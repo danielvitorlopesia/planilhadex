@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Link } from "wouter";
 import { supabase } from "../lib/supabase";
 
@@ -33,151 +33,138 @@ export default function Home() {
   }, []);
 
   return (
-    <main
-      style={{
-        padding: "32px",
-        fontFamily: "Arial, sans-serif",
-        background: "#f7f8fa",
-        minHeight: "100vh",
-      }}
-    >
-      <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
-        <div style={{ marginBottom: "24px" }}>
-          <h1 style={{ fontSize: "32px", margin: 0, color: "#111827" }}>
-            PlanilhaDEX
-          </h1>
-          <p style={{ marginTop: "8px", color: "#6b7280", fontSize: "16px" }}>
-            Lista de contratações
-          </p>
-        </div>
+    <main style={styles.page}>
+      <div style={styles.container}>
+        <header style={styles.header}>
+          <h1 style={styles.title}>PlanilhaDEX</h1>
+          <p style={styles.subtitle}>Lista de contratações</p>
+        </header>
 
-        {loading && (
-          <div
-            style={{
-              background: "#ffffff",
-              borderRadius: "12px",
-              padding: "20px",
-              border: "1px solid #e5e7eb",
-            }}
-          >
-            Carregando contratações...
-          </div>
-        )}
+        {loading && <p style={styles.message}>Carregando contratações...</p>}
 
         {error && (
-          <div
-            style={{
-              background: "#fef2f2",
-              color: "#b91c1c",
-              border: "1px solid #fecaca",
-              borderRadius: "12px",
-              padding: "16px",
-            }}
-          >
+          <p style={{ ...styles.message, color: "#b42318" }}>
             Erro ao carregar: {error}
-          </div>
+          </p>
         )}
 
         {!loading && !error && contracts.length === 0 && (
-          <div
-            style={{
-              background: "#ffffff",
-              borderRadius: "12px",
-              padding: "20px",
-              border: "1px solid #e5e7eb",
-            }}
-          >
-            Nenhuma contratação encontrada.
-          </div>
+          <div style={styles.emptyState}>Nenhuma contratação encontrada.</div>
         )}
 
-        {!loading && !error && contracts.length > 0 && (
-          <div style={{ display: "grid", gap: "16px" }}>
-            {contracts.map((contract) => (
-              <div
-                key={contract.id}
-                style={{
-                  background: "#ffffff",
-                  borderRadius: "14px",
-                  padding: "20px",
-                  border: "1px solid #e5e7eb",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    gap: "16px",
-                  }}
-                >
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        color: "#6b7280",
-                        marginBottom: "8px",
-                      }}
-                    >
-                      Contratação #{contract.id}
-                    </div>
-
-                    <h2
-                      style={{
-                        margin: 0,
-                        fontSize: "22px",
-                        color: "#111827",
-                      }}
-                    >
-                      {contract.titulo}
-                    </h2>
-                  </div>
-
-                  <span
-                    style={{
-                      background:
-                        contract.status === "em_elaboracao"
-                          ? "#fef3c7"
-                          : "#e5e7eb",
-                      color:
-                        contract.status === "em_elaboracao"
-                          ? "#92400e"
-                          : "#374151",
-                      padding: "8px 12px",
-                      borderRadius: "999px",
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {contract.status}
-                  </span>
+        <div style={styles.list}>
+          {contracts.map((contract) => (
+            <div key={contract.id} style={styles.card}>
+              <div style={styles.cardHeader}>
+                <div>
+                  <p style={styles.cardOverline}>Contratação #{contract.id}</p>
+                  <h2 style={styles.cardTitle}>{contract.titulo}</h2>
                 </div>
 
-                <div style={{ marginTop: "18px" }}>
-                  <Link href={`/contratacoes/${contract.id}`}>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        background: "#111827",
-                        color: "#ffffff",
-                        borderRadius: "10px",
-                        padding: "10px 16px",
-                        cursor: "pointer",
-                        fontWeight: 600,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      Abrir contratação
-                    </span>
-                  </Link>
-                </div>
+                <span style={styles.statusBadge}>
+                  {contract.status || "sem_status"}
+                </span>
               </div>
-            ))}
-          </div>
-        )}
+
+              <Link
+                href={`/contratacoes/${contract.id}`}
+                style={styles.primaryButton}
+              >
+                Abrir contratação
+              </Link>
+            </div>
+          ))}
+        </div>
       </div>
     </main>
   );
 }
+
+const styles: Record<string, CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background: "#f7f4f9",
+    fontFamily: "Arial, sans-serif",
+    padding: "32px 16px",
+  },
+  container: {
+    maxWidth: "1200px",
+    margin: "0 auto",
+  },
+  header: {
+    marginBottom: "28px",
+  },
+  title: {
+    fontSize: "48px",
+    lineHeight: 1.1,
+    margin: "0 0 10px 0",
+    color: "#6f4381",
+    fontWeight: 800,
+  },
+  subtitle: {
+    margin: 0,
+    fontSize: "18px",
+    color: "#6f5a78",
+  },
+  list: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "24px",
+  },
+  card: {
+    background: "#ffffff",
+    border: "1px solid #dccde4",
+    borderRadius: "24px",
+    padding: "28px",
+    boxShadow: "0 8px 24px rgba(140, 88, 162, 0.06)",
+  },
+  cardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "16px",
+    marginBottom: "24px",
+    flexWrap: "wrap",
+  },
+  cardOverline: {
+    margin: "0 0 8px 0",
+    fontSize: "14px",
+    color: "#7b6a84",
+  },
+  cardTitle: {
+    margin: 0,
+    fontSize: "28px",
+    lineHeight: 1.2,
+    color: "#2f2038",
+    maxWidth: "760px",
+  },
+  statusBadge: {
+    background: "#efe7f3",
+    color: "#8c58a2",
+    padding: "12px 18px",
+    borderRadius: "999px",
+    fontWeight: 700,
+    fontSize: "14px",
+  },
+  primaryButton: {
+    display: "inline-block",
+    background: "#6f4381",
+    color: "#ffffff",
+    textDecoration: "none",
+    padding: "16px 22px",
+    borderRadius: "18px",
+    fontWeight: 700,
+    fontSize: "16px",
+  },
+  emptyState: {
+    background: "#ffffff",
+    border: "1px solid #dccde4",
+    borderRadius: "20px",
+    padding: "24px",
+    color: "#6f5a78",
+  },
+  message: {
+    fontSize: "16px",
+    color: "#4b3a56",
+  },
+};
