@@ -3,33 +3,34 @@ import Home from "./pages/Home";
 import ContractDetail from "./pages/ContractDetail";
 import SpreadsheetDetail from "./pages/SpreadsheetDetail";
 import VersionDetail from "./pages/VersionDetail";
+import { theme } from "./theme";
 
 function NotFound() {
   return (
     <main
       style={{
         minHeight: "100vh",
-        background: "#f7f4f9",
+        background: theme.colors.pageBackground,
         padding: "32px 16px",
-        fontFamily: "Arial, sans-serif",
+        fontFamily: theme.font.family,
       }}
     >
       <div
         style={{
           maxWidth: "900px",
           margin: "0 auto",
-          background: "#ffffff",
-          border: "1px solid #dccde4",
-          borderRadius: "24px",
+          background: theme.colors.white,
+          border: `1px solid ${theme.colors.primaryBorder}`,
+          borderRadius: theme.radius.xl,
           padding: "32px",
-          boxShadow: "0 8px 24px rgba(140, 88, 162, 0.06)",
+          boxShadow: theme.shadow.soft,
         }}
       >
         <p
           style={{
             margin: "0 0 8px 0",
             fontSize: "14px",
-            color: "#7b6a84",
+            color: theme.colors.textMuted,
           }}
         >
           Erro de navegação
@@ -39,7 +40,7 @@ function NotFound() {
           style={{
             margin: "0 0 12px 0",
             fontSize: "40px",
-            color: "#6f4381",
+            color: theme.colors.primaryDark,
             fontWeight: 800,
           }}
         >
@@ -50,7 +51,7 @@ function NotFound() {
           style={{
             margin: 0,
             fontSize: "18px",
-            color: "#4b3a56",
+            color: theme.colors.textMedium,
           }}
         >
           Página não encontrada.
