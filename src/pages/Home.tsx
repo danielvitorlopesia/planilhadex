@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { Link } from "wouter";
 import { supabase } from "../lib/supabase";
+import { theme, commonStyles } from "../theme";
 
 type Contract = {
   id: number;
@@ -43,7 +44,7 @@ export default function Home() {
         {loading && <p style={styles.message}>Carregando contratações...</p>}
 
         {error && (
-          <p style={{ ...styles.message, color: "#b42318" }}>
+          <p style={{ ...styles.message, color: theme.colors.danger }}>
             Erro ao carregar: {error}
           </p>
         )}
@@ -81,16 +82,8 @@ export default function Home() {
 }
 
 const styles: Record<string, CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#f7f4f9",
-    fontFamily: "Arial, sans-serif",
-    padding: "32px 16px",
-  },
-  container: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-  },
+  page: commonStyles.page,
+  container: commonStyles.container,
   header: {
     marginBottom: "28px",
   },
@@ -98,13 +91,13 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "48px",
     lineHeight: 1.1,
     margin: "0 0 10px 0",
-    color: "#6f4381",
+    color: theme.colors.primaryDark,
     fontWeight: 800,
   },
   subtitle: {
     margin: 0,
     fontSize: "18px",
-    color: "#6f5a78",
+    color: theme.colors.textSoft,
   },
   list: {
     display: "flex",
@@ -112,11 +105,7 @@ const styles: Record<string, CSSProperties> = {
     gap: "24px",
   },
   card: {
-    background: "#ffffff",
-    border: "1px solid #dccde4",
-    borderRadius: "24px",
-    padding: "28px",
-    boxShadow: "0 8px 24px rgba(140, 88, 162, 0.06)",
+    ...commonStyles.card,
   },
   cardHeader: {
     display: "flex",
@@ -129,42 +118,30 @@ const styles: Record<string, CSSProperties> = {
   cardOverline: {
     margin: "0 0 8px 0",
     fontSize: "14px",
-    color: "#7b6a84",
+    color: theme.colors.textMuted,
   },
   cardTitle: {
     margin: 0,
     fontSize: "28px",
     lineHeight: 1.2,
-    color: "#2f2038",
+    color: theme.colors.textStrong,
     maxWidth: "760px",
   },
   statusBadge: {
-    background: "#efe7f3",
-    color: "#8c58a2",
+    background: theme.colors.primarySoft,
+    color: theme.colors.primary,
     padding: "12px 18px",
-    borderRadius: "999px",
+    borderRadius: theme.radius.pill,
     fontWeight: 700,
     fontSize: "14px",
   },
   primaryButton: {
-    display: "inline-block",
-    background: "#6f4381",
-    color: "#ffffff",
-    textDecoration: "none",
-    padding: "16px 22px",
-    borderRadius: "18px",
-    fontWeight: 700,
-    fontSize: "16px",
+    ...commonStyles.buttonPrimary,
   },
   emptyState: {
-    background: "#ffffff",
-    border: "1px solid #dccde4",
-    borderRadius: "20px",
-    padding: "24px",
-    color: "#6f5a78",
+    ...commonStyles.emptyState,
   },
   message: {
-    fontSize: "16px",
-    color: "#4b3a56",
+    ...commonStyles.message,
   },
 };
