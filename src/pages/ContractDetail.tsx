@@ -1,17 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Link, useRoute } from "wouter";
 import { supabase } from "../lib/supabase";
 
 type Contract = {
   id: number;
   titulo: string;
-  status: string;
-  objeto?: string | null;
-  municipio?: string | null;
-  uf?: string | null;
-  data_base?: string | null;
-  vigencia_meses?: number | null;
+  objeto: string;
   observacoes?: string | null;
+  status: string;
 };
 
 type Spreadsheet = {
@@ -37,9 +33,7 @@ export default function ContractDetail() {
 
       const { data: contractData, error: contractError } = await supabase
         .from("contracts")
-        .select(
-          "id, titulo, status, objeto, municipio, uf, data_base, vigencia_meses, observacoes"
-        )
+        .select("id, titulo, objeto, observacoes, status")
         .eq("id", contractId)
         .single();
 
@@ -59,10 +53,11 @@ export default function ContractDetail() {
 
       if (spreadsheetsError) {
         setError(spreadsheetsError.message);
-      } else {
-        setSpreadsheets(spreadsheetsData || []);
+        setLoading(false);
+        return;
       }
 
+      setSpreadsheets(spreadsheetsData || []);
       setLoading(false);
     }
 
@@ -70,277 +65,223 @@ export default function ContractDetail() {
   }, [match, params?.id]);
 
   return (
-    <main
-      style={{
-        padding: "32px",
-        fontFamily: "Arial, sans-serif",
-        background: "#f7f8fa",
-        minHeight: "100vh",
-      }}
-    >
-      <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
-        <div style={{ marginBottom: "24px" }}>
-          <Link href="/" style={{ color: "#2563eb", textDecoration: "none" }}>
+    <main style={styles.page}>
+      <div style={styles.container}>
+        <div style={styles.navRow}>
+          <Link href="/" style={styles.backLink}>
             ← Voltar para contratações
           </Link>
         </div>
 
-        {loading && (
-          <div
-            style={{
-              background: "#ffffff",
-              borderRadius: "12px",
-              padding: "20px",
-              border: "1px solid #e5e7eb",
-            }}
-          >
-            Carregando contratação...
-          </div>
-        )}
+        {loading && <p style={styles.message}>Carregando contratação...</p>}
 
         {error && (
-          <div
-            style={{
-              background: "#fef2f2",
-              color: "#b91c1c",
-              border: "1px solid #fecaca",
-              borderRadius: "12px",
-              padding: "16px",
-            }}
-          >
+          <p style={{ ...styles.message, color: "#b42318" }}>
             Erro ao carregar: {error}
-          </div>
+          </p>
         )}
 
         {!loading && !error && contract && (
-          <div
-            style={{
-              background: "#ffffff",
-              borderRadius: "16px",
-              padding: "24px",
-              border: "1px solid #e5e7eb",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                gap: "16px",
-                marginBottom: "24px",
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontSize: "14px",
-                    color: "#6b7280",
-                    marginBottom: "8px",
-                  }}
-                >
-                  Contratação #{contract.id}
+          <>
+            <div style={styles.headerCard}>
+              <div style={styles.headerTop}>
+                <div>
+                  <p style={styles.overline}>Contratação #{contract.id}</p>
+                  <h1 style={styles.title}>{contract.titulo}</h1>
                 </div>
 
-                <h1
-                  style={{
-                    margin: 0,
-                    fontSize: "32px",
-                    color: "#111827",
-                  }}
-                >
-                  {contract.titulo}
-                </h1>
+                <span style={styles.statusBadge}>
+                  {contract.status || "sem_status"}
+                </span>
               </div>
-
-              <span
-                style={{
-                  background:
-                    contract.status === "em_elaboracao" ? "#fef3c7" : "#e5e7eb",
-                  color:
-                    contract.status === "em_elaboracao" ? "#92400e" : "#374151",
-                  padding: "10px 14px",
-                  borderRadius: "999px",
-                  fontSize: "14px",
-                  fontWeight: 700,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {contract.status}
-              </span>
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: "16px",
-                marginBottom: "24px",
-              }}
-            >
-              <InfoCard label="Município" value={contract.municipio} />
-              <InfoCard label="UF" value={contract.uf} />
-              <InfoCard label="Data base" value={contract.data_base} />
-              <InfoCard
-                label="Vigência (meses)"
-                value={
-                  contract.vigencia_meses !== null &&
-                  contract.vigencia_meses !== undefined
-                    ? String(contract.vigencia_meses)
-                    : null
-                }
-              />
-            </div>
+            <section style={styles.section}>
+              <h2 style={styles.sectionTitle}>Objeto</h2>
+              <div style={styles.contentBox}>{contract.objeto || "—"}</div>
+            </section>
 
-            <Section
-              title="Objeto"
-              content={contract.objeto || "Não informado."}
-            />
+            <section style={styles.section}>
+              <h2 style={styles.sectionTitle}>Observações</h2>
+              <div style={styles.contentBox}>
+                {contract.observacoes || "Sem observações registradas."}
+              </div>
+            </section>
 
-            <Section
-              title="Observações"
-              content={contract.observacoes || "Não informado."}
-            />
+            <section style={styles.section}>
+              <h2 style={styles.sectionTitle}>Planilhas vinculadas</h2>
 
-            <div style={{ marginTop: "32px" }}>
-              <h2
-                style={{
-                  fontSize: "22px",
-                  marginBottom: "16px",
-                  color: "#111827",
-                }}
-              >
-                Planilhas vinculadas
-              </h2>
-
-              {spreadsheets.length === 0 ? (
-                <div
-                  style={{
-                    background: "#f9fafb",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "12px",
-                    padding: "16px",
-                    color: "#6b7280",
-                  }}
-                >
-                  Nenhuma planilha vinculada a esta contratação.
-                </div>
-              ) : (
-                <div style={{ display: "grid", gap: "14px" }}>
-                  {spreadsheets.map((spreadsheet) => (
-                    <div
-                      key={spreadsheet.id}
-                      style={{
-                        background: "#f9fafb",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "12px",
-                        padding: "18px",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        gap: "16px",
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            fontSize: "14px",
-                            color: "#6b7280",
-                            marginBottom: "8px",
-                          }}
-                        >
-                          Planilha #{spreadsheet.id}
+              <div style={styles.list}>
+                {spreadsheets.length === 0 ? (
+                  <div style={styles.emptyState}>
+                    Nenhuma planilha vinculada a esta contratação.
+                  </div>
+                ) : (
+                  spreadsheets.map((spreadsheet) => (
+                    <div key={spreadsheet.id} style={styles.card}>
+                      <div style={styles.cardHeader}>
+                        <div>
+                          <p style={styles.cardOverline}>
+                            Planilha #{spreadsheet.id}
+                          </p>
+                          <h3 style={styles.cardTitle}>{spreadsheet.nome}</h3>
+                          <p style={styles.cardText}>
+                            Tipo: {spreadsheet.tipo_planilha} • Status:{" "}
+                            {spreadsheet.status}
+                          </p>
                         </div>
 
-                        <div
-                          style={{
-                            fontSize: "20px",
-                            fontWeight: 700,
-                            color: "#111827",
-                            marginBottom: "6px",
-                          }}
-                        >
-                          {spreadsheet.nome}
-                        </div>
-
-                        <div style={{ color: "#4b5563", fontSize: "14px" }}>
-                          Tipo: {spreadsheet.tipo_planilha} • Status:{" "}
-                          {spreadsheet.status}
-                        </div>
-                      </div>
-
-                      <Link href={`/planilhas/${spreadsheet.id}`}>
-                        <span
-                          style={{
-                            display: "inline-block",
-                            background: "#111827",
-                            color: "#ffffff",
-                            borderRadius: "10px",
-                            padding: "10px 16px",
-                            cursor: "pointer",
-                            fontWeight: 600,
-                            whiteSpace: "nowrap",
-                          }}
+                        <Link
+                          href={`/planilhas/${spreadsheet.id}`}
+                          style={styles.primaryButton}
                         >
                           Abrir planilha
-                        </span>
-                      </Link>
+                        </Link>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+                  ))
+                )}
+              </div>
+            </section>
+          </>
+        )}
+
+        {!loading && !error && !contract && (
+          <p style={styles.message}>Contratação não encontrada.</p>
         )}
       </div>
     </main>
   );
 }
 
-function InfoCard({ label, value }: { label: string; value?: string | null }) {
-  return (
-    <div
-      style={{
-        background: "#f9fafb",
-        border: "1px solid #e5e7eb",
-        borderRadius: "12px",
-        padding: "16px",
-      }}
-    >
-      <div style={{ fontSize: "13px", color: "#6b7280", marginBottom: "6px" }}>
-        {label}
-      </div>
-      <div style={{ fontSize: "16px", color: "#111827", fontWeight: 600 }}>
-        {value || "Não informado"}
-      </div>
-    </div>
-  );
-}
-
-function Section({ title, content }: { title: string; content: string }) {
-  return (
-    <div style={{ marginTop: "24px" }}>
-      <h2
-        style={{
-          fontSize: "18px",
-          marginBottom: "10px",
-          color: "#111827",
-        }}
-      >
-        {title}
-      </h2>
-      <div
-        style={{
-          background: "#f9fafb",
-          border: "1px solid #e5e7eb",
-          borderRadius: "12px",
-          padding: "16px",
-          color: "#374151",
-          lineHeight: 1.5,
-        }}
-      >
-        {content}
-      </div>
-    </div>
-  );
-}
+const styles: Record<string, CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background: "#f7f4f9",
+    fontFamily: "Arial, sans-serif",
+    padding: "32px 16px",
+  },
+  container: {
+    maxWidth: "1200px",
+    margin: "0 auto",
+  },
+  navRow: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+    marginBottom: "24px",
+  },
+  backLink: {
+    color: "#8c58a2",
+    textDecoration: "none",
+    fontWeight: 600,
+    fontSize: "16px",
+  },
+  headerCard: {
+    background: "#ffffff",
+    border: "1px solid #dccde4",
+    borderRadius: "24px",
+    padding: "28px",
+    marginBottom: "28px",
+    boxShadow: "0 8px 24px rgba(140, 88, 162, 0.06)",
+  },
+  headerTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "16px",
+    flexWrap: "wrap",
+  },
+  overline: {
+    margin: "0 0 8px 0",
+    fontSize: "14px",
+    color: "#7b6a84",
+  },
+  title: {
+    margin: 0,
+    fontSize: "42px",
+    lineHeight: 1.1,
+    color: "#6f4381",
+    fontWeight: 800,
+    maxWidth: "820px",
+  },
+  statusBadge: {
+    background: "#efe7f3",
+    color: "#8c58a2",
+    padding: "12px 18px",
+    borderRadius: "999px",
+    fontWeight: 700,
+    fontSize: "14px",
+  },
+  section: {
+    marginTop: "28px",
+  },
+  sectionTitle: {
+    fontSize: "22px",
+    margin: "0 0 14px 0",
+    color: "#6f4381",
+  },
+  contentBox: {
+    background: "#ffffff",
+    border: "1px solid #dccde4",
+    borderRadius: "20px",
+    padding: "28px",
+    color: "#4b3a56",
+    fontSize: "18px",
+    lineHeight: 1.5,
+  },
+  list: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "22px",
+  },
+  card: {
+    background: "#ffffff",
+    border: "1px solid #dccde4",
+    borderRadius: "24px",
+    padding: "28px",
+  },
+  cardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "16px",
+    flexWrap: "wrap",
+  },
+  cardOverline: {
+    margin: "0 0 8px 0",
+    fontSize: "14px",
+    color: "#7b6a84",
+  },
+  cardTitle: {
+    margin: "0 0 10px 0",
+    fontSize: "24px",
+    color: "#2f2038",
+  },
+  cardText: {
+    margin: 0,
+    color: "#5d4b68",
+    fontSize: "16px",
+  },
+  primaryButton: {
+    display: "inline-block",
+    background: "#6f4381",
+    color: "#ffffff",
+    textDecoration: "none",
+    padding: "16px 22px",
+    borderRadius: "18px",
+    fontWeight: 700,
+    fontSize: "16px",
+  },
+  emptyState: {
+    background: "#ffffff",
+    border: "1px solid #dccde4",
+    borderRadius: "20px",
+    padding: "24px",
+    color: "#6f5a78",
+  },
+  message: {
+    fontSize: "16px",
+    color: "#4b3a56",
+  },
+};
