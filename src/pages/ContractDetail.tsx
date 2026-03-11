@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { Link, useRoute } from "wouter";
 import { supabase } from "../lib/supabase";
+import { theme, commonStyles } from "../theme";
 
 type Contract = {
   id: number;
@@ -76,7 +77,7 @@ export default function ContractDetail() {
         {loading && <p style={styles.message}>Carregando contratação...</p>}
 
         {error && (
-          <p style={{ ...styles.message, color: "#b42318" }}>
+          <p style={{ ...styles.message, color: theme.colors.danger }}>
             Erro ao carregar: {error}
           </p>
         )}
@@ -155,35 +156,18 @@ export default function ContractDetail() {
 }
 
 const styles: Record<string, CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#f7f4f9",
-    fontFamily: "Arial, sans-serif",
-    padding: "32px 16px",
-  },
-  container: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-  },
+  page: commonStyles.page,
+  container: commonStyles.container,
   navRow: {
     display: "flex",
     flexDirection: "column",
     gap: "8px",
     marginBottom: "24px",
   },
-  backLink: {
-    color: "#8c58a2",
-    textDecoration: "none",
-    fontWeight: 600,
-    fontSize: "16px",
-  },
+  backLink: commonStyles.backLink,
   headerCard: {
-    background: "#ffffff",
-    border: "1px solid #dccde4",
-    borderRadius: "24px",
-    padding: "28px",
+    ...commonStyles.card,
     marginBottom: "28px",
-    boxShadow: "0 8px 24px rgba(140, 88, 162, 0.06)",
   },
   headerTop: {
     display: "flex",
@@ -195,38 +179,34 @@ const styles: Record<string, CSSProperties> = {
   overline: {
     margin: "0 0 8px 0",
     fontSize: "14px",
-    color: "#7b6a84",
+    color: theme.colors.textMuted,
   },
   title: {
     margin: 0,
     fontSize: "42px",
     lineHeight: 1.1,
-    color: "#6f4381",
+    color: theme.colors.primaryDark,
     fontWeight: 800,
     maxWidth: "820px",
   },
   statusBadge: {
-    background: "#efe7f3",
-    color: "#8c58a2",
+    background: theme.colors.primarySoft,
+    color: theme.colors.primary,
     padding: "12px 18px",
-    borderRadius: "999px",
+    borderRadius: theme.radius.pill,
     fontWeight: 700,
     fontSize: "14px",
   },
   section: {
     marginTop: "28px",
   },
-  sectionTitle: {
-    fontSize: "22px",
-    margin: "0 0 14px 0",
-    color: "#6f4381",
-  },
+  sectionTitle: commonStyles.sectionTitle,
   contentBox: {
-    background: "#ffffff",
-    border: "1px solid #dccde4",
-    borderRadius: "20px",
+    background: theme.colors.white,
+    border: `1px solid ${theme.colors.primaryBorder}`,
+    borderRadius: theme.radius.lg,
     padding: "28px",
-    color: "#4b3a56",
+    color: theme.colors.textMedium,
     fontSize: "18px",
     lineHeight: 1.5,
   },
@@ -236,9 +216,9 @@ const styles: Record<string, CSSProperties> = {
     gap: "22px",
   },
   card: {
-    background: "#ffffff",
-    border: "1px solid #dccde4",
-    borderRadius: "24px",
+    background: theme.colors.white,
+    border: `1px solid ${theme.colors.primaryBorder}`,
+    borderRadius: theme.radius.xl,
     padding: "28px",
   },
   cardHeader: {
@@ -251,37 +231,19 @@ const styles: Record<string, CSSProperties> = {
   cardOverline: {
     margin: "0 0 8px 0",
     fontSize: "14px",
-    color: "#7b6a84",
+    color: theme.colors.textMuted,
   },
   cardTitle: {
     margin: "0 0 10px 0",
     fontSize: "24px",
-    color: "#2f2038",
+    color: theme.colors.textStrong,
   },
   cardText: {
     margin: 0,
-    color: "#5d4b68",
+    color: theme.colors.textSoft,
     fontSize: "16px",
   },
-  primaryButton: {
-    display: "inline-block",
-    background: "#6f4381",
-    color: "#ffffff",
-    textDecoration: "none",
-    padding: "16px 22px",
-    borderRadius: "18px",
-    fontWeight: 700,
-    fontSize: "16px",
-  },
-  emptyState: {
-    background: "#ffffff",
-    border: "1px solid #dccde4",
-    borderRadius: "20px",
-    padding: "24px",
-    color: "#6f5a78",
-  },
-  message: {
-    fontSize: "16px",
-    color: "#4b3a56",
-  },
+  primaryButton: commonStyles.buttonPrimary,
+  emptyState: commonStyles.emptyState,
+  message: commonStyles.message,
 };
