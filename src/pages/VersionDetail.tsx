@@ -171,13 +171,18 @@ export default function VersionDetail() {
                 </div>
               ) : (
                 <div style={styles.grid}>
-                  {summaryEntries.map(([key, value]) => (
-                    <InfoCard
-                      key={key}
-                      label={beautifyKey(key)}
-                      value={formatDynamicValue(value, key)}
-                    />
-                  ))}
+                  {summaryEntries.map(([key, value]) => {
+                    const isMainTotal = key.toLowerCase().includes("global");
+
+                    return (
+                      <InfoCard
+                        key={key}
+                        label={beautifyKey(key)}
+                        value={formatDynamicValue(value, key)}
+                        highlight={isMainTotal}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -226,14 +231,35 @@ export default function VersionDetail() {
 function InfoCard({
   label,
   value,
+  highlight = false,
 }: {
   label: string;
   value?: string | null;
+  highlight?: boolean;
 }) {
   return (
-    <div style={styles.infoCard}>
-      <span style={styles.infoLabel}>{label}</span>
-      <strong style={styles.infoValue}>{value || "Não informado"}</strong>
+    <div
+      style={{
+        ...styles.infoCard,
+        ...(highlight ? styles.infoCardHighlight : {}),
+      }}
+    >
+      <span
+        style={{
+          ...styles.infoLabel,
+          ...(highlight ? styles.infoLabelHighlight : {}),
+        }}
+      >
+        {label}
+      </span>
+      <strong
+        style={{
+          ...styles.infoValue,
+          ...(highlight ? styles.infoValueHighlight : {}),
+        }}
+      >
+        {value || "Não informado"}
+      </strong>
     </div>
   );
 }
@@ -277,7 +303,9 @@ function formatDynamicValue(
     lowerKey.includes("custo") ||
     lowerKey.includes("total") ||
     lowerKey.includes("orcado") ||
-    lowerKey.includes("orçado")
+    lowerKey.includes("orçado") ||
+    lowerKey.includes("lucro") ||
+    lowerKey.includes("tributo")
   ) {
     return formatCurrency(Number(value));
   }
@@ -296,7 +324,7 @@ function formatDynamicValue(
 const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
-    background: "#f5f7fb",
+    background: "#f7f4f9",
     fontFamily: "Arial, sans-serif",
     padding: "32px 16px",
   },
@@ -311,14 +339,14 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: "24px",
   },
   backLink: {
-    color: "#175cd3",
+    color: "#8c58a2",
     textDecoration: "none",
     fontWeight: 600,
   },
   badge: {
     display: "inline-block",
-    background: "#e9f2ff",
-    color: "#175cd3",
+    background: "#efe7f3",
+    color: "#8c58a2",
     padding: "6px 10px",
     borderRadius: "999px",
     fontSize: "12px",
@@ -328,7 +356,7 @@ const styles: Record<string, CSSProperties> = {
   title: {
     fontSize: "32px",
     margin: "0 0 24px 0",
-    color: "#101828",
+    color: "#6f4381",
   },
   grid: {
     display: "grid",
@@ -338,19 +366,32 @@ const styles: Record<string, CSSProperties> = {
   },
   infoCard: {
     background: "#ffffff",
-    border: "1px solid #e4e7ec",
+    border: "1px solid #dccde4",
     borderRadius: "16px",
     padding: "16px",
+  },
+  infoCardHighlight: {
+    background: "#8c58a2",
+    border: "1px solid #8c58a2",
+    boxShadow: "0 10px 24px rgba(140, 88, 162, 0.18)",
   },
   infoLabel: {
     display: "block",
     fontSize: "13px",
-    color: "#475467",
+    color: "#6f5a78",
     marginBottom: "8px",
+  },
+  infoLabelHighlight: {
+    color: "#f3eefa",
   },
   infoValue: {
     fontSize: "16px",
-    color: "#101828",
+    color: "#2f2038",
+  },
+  infoValueHighlight: {
+    color: "#ffffff",
+    fontSize: "28px",
+    lineHeight: 1.2,
   },
   section: {
     marginTop: "24px",
@@ -358,46 +399,46 @@ const styles: Record<string, CSSProperties> = {
   sectionTitle: {
     fontSize: "22px",
     marginBottom: "16px",
-    color: "#101828",
+    color: "#6f4381",
   },
   card: {
     background: "#ffffff",
-    border: "1px solid #e4e7ec",
+    border: "1px solid #dccde4",
     borderRadius: "16px",
     padding: "20px",
   },
   cardOverline: {
     margin: "0 0 8px 0",
     fontSize: "12px",
-    color: "#475467",
+    color: "#7b6a84",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
   },
   cardTitle: {
     margin: "0 0 8px 0",
     fontSize: "22px",
-    color: "#101828",
+    color: "#2f2038",
   },
   cardText: {
     margin: "0 0 16px 0",
-    color: "#344054",
+    color: "#5d4b68",
   },
   primaryLink: {
-    color: "#175cd3",
+    color: "#8c58a2",
     textDecoration: "none",
     fontWeight: 700,
   },
   emptyState: {
     background: "#fff",
-    border: "1px solid #e4e7ec",
+    border: "1px solid #dccde4",
     borderRadius: "16px",
     padding: "20px",
-    color: "#475467",
+    color: "#6f5a78",
   },
   tableWrapper: {
     overflowX: "auto",
     background: "#fff",
-    border: "1px solid #e4e7ec",
+    border: "1px solid #dccde4",
     borderRadius: "16px",
   },
   table: {
@@ -408,20 +449,20 @@ const styles: Record<string, CSSProperties> = {
   th: {
     textAlign: "left",
     padding: "14px 16px",
-    borderBottom: "1px solid #e4e7ec",
+    borderBottom: "1px solid #dccde4",
     fontSize: "13px",
-    color: "#475467",
-    background: "#f9fafb",
+    color: "#6f5a78",
+    background: "#f6f0f8",
   },
   td: {
     padding: "14px 16px",
-    borderBottom: "1px solid #e4e7ec",
+    borderBottom: "1px solid #ece2f0",
     fontSize: "14px",
-    color: "#344054",
+    color: "#4b3a56",
     verticalAlign: "top",
   },
   message: {
     fontSize: "16px",
-    color: "#344054",
+    color: "#4b3a56",
   },
 };
