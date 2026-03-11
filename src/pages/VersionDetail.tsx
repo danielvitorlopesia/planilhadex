@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useRoute } from "wouter";
 import { supabase } from "../lib/supabase";
-import { theme, commonStyles } from "../theme";
+import { theme, commonStyles, getStatusBadgeStyle } from "../theme";
 
 type SpreadsheetVersion = {
   id: number;
@@ -137,7 +137,14 @@ export default function VersionDetail() {
 
             <div style={styles.metaGrid}>
               <InfoCard label="Tipo da versão" value={version.tipo_versao} />
-              <InfoCard label="Status" value={version.status} />
+
+              <div style={styles.infoCard}>
+                <span style={styles.infoLabel}>Status</span>
+                <span style={getStatusBadgeStyle(version.status)}>
+                  {version.status || "sem_status"}
+                </span>
+              </div>
+
               <InfoCard label="Criada em" value={formatDate(version.criada_em)} />
               <InfoCard
                 label="ID da planilha"
