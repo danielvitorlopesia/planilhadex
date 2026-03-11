@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { Link, useRoute } from "wouter";
 import { supabase } from "../lib/supabase";
-import { theme, commonStyles } from "../theme";
+import { theme, commonStyles, getStatusBadgeStyle } from "../theme";
 
 type Spreadsheet = {
   id: number;
@@ -100,7 +100,7 @@ export default function SpreadsheetDetail() {
                   <h1 style={styles.title}>{spreadsheet.nome}</h1>
                 </div>
 
-                <span style={styles.statusBadge}>
+                <span style={getStatusBadgeStyle(spreadsheet.status)}>
                   {spreadsheet.status || "sem_status"}
                 </span>
               </div>
@@ -202,14 +202,6 @@ const styles: Record<string, CSSProperties> = {
     color: theme.colors.primaryDark,
     fontWeight: 800,
     maxWidth: "820px",
-  },
-  statusBadge: {
-    background: theme.colors.successBg,
-    color: theme.colors.successText,
-    padding: "12px 18px",
-    borderRadius: theme.radius.pill,
-    fontWeight: 700,
-    fontSize: "14px",
   },
   section: {
     marginTop: "28px",
