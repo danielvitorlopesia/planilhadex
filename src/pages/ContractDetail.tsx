@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { Link, useRoute } from "wouter";
 import { supabase } from "../lib/supabase";
-import { theme, commonStyles } from "../theme";
+import { theme, commonStyles, getStatusBadgeStyle } from "../theme";
 
 type Contract = {
   id: number;
@@ -91,7 +91,7 @@ export default function ContractDetail() {
                   <h1 style={styles.title}>{contract.titulo}</h1>
                 </div>
 
-                <span style={styles.statusBadge}>
+                <span style={getStatusBadgeStyle(contract.status)}>
                   {contract.status || "sem_status"}
                 </span>
               </div>
@@ -188,14 +188,6 @@ const styles: Record<string, CSSProperties> = {
     color: theme.colors.primaryDark,
     fontWeight: 800,
     maxWidth: "820px",
-  },
-  statusBadge: {
-    background: theme.colors.primarySoft,
-    color: theme.colors.primary,
-    padding: "12px 18px",
-    borderRadius: theme.radius.pill,
-    fontWeight: 700,
-    fontSize: "14px",
   },
   section: {
     marginTop: "28px",
