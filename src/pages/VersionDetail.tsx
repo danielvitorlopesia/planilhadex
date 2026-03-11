@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useRoute } from "wouter";
 import { supabase } from "../lib/supabase";
 
@@ -19,14 +19,7 @@ type Spreadsheet = {
   status: string;
 };
 
-type SpreadsheetTotal = {
-  id: number;
-  spreadsheet_version_id: number;
-  valor_geral_orcado?: number | null;
-  valor_total_bdi?: number | null;
-  valor_global_orcado?: number | null;
-  custo_direto_total?: number | null;
-};
+type SpreadsheetTotal = Record<string, string | number | null>;
 
 export default function VersionDetail() {
   const [match, params] = useRoute("/versoes/:id");
@@ -72,9 +65,7 @@ export default function VersionDetail() {
 
       const { data: totalsData, error: totalsError } = await supabase
         .from("spreadsheet_totals")
-        .select(
-          "id, spreadsheet_version_id, valor_geral_orcado, valor_total_bdi, valor_global_orcado, custo_direto_total"
-        )
+        .select("*")
         .eq("spreadsheet_version_id", versionId)
         .order("id", { ascending: true });
 
@@ -92,6 +83,19 @@ export default function VersionDetail() {
   }, [match, params?.id]);
 
   const resumo = totals[0] || null;
+
+  const summaryEntries = useMemo(() => {
+    if (!resumo) return [];
+
+    return Object.entries(resumo).filter(([key]) => {
+      return ![
+        "id",
+        "spreadsheet_version_id",
+        "created_at",
+        "updated_at",
+      ].includes(key);
+    });
+  }, [resumo]);
 
   return (
     <main style={styles.page}>
@@ -167,27 +171,18 @@ export default function VersionDetail() {
                 </div>
               ) : (
                 <div style={styles.grid}>
-                  <InfoCard
-                    label="Valor geral orçado"
-                    value={formatCurrency(resumo.valor_geral_orcado)}
-                  />
-                  <InfoCard
-                    label="Valor total BDI"
-                    value={formatCurrency(resumo.valor_total_bdi)}
-                  />
-                  <InfoCard
-                    label="Valor global orçado"
-                    value={formatCurrency(resumo.valor_global_orcado)}
-                  />
-                  <InfoCard
-                    label="Custo direto total"
-                    value={formatCurrency(resumo.custo_direto_total)}
-                  />
+                  {summaryEntries.map(([key, value]) => (
+                    <InfoCard
+                      key={key}
+                      label={beautifyKey(key)}
+                      value={formatDynamicValue(value, key)}
+                    />
+                  ))}
                 </div>
               )}
             </section>
 
-            {totals.length > 1 && (
+            {totals.length > 0 && (
               <section style={styles.section}>
                 <h2 style={styles.sectionTitle}>Registros de totais</h2>
 
@@ -195,21 +190,21 @@ export default function VersionDetail() {
                   <table style={styles.table}>
                     <thead>
                       <tr>
-                        <th style={styles.th}>ID</th>
-                        <th style={styles.th}>Valor geral orçado</th>
-                        <th style={styles.th}>Valor total BDI</th>
-                        <th style={styles.th}>Valor global orçado</th>
-                        <th style={styles.th}>Custo direto total</th>
+                        {Object.keys(totals[0]).map((key) => (
+                          <th key={key} style={styles.th}>
+                            {beautifyKey(key)}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {totals.map((item) => (
-                        <tr key={item.id}>
-                          <td style={styles.td}>{item.id}</td>
-                          <td style={styles.td}>{formatCurrency(item.valor_geral_orcado)}</td>
-                          <td style={styles.td}>{formatCurrency(item.valor_total_bdi)}</td>
-                          <td style={styles.td}>{formatCurrency(item.valor_global_orcado)}</td>
-                          <td style={styles.td}>{formatCurrency(item.custo_direto_total)}</td>
+                      {totals.map((row, rowIndex) => (
+                        <tr key={rowIndex}>
+                          {Object.keys(totals[0]).map((key) => (
+                            <td key={key} style={styles.td}>
+                              {formatDynamicValue(row[key], key)}
+                            </td>
+                          ))}
                         </tr>
                       ))}
                     </tbody>
@@ -248,9 +243,7 @@ function formatDate(value?: string | null) {
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
+  if (Number.isNaN(date.getTime())) return value;
 
   return date.toLocaleString("pt-BR");
 }
@@ -261,6 +254,43 @@ function formatCurrency(value?: number | null) {
     style: "currency",
     currency: "BRL",
   });
+}
+
+function beautifyKey(key: string) {
+  return key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatDynamicValue(
+  value: string | number | null | undefined,
+  key: string
+) {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
+  const lowerKey = key.toLowerCase();
+
+  if (
+    lowerKey.includes("valor") ||
+    lowerKey.includes("custo") ||
+    lowerKey.includes("total") ||
+    lowerKey.includes("orcado") ||
+    lowerKey.includes("orçado")
+  ) {
+    return formatCurrency(Number(value));
+  }
+
+  if (
+    lowerKey.includes("created_at") ||
+    lowerKey.includes("updated_at") ||
+    lowerKey.includes("criada_em")
+  ) {
+    return formatDate(String(value));
+  }
+
+  return String(value);
 }
 
 const styles: Record<string, CSSProperties> = {
