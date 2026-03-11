@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useRoute } from "wouter";
 import { supabase } from "../lib/supabase";
+import { theme, commonStyles } from "../theme";
 
 type SpreadsheetVersion = {
   id: number;
@@ -88,12 +89,9 @@ export default function VersionDetail() {
     if (!resumo) return [];
 
     return Object.entries(resumo).filter(([key]) => {
-      return ![
-        "id",
-        "spreadsheet_version_id",
-        "created_at",
-        "updated_at",
-      ].includes(key);
+      return !["id", "spreadsheet_version_id", "created_at", "updated_at"].includes(
+        key
+      );
     });
   }, [resumo]);
 
@@ -127,7 +125,7 @@ export default function VersionDetail() {
         {loading && <p style={styles.message}>Carregando versão...</p>}
 
         {error && (
-          <p style={{ ...styles.message, color: "#b42318" }}>
+          <p style={{ ...styles.message, color: theme.colors.danger }}>
             Erro ao carregar: {error}
           </p>
         )}
@@ -137,11 +135,14 @@ export default function VersionDetail() {
             <span style={styles.badge}>Versão #{version.id}</span>
             <h1 style={styles.title}>Versão {version.numero_versao}</h1>
 
-            <div style={styles.grid}>
+            <div style={styles.metaGrid}>
               <InfoCard label="Tipo da versão" value={version.tipo_versao} />
               <InfoCard label="Status" value={version.status} />
               <InfoCard label="Criada em" value={formatDate(version.criada_em)} />
-              <InfoCard label="ID da planilha" value={String(version.spreadsheet_id)} />
+              <InfoCard
+                label="ID da planilha"
+                value={String(version.spreadsheet_id)}
+              />
             </div>
 
             {spreadsheet && (
@@ -155,7 +156,10 @@ export default function VersionDetail() {
                     Tipo: {spreadsheet.tipo_planilha} • Status: {spreadsheet.status}
                   </p>
 
-                  <Link href={`/planilhas/${spreadsheet.id}`} style={styles.primaryLink}>
+                  <Link
+                    href={`/planilhas/${spreadsheet.id}`}
+                    style={styles.primaryButton}
+                  >
                     Abrir planilha
                   </Link>
                 </div>
@@ -170,7 +174,7 @@ export default function VersionDetail() {
                   Nenhum total consolidado encontrado para esta versão.
                 </div>
               ) : (
-                <div style={styles.grid}>
+                <div style={styles.summaryGrid}>
                   {summaryEntries.map(([key, value]) => {
                     const isMainTotal = key.toLowerCase().includes("global");
 
@@ -322,33 +326,21 @@ function formatDynamicValue(
 }
 
 const styles: Record<string, CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#f7f4f9",
-    fontFamily: "Arial, sans-serif",
-    padding: "32px 16px",
-  },
-  container: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-  },
+  page: commonStyles.page,
+  container: commonStyles.container,
   navRow: {
     display: "flex",
     flexDirection: "column",
     gap: "8px",
     marginBottom: "24px",
   },
-  backLink: {
-    color: "#8c58a2",
-    textDecoration: "none",
-    fontWeight: 600,
-  },
+  backLink: commonStyles.backLink,
   badge: {
     display: "inline-block",
-    background: "#efe7f3",
-    color: "#8c58a2",
+    background: theme.colors.primarySoft,
+    color: theme.colors.primary,
     padding: "6px 10px",
-    borderRadius: "999px",
+    borderRadius: theme.radius.pill,
     fontSize: "12px",
     fontWeight: 700,
     marginBottom: "12px",
@@ -356,29 +348,36 @@ const styles: Record<string, CSSProperties> = {
   title: {
     fontSize: "32px",
     margin: "0 0 24px 0",
-    color: "#6f4381",
+    color: theme.colors.primaryDark,
+    fontWeight: 800,
   },
-  grid: {
+  metaGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
     gap: "16px",
     marginBottom: "32px",
   },
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: "16px",
+    marginBottom: "32px",
+  },
   infoCard: {
-    background: "#ffffff",
-    border: "1px solid #dccde4",
-    borderRadius: "16px",
+    background: theme.colors.white,
+    border: `1px solid ${theme.colors.primaryBorder}`,
+    borderRadius: theme.radius.md,
     padding: "16px",
   },
   infoCardHighlight: {
-    background: "#8c58a2",
-    border: "1px solid #8c58a2",
-    boxShadow: "0 10px 24px rgba(140, 88, 162, 0.18)",
+    background: theme.colors.primary,
+    border: `1px solid ${theme.colors.primary}`,
+    boxShadow: theme.shadow.highlight,
   },
   infoLabel: {
     display: "block",
     fontSize: "13px",
-    color: "#6f5a78",
+    color: theme.colors.textSoft,
     marginBottom: "8px",
   },
   infoLabelHighlight: {
@@ -386,60 +385,44 @@ const styles: Record<string, CSSProperties> = {
   },
   infoValue: {
     fontSize: "16px",
-    color: "#2f2038",
+    color: theme.colors.textStrong,
   },
   infoValueHighlight: {
-    color: "#ffffff",
+    color: theme.colors.white,
     fontSize: "28px",
     lineHeight: 1.2,
   },
   section: {
     marginTop: "24px",
   },
-  sectionTitle: {
-    fontSize: "22px",
-    marginBottom: "16px",
-    color: "#6f4381",
-  },
+  sectionTitle: commonStyles.sectionTitle,
   card: {
-    background: "#ffffff",
-    border: "1px solid #dccde4",
-    borderRadius: "16px",
+    ...commonStyles.card,
     padding: "20px",
   },
   cardOverline: {
     margin: "0 0 8px 0",
     fontSize: "12px",
-    color: "#7b6a84",
+    color: theme.colors.textMuted,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
   },
   cardTitle: {
     margin: "0 0 8px 0",
     fontSize: "22px",
-    color: "#2f2038",
+    color: theme.colors.textStrong,
   },
   cardText: {
     margin: "0 0 16px 0",
-    color: "#5d4b68",
+    color: theme.colors.textMedium,
   },
-  primaryLink: {
-    color: "#8c58a2",
-    textDecoration: "none",
-    fontWeight: 700,
-  },
-  emptyState: {
-    background: "#fff",
-    border: "1px solid #dccde4",
-    borderRadius: "16px",
-    padding: "20px",
-    color: "#6f5a78",
-  },
+  primaryButton: commonStyles.buttonPrimary,
+  emptyState: commonStyles.emptyState,
   tableWrapper: {
     overflowX: "auto",
-    background: "#fff",
-    border: "1px solid #dccde4",
-    borderRadius: "16px",
+    background: theme.colors.white,
+    border: `1px solid ${theme.colors.primaryBorder}`,
+    borderRadius: theme.radius.md,
   },
   table: {
     width: "100%",
@@ -449,20 +432,17 @@ const styles: Record<string, CSSProperties> = {
   th: {
     textAlign: "left",
     padding: "14px 16px",
-    borderBottom: "1px solid #dccde4",
+    borderBottom: `1px solid ${theme.colors.primaryBorder}`,
     fontSize: "13px",
-    color: "#6f5a78",
-    background: "#f6f0f8",
+    color: theme.colors.textSoft,
+    background: theme.colors.tableHeader,
   },
   td: {
     padding: "14px 16px",
-    borderBottom: "1px solid #ece2f0",
+    borderBottom: `1px solid ${theme.colors.tableBorder}`,
     fontSize: "14px",
-    color: "#4b3a56",
+    color: theme.colors.textMedium,
     verticalAlign: "top",
   },
-  message: {
-    fontSize: "16px",
-    color: "#4b3a56",
-  },
+  message: commonStyles.message,
 };
