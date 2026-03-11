@@ -22,7 +22,6 @@ type Spreadsheet = {
 type SpreadsheetTotal = {
   id: number;
   spreadsheet_version_id: number;
-  equipment_service_id?: number | null;
   valor_geral_orcado?: number | null;
   valor_total_bdi?: number | null;
   valor_global_orcado?: number | null;
@@ -74,7 +73,7 @@ export default function VersionDetail() {
       const { data: totalsData, error: totalsError } = await supabase
         .from("spreadsheet_totals")
         .select(
-          "id, spreadsheet_version_id, equipment_service_id, valor_geral_orcado, valor_total_bdi, valor_global_orcado, custo_direto_total"
+          "id, spreadsheet_version_id, valor_geral_orcado, valor_total_bdi, valor_global_orcado, custo_direto_total"
         )
         .eq("spreadsheet_version_id", versionId)
         .order("id", { ascending: true });
@@ -184,15 +183,6 @@ export default function VersionDetail() {
                     label="Custo direto total"
                     value={formatCurrency(resumo.custo_direto_total)}
                   />
-                  <InfoCard
-                    label="Equipment / Service ID"
-                    value={
-                      resumo.equipment_service_id !== null &&
-                      resumo.equipment_service_id !== undefined
-                        ? String(resumo.equipment_service_id)
-                        : "Não informado"
-                    }
-                  />
                 </div>
               )}
             </section>
@@ -206,7 +196,6 @@ export default function VersionDetail() {
                     <thead>
                       <tr>
                         <th style={styles.th}>ID</th>
-                        <th style={styles.th}>Equip./Serviço</th>
                         <th style={styles.th}>Valor geral orçado</th>
                         <th style={styles.th}>Valor total BDI</th>
                         <th style={styles.th}>Valor global orçado</th>
@@ -217,7 +206,6 @@ export default function VersionDetail() {
                       {totals.map((item) => (
                         <tr key={item.id}>
                           <td style={styles.td}>{item.id}</td>
-                          <td style={styles.td}>{item.equipment_service_id ?? "—"}</td>
                           <td style={styles.td}>{formatCurrency(item.valor_geral_orcado)}</td>
                           <td style={styles.td}>{formatCurrency(item.valor_total_bdi)}</td>
                           <td style={styles.td}>{formatCurrency(item.valor_global_orcado)}</td>
