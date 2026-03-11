@@ -98,3 +98,77 @@ export const commonStyles: Record<string, CSSProperties> = {
     color: theme.colors.textMedium,
   },
 };
+
+export function getStatusBadgeStyle(status?: string): CSSProperties {
+  const normalized = (status || "").trim().toLowerCase();
+
+  const base: CSSProperties = {
+    padding: "12px 18px",
+    borderRadius: theme.radius.pill,
+    fontWeight: 700,
+    fontSize: "14px",
+    display: "inline-block",
+  };
+
+  if (
+    normalized.includes("aprov") ||
+    normalized.includes("ativo") ||
+    normalized.includes("conclu") ||
+    normalized.includes("finaliz") ||
+    normalized.includes("ok")
+  ) {
+    return {
+      ...base,
+      background: theme.colors.successBg,
+      color: theme.colors.successText,
+    };
+  }
+
+  if (
+    normalized.includes("rascunho") ||
+    normalized.includes("edição") ||
+    normalized.includes("edicao") ||
+    normalized.includes("em elaboração") ||
+    normalized.includes("em elaboracao")
+  ) {
+    return {
+      ...base,
+      background: theme.colors.primarySoft,
+      color: theme.colors.primary,
+    };
+  }
+
+  if (
+    normalized.includes("pend") ||
+    normalized.includes("análise") ||
+    normalized.includes("analise") ||
+    normalized.includes("aguard") ||
+    normalized.includes("revis")
+  ) {
+    return {
+      ...base,
+      background: "#fff4e5",
+      color: "#b54708",
+    };
+  }
+
+  if (
+    normalized.includes("erro") ||
+    normalized.includes("reprov") ||
+    normalized.includes("cancel") ||
+    normalized.includes("inativo") ||
+    normalized.includes("bloque")
+  ) {
+    return {
+      ...base,
+      background: "#fdeaea",
+      color: "#b42318",
+    };
+  }
+
+  return {
+    ...base,
+    background: "#f1f3f5",
+    color: "#475467",
+  };
+}
