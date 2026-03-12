@@ -20,9 +20,11 @@ import TableChartIcon from "@mui/icons-material/TableChart";
 import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import LogoutIcon from "@mui/icons-material/Logout";
 import { useNavigate } from "react-router-dom";
 import { getSpreadsheets } from "../lib/api";
 import { SpreadsheetListItem } from "../types/spreadsheet";
+import { useAuth } from "../auth/AuthContext";
 
 export function getStatusStyles(status: string) {
   const normalized = status.toLowerCase();
@@ -98,6 +100,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { logout, user } = useAuth();
 
   useEffect(() => {
     let isMounted = true;
@@ -162,6 +165,7 @@ export default function Home() {
           sx={{
             minHeight: 68,
             px: { xs: 2, md: 4 },
+            justifyContent: "space-between",
           }}
         >
           <Stack direction="row" spacing={1.5} alignItems="center">
@@ -169,6 +173,37 @@ export default function Home() {
             <Typography variant="h6" sx={{ fontWeight: 800 }}>
               PlanilhaDEX
             </Typography>
+          </Stack>
+
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Typography
+              variant="body2"
+              sx={{
+                color: "rgba(255,255,255,0.92)",
+                fontWeight: 600,
+                display: { xs: "none", md: "block" },
+              }}
+            >
+              Usuário: {user?.username || "admin"}
+            </Typography>
+
+            <Button
+              variant="outlined"
+              startIcon={<LogoutIcon />}
+              onClick={logout}
+              sx={{
+                color: "#fff",
+                borderColor: "rgba(255,255,255,0.45)",
+                "&:hover": {
+                  borderColor: "#fff",
+                  backgroundColor: "rgba(255,255,255,0.08)",
+                },
+                borderRadius: "12px",
+                fontWeight: 700,
+              }}
+            >
+              Sair
+            </Button>
           </Stack>
         </Toolbar>
       </AppBar>
