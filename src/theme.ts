@@ -1,174 +1,134 @@
-import type { CSSProperties } from "react";
+import { createTheme } from "@mui/material/styles";
 
-export const theme = {
-  colors: {
-    primary: "#8c58a2",
-    primaryDark: "#6f4381",
-    primarySoft: "#efe7f3",
-    primaryBorder: "#dccde4",
-    pageBackground: "#f7f4f9",
-
-    textStrong: "#2f2038",
-    textMedium: "#4b3a56",
-    textSoft: "#6f5a78",
-    textMuted: "#7b6a84",
-
-    white: "#ffffff",
-    danger: "#b42318",
-
-    successBg: "#e7f6ea",
-    successText: "#1f7a3d",
-
-    tableHeader: "#f6f0f8",
-    tableBorder: "#ece2f0",
+const theme = createTheme({
+  palette: {
+    mode: "light",
+    primary: {
+      main: "#8c58a2",
+      light: "#a97abd",
+      dark: "#6f3f84",
+      contrastText: "#ffffff",
+    },
+    secondary: {
+      main: "#6f3f84",
+      light: "#8c58a2",
+      dark: "#532c63",
+      contrastText: "#ffffff",
+    },
+    background: {
+      default: "#f7f4f9",
+      paper: "#ffffff",
+    },
+    text: {
+      primary: "#2f2235",
+      secondary: "#6f6277",
+    },
+    divider: "#e7ddeb",
+    success: {
+      main: "#2e7d32",
+    },
+    warning: {
+      main: "#ed6c02",
+    },
+    error: {
+      main: "#d32f2f",
+    },
+    info: {
+      main: "#0288d1",
+    },
   },
-
-  radius: {
-    sm: "12px",
-    md: "16px",
-    lg: "20px",
-    xl: "24px",
-    pill: "999px",
+  shape: {
+    borderRadius: 14,
   },
-
-  shadow: {
-    soft: "0 8px 24px rgba(140, 88, 162, 0.06)",
-    highlight: "0 10px 24px rgba(140, 88, 162, 0.18)",
+  typography: {
+    fontFamily: [
+      "Inter",
+      "Roboto",
+      '"Helvetica Neue"',
+      "Arial",
+      "sans-serif",
+    ].join(","),
+    h1: {
+      fontWeight: 700,
+    },
+    h2: {
+      fontWeight: 700,
+    },
+    h3: {
+      fontWeight: 700,
+    },
+    h4: {
+      fontWeight: 700,
+    },
+    h5: {
+      fontWeight: 700,
+    },
+    h6: {
+      fontWeight: 700,
+    },
+    button: {
+      textTransform: "none",
+      fontWeight: 600,
+    },
   },
-
-  spacing: {
-    page: "32px 16px",
-    card: "28px",
-    cardCompact: "20px",
+  components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          margin: 0,
+          padding: 0,
+          backgroundColor: "#f7f4f9",
+        },
+        "*": {
+          boxSizing: "border-box",
+        },
+      },
+    },
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          background: "linear-gradient(90deg, #6f3f84 0%, #8c58a2 100%)",
+          boxShadow: "0 8px 24px rgba(111, 63, 132, 0.18)",
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 18,
+          boxShadow: "0 10px 30px rgba(81, 52, 96, 0.10)",
+          border: "1px solid #eee4f3",
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          paddingInline: 16,
+          paddingBlock: 10,
+        },
+        containedPrimary: {
+          boxShadow: "0 8px 18px rgba(140, 88, 162, 0.25)",
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 10,
+          fontWeight: 600,
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: "none",
+        },
+      },
+    },
   },
+});
 
-  font: {
-    family: "Arial, sans-serif",
-  },
-};
-
-export const commonStyles: Record<string, CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: theme.colors.pageBackground,
-    fontFamily: theme.font.family,
-    padding: theme.spacing.page,
-  },
-  container: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-  },
-  backLink: {
-    color: theme.colors.primary,
-    textDecoration: "none",
-    fontWeight: 600,
-    fontSize: "16px",
-  },
-  sectionTitle: {
-    fontSize: "22px",
-    margin: "0 0 16px 0",
-    color: theme.colors.primaryDark,
-  },
-  card: {
-    background: theme.colors.white,
-    border: `1px solid ${theme.colors.primaryBorder}`,
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.card,
-    boxShadow: theme.shadow.soft,
-  },
-  buttonPrimary: {
-    display: "inline-block",
-    background: theme.colors.primaryDark,
-    color: theme.colors.white,
-    textDecoration: "none",
-    padding: "16px 22px",
-    borderRadius: "18px",
-    fontWeight: 700,
-    fontSize: "16px",
-  },
-  emptyState: {
-    background: theme.colors.white,
-    border: `1px solid ${theme.colors.primaryBorder}`,
-    borderRadius: theme.radius.lg,
-    padding: "24px",
-    color: theme.colors.textSoft,
-  },
-  message: {
-    fontSize: "16px",
-    color: theme.colors.textMedium,
-  },
-};
-
-export function getStatusBadgeStyle(status?: string): CSSProperties {
-  const normalized = (status || "").trim().toLowerCase();
-
-  const base: CSSProperties = {
-    padding: "12px 18px",
-    borderRadius: theme.radius.pill,
-    fontWeight: 700,
-    fontSize: "14px",
-    display: "inline-block",
-  };
-
-  if (
-    normalized.includes("aprov") ||
-    normalized.includes("ativo") ||
-    normalized.includes("conclu") ||
-    normalized.includes("finaliz") ||
-    normalized.includes("ok")
-  ) {
-    return {
-      ...base,
-      background: theme.colors.successBg,
-      color: theme.colors.successText,
-    };
-  }
-
-  if (
-    normalized.includes("rascunho") ||
-    normalized.includes("edição") ||
-    normalized.includes("edicao") ||
-    normalized.includes("em elaboração") ||
-    normalized.includes("em elaboracao")
-  ) {
-    return {
-      ...base,
-      background: theme.colors.primarySoft,
-      color: theme.colors.primary,
-    };
-  }
-
-  if (
-    normalized.includes("pend") ||
-    normalized.includes("análise") ||
-    normalized.includes("analise") ||
-    normalized.includes("aguard") ||
-    normalized.includes("revis")
-  ) {
-    return {
-      ...base,
-      background: "#fff4e5",
-      color: "#b54708",
-    };
-  }
-
-  if (
-    normalized.includes("erro") ||
-    normalized.includes("reprov") ||
-    normalized.includes("cancel") ||
-    normalized.includes("inativo") ||
-    normalized.includes("bloque")
-  ) {
-    return {
-      ...base,
-      background: "#fdeaea",
-      color: "#b42318",
-    };
-  }
-
-  return {
-    ...base,
-    background: "#f1f3f5",
-    color: "#475467",
-  };
-}
+export default theme;
