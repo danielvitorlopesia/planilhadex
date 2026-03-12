@@ -2,6 +2,8 @@ import { spreadsheets } from "../_data.js";
 
 export default function handler(req, res) {
   try {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+
     if (req.method !== "GET") {
       return res.status(405).json({
         message: "Método não permitido.",
