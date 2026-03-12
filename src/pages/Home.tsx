@@ -7,7 +7,6 @@ import {
   CardContent,
   Chip,
   Container,
-  Grid,
   InputAdornment,
   Stack,
   TextField,
@@ -146,7 +145,7 @@ export default function Home() {
       </AppBar>
 
       <Container maxWidth="xl" sx={{ py: { xs: 4, md: 6 } }}>
-        <Box sx={{ maxWidth: 1200, mx: "auto" }}>
+        <Box sx={{ maxWidth: 1280, mx: "auto" }}>
           <Stack spacing={4}>
             <Box
               sx={{
@@ -226,132 +225,163 @@ export default function Home() {
               }}
             />
 
-            <Grid container spacing={3}>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  md: "repeat(2, minmax(0, 1fr))",
+                },
+                gap: 3,
+                alignItems: "stretch",
+              }}
+            >
               {filteredItems.map((item) => {
                 const statusConfig = getStatusStyles(item.status);
 
                 return (
-                  <Grid item xs={12} md={6} key={item.id}>
-                    <Card
+                  <Card
+                    key={item.id}
+                    sx={{
+                      height: "100%",
+                      minHeight: 280,
+                      borderRadius: "20px",
+                      transition:
+                        "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
+                      "&:hover": {
+                        transform: "translateY(-4px)",
+                        boxShadow: "0 20px 40px rgba(81, 52, 96, 0.14)",
+                        borderColor: "rgba(140, 88, 162, 0.25)",
+                      },
+                    }}
+                  >
+                    <CardContent
                       sx={{
+                        p: 3.2,
                         height: "100%",
-                        borderRadius: "20px",
-                        transition:
-                          "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
-                        "&:hover": {
-                          transform: "translateY(-4px)",
-                          boxShadow: "0 20px 40px rgba(81, 52, 96, 0.14)",
-                          borderColor: "rgba(140, 88, 162, 0.25)",
-                        },
+                        display: "flex",
+                        flexDirection: "column",
                       }}
                     >
-                      <CardContent
+                      <Stack
+                        spacing={2.4}
                         sx={{
-                          p: 3.2,
+                          flexGrow: 1,
                           height: "100%",
-                          display: "flex",
-                          flexDirection: "column",
                         }}
                       >
-                        <Stack spacing={2.4} sx={{ flexGrow: 1 }}>
-                          <Stack
-                            direction="row"
-                            justifyContent="space-between"
-                            alignItems="flex-start"
-                            spacing={2}
-                          >
-                            <Typography
-                              variant="h6"
-                              sx={{
-                                fontWeight: 800,
-                                color: "text.primary",
-                                lineHeight: 1.25,
-                              }}
-                            >
-                              {item.title}
-                            </Typography>
-
-                            <Chip
-                              label={statusConfig.label}
-                              sx={{
-                                ...statusConfig.sx,
-                                borderRadius: "10px",
-                                whiteSpace: "nowrap",
-                                flexShrink: 0,
-                              }}
-                            />
-                          </Stack>
-
+                        <Stack
+                          direction="row"
+                          justifyContent="space-between"
+                          alignItems="flex-start"
+                          spacing={2}
+                        >
                           <Typography
-                            variant="body2"
+                            variant="h5"
                             sx={{
-                              color: "text.secondary",
-                              lineHeight: 1.75,
-                              minHeight: 56,
+                              fontWeight: 800,
+                              color: "text.primary",
+                              lineHeight: 1.2,
+                              fontSize: { xs: "1.45rem", md: "1.65rem" },
+                              pr: 1,
                             }}
                           >
-                            {item.description}
+                            {item.title}
                           </Typography>
 
+                          <Chip
+                            label={statusConfig.label}
+                            sx={{
+                              ...statusConfig.sx,
+                              borderRadius: "12px",
+                              whiteSpace: "nowrap",
+                              flexShrink: 0,
+                              fontSize: "0.95rem",
+                              height: 42,
+                              px: 1,
+                            }}
+                          />
+                        </Stack>
+
+                        <Typography
+                          variant="body1"
+                          sx={{
+                            color: "text.secondary",
+                            lineHeight: 1.8,
+                            fontSize: "1rem",
+                            minHeight: 72,
+                          }}
+                        >
+                          {item.description}
+                        </Typography>
+
+                        <Stack
+                          direction="row"
+                          spacing={1.2}
+                          alignItems="center"
+                          flexWrap="wrap"
+                          useFlexGap
+                        >
+                          <Chip
+                            label={item.category}
+                            variant="outlined"
+                            sx={{
+                              borderColor: "#d8c9e0",
+                              color: "#5f4a6c",
+                              fontWeight: 700,
+                              backgroundColor: "#fff",
+                              height: 38,
+                              fontSize: "0.95rem",
+                            }}
+                          />
+
                           <Stack
                             direction="row"
-                            spacing={1}
+                            spacing={0.8}
                             alignItems="center"
-                            flexWrap="wrap"
-                            useFlexGap
+                            sx={{ color: "text.secondary" }}
                           >
-                            <Chip
-                              label={item.category}
-                              variant="outlined"
-                              sx={{
-                                borderColor: "#d8c9e0",
-                                color: "#5f4a6c",
-                                fontWeight: 700,
-                                backgroundColor: "#fff",
-                              }}
-                            />
-
-                            <Stack
-                              direction="row"
-                              spacing={0.6}
-                              alignItems="center"
-                              sx={{ color: "text.secondary" }}
+                            <AccessTimeIcon sx={{ fontSize: 18 }} />
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ fontSize: "0.98rem" }}
                             >
-                              <AccessTimeIcon sx={{ fontSize: 14 }} />
-                              <Typography variant="caption" color="text.secondary">
-                                Atualizado em {item.updatedAt}
-                              </Typography>
-                            </Stack>
+                              Atualizado em {item.updatedAt}
+                            </Typography>
                           </Stack>
+                        </Stack>
 
-                          <Box
+                        <Box
+                          sx={{
+                            mt: "auto",
+                            pt: 2,
+                            display: "flex",
+                            justifyContent: "flex-end",
+                          }}
+                        >
+                          <Button
+                            variant="contained"
+                            endIcon={
+                              <ArrowForwardIosIcon sx={{ fontSize: 16 }} />
+                            }
                             sx={{
-                              mt: "auto",
-                              pt: 1.5,
-                              display: "flex",
-                              justifyContent: "flex-end",
+                              minWidth: 158,
+                              height: 54,
+                              fontWeight: 800,
+                              fontSize: "1rem",
+                              borderRadius: "16px",
                             }}
                           >
-                            <Button
-                              variant="contained"
-                              endIcon={
-                                <ArrowForwardIosIcon sx={{ fontSize: 14 }} />
-                              }
-                              sx={{
-                                minWidth: 104,
-                                fontWeight: 700,
-                              }}
-                            >
-                              Abrir
-                            </Button>
-                          </Box>
-                        </Stack>
-                      </CardContent>
-                    </Card>
-                  </Grid>
+                            Abrir
+                          </Button>
+                        </Box>
+                      </Stack>
+                    </CardContent>
+                  </Card>
                 );
               })}
-            </Grid>
+            </Box>
 
             {filteredItems.length === 0 && (
               <Box
