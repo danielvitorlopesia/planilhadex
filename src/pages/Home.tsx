@@ -1,11 +1,13 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   AppBar,
   Box,
   Button,
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Container,
   InputAdornment,
   Stack,
@@ -19,56 +21,10 @@ import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import { useNavigate } from "react-router-dom";
+import { getSpreadsheets } from "../lib/api";
+import { SpreadsheetListItem } from "../types/spreadsheet";
 
-export type SpreadsheetItem = {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  category: string;
-  updatedAt: string;
-};
-
-export const spreadsheetsMock: SpreadsheetItem[] = [
-  {
-    id: "1",
-    title: "Planilha Orçamentária",
-    description:
-      "Controle e organização de custos, categorias financeiras e projeções orçamentárias do projeto.",
-    status: "Em elaboração",
-    category: "Financeiro",
-    updatedAt: "11/03/2026",
-  },
-  {
-    id: "2",
-    title: "Cronograma de Execução",
-    description:
-      "Planejamento temporal das etapas do projeto, com acompanhamento das ações previstas.",
-    status: "Em elaboração",
-    category: "Gestão",
-    updatedAt: "11/03/2026",
-  },
-  {
-    id: "3",
-    title: "Relatório de Prestação de Contas",
-    description:
-      "Consolidação de dados e documentos para prestação de contas e monitoramento da execução.",
-    status: "Em elaboração",
-    category: "Compliance",
-    updatedAt: "11/03/2026",
-  },
-  {
-    id: "4",
-    title: "Mapa de Entregáveis",
-    description:
-      "Visão geral dos produtos, documentos e marcos de acompanhamento do projeto.",
-    status: "Em elaboração",
-    category: "Planejamento",
-    updatedAt: "11/03/2026",
-  },
-];
-
-function getStatusStyles(status: string) {
+export function getStatusStyles(status: string) {
   const normalized = status.toLowerCase();
 
   if (normalized.includes("concluído") || normalized.includes("concluido")) {
@@ -82,12 +38,45 @@ function getStatusStyles(status: string) {
     };
   }
 
-  if (normalized.includes("elaboração") || normalized.includes("elaboracao")) {
+  if (normalized.includes("conferido")) {
     return {
       label: status,
       sx: {
-        backgroundColor: "rgba(140, 88, 162, 0.12)",
-        color: "#6f3f84",
+        backgroundColor: "#e3f2fd",
+        color: "#1565c0",
+        fontWeight: 700,
+      },
+    };
+  }
+
+  if (normalized.includes("revis")) {
+    return {
+      label: status,
+      sx: {
+        backgroundColor: "#fff3e0",
+        color: "#b26a00",
+        fontWeight: 700,
+      },
+    };
+  }
+
+  if (normalized.includes("pendente")) {
+    return {
+      label: status,
+      sx: {
+        backgroundColor: "#fff8e1",
+        color: "#8d6e00",
+        fontWeight: 700,
+      },
+    };
+  }
+
+  if (normalized.includes("andamento")) {
+    return {
+      label: status,
+      sx: {
+        backgroundColor: "#ede7f6",
+        color: "#5e35b1",
         fontWeight: 700,
       },
     };
@@ -105,14 +94,52 @@ function getStatusStyles(status: string) {
 
 export default function Home() {
   const [search, setSearch] = useState("");
+  const [items, setItems] = useState<SpreadsheetListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadData() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const data = await getSpreadsheets();
+
+        if (isMounted) {
+          setItems(data);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Não foi possível carregar as planilhas."
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const filteredItems = useMemo(() => {
     const term = search.trim().toLowerCase();
 
-    if (!term) return spreadsheetsMock;
+    if (!term) return items;
 
-    return spreadsheetsMock.filter((item) => {
+    return items.filter((item) => {
       return (
         item.title.toLowerCase().includes(term) ||
         item.description.toLowerCase().includes(term) ||
@@ -120,7 +147,7 @@ export default function Home() {
         item.status.toLowerCase().includes(term)
       );
     });
-  }, [search]);
+  }, [search, items]);
 
   return (
     <Box
@@ -227,166 +254,182 @@ export default function Home() {
               }}
             />
 
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: {
-                  xs: "1fr",
-                  md: "repeat(2, minmax(0, 1fr))",
-                },
-                gap: 3,
-                alignItems: "stretch",
-              }}
-            >
-              {filteredItems.map((item) => {
-                const statusConfig = getStatusStyles(item.status);
+            {loading && (
+              <Box
+                sx={{
+                  py: 8,
+                  display: "flex",
+                  justifyContent: "center",
+                }}
+              >
+                <CircularProgress />
+              </Box>
+            )}
 
-                return (
-                  <Card
-                    key={item.id}
-                    sx={{
-                      height: "100%",
-                      minHeight: 280,
-                      borderRadius: "20px",
-                      transition:
-                        "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
-                      "&:hover": {
-                        transform: "translateY(-4px)",
-                        boxShadow: "0 20px 40px rgba(81, 52, 96, 0.14)",
-                        borderColor: "rgba(140, 88, 162, 0.25)",
-                      },
-                    }}
-                  >
-                    <CardContent
+            {!loading && error && <Alert severity="error">{error}</Alert>}
+
+            {!loading && !error && (
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    md: "repeat(2, minmax(0, 1fr))",
+                  },
+                  gap: 3,
+                  alignItems: "stretch",
+                }}
+              >
+                {filteredItems.map((item) => {
+                  const statusConfig = getStatusStyles(item.status);
+
+                  return (
+                    <Card
+                      key={item.id}
                       sx={{
-                        p: 3.2,
                         height: "100%",
-                        display: "flex",
-                        flexDirection: "column",
+                        minHeight: 280,
+                        borderRadius: "20px",
+                        transition:
+                          "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
+                        "&:hover": {
+                          transform: "translateY(-4px)",
+                          boxShadow: "0 20px 40px rgba(81, 52, 96, 0.14)",
+                          borderColor: "rgba(140, 88, 162, 0.25)",
+                        },
                       }}
                     >
-                      <Stack
-                        spacing={2.4}
+                      <CardContent
                         sx={{
-                          flexGrow: 1,
+                          p: 3.2,
                           height: "100%",
+                          display: "flex",
+                          flexDirection: "column",
                         }}
                       >
                         <Stack
-                          direction="row"
-                          justifyContent="space-between"
-                          alignItems="flex-start"
-                          spacing={2}
-                        >
-                          <Typography
-                            variant="h5"
-                            sx={{
-                              fontWeight: 800,
-                              color: "text.primary",
-                              lineHeight: 1.2,
-                              fontSize: { xs: "1.45rem", md: "1.65rem" },
-                              pr: 1,
-                            }}
-                          >
-                            {item.title}
-                          </Typography>
-
-                          <Chip
-                            label={statusConfig.label}
-                            sx={{
-                              ...statusConfig.sx,
-                              borderRadius: "12px",
-                              whiteSpace: "nowrap",
-                              flexShrink: 0,
-                              fontSize: "0.95rem",
-                              height: 42,
-                              px: 1,
-                            }}
-                          />
-                        </Stack>
-
-                        <Typography
-                          variant="body1"
+                          spacing={2.4}
                           sx={{
-                            color: "text.secondary",
-                            lineHeight: 1.8,
-                            fontSize: "1rem",
-                            minHeight: 72,
+                            flexGrow: 1,
+                            height: "100%",
                           }}
                         >
-                          {item.description}
-                        </Typography>
+                          <Stack
+                            direction="row"
+                            justifyContent="space-between"
+                            alignItems="flex-start"
+                            spacing={2}
+                          >
+                            <Typography
+                              variant="h5"
+                              sx={{
+                                fontWeight: 800,
+                                color: "text.primary",
+                                lineHeight: 1.2,
+                                fontSize: { xs: "1.45rem", md: "1.65rem" },
+                                pr: 1,
+                              }}
+                            >
+                              {item.title}
+                            </Typography>
 
-                        <Stack
-                          direction="row"
-                          spacing={1.2}
-                          alignItems="center"
-                          flexWrap="wrap"
-                          useFlexGap
-                        >
-                          <Chip
-                            label={item.category}
-                            variant="outlined"
+                            <Chip
+                              label={statusConfig.label}
+                              sx={{
+                                ...statusConfig.sx,
+                                borderRadius: "12px",
+                                whiteSpace: "nowrap",
+                                flexShrink: 0,
+                                fontSize: "0.95rem",
+                                height: 42,
+                                px: 1,
+                              }}
+                            />
+                          </Stack>
+
+                          <Typography
+                            variant="body1"
                             sx={{
-                              borderColor: "#d8c9e0",
-                              color: "#5f4a6c",
-                              fontWeight: 700,
-                              backgroundColor: "#fff",
-                              height: 38,
-                              fontSize: "0.95rem",
+                              color: "text.secondary",
+                              lineHeight: 1.8,
+                              fontSize: "1rem",
+                              minHeight: 72,
                             }}
-                          />
+                          >
+                            {item.description}
+                          </Typography>
 
                           <Stack
                             direction="row"
-                            spacing={0.8}
+                            spacing={1.2}
                             alignItems="center"
-                            sx={{ color: "text.secondary" }}
+                            flexWrap="wrap"
+                            useFlexGap
                           >
-                            <AccessTimeIcon sx={{ fontSize: 18 }} />
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{ fontSize: "0.98rem" }}
+                            <Chip
+                              label={item.category}
+                              variant="outlined"
+                              sx={{
+                                borderColor: "#d8c9e0",
+                                color: "#5f4a6c",
+                                fontWeight: 700,
+                                backgroundColor: "#fff",
+                                height: 38,
+                                fontSize: "0.95rem",
+                              }}
+                            />
+
+                            <Stack
+                              direction="row"
+                              spacing={0.8}
+                              alignItems="center"
+                              sx={{ color: "text.secondary" }}
                             >
-                              Atualizado em {item.updatedAt}
-                            </Typography>
+                              <AccessTimeIcon sx={{ fontSize: 18 }} />
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ fontSize: "0.98rem" }}
+                              >
+                                Atualizado em {item.updatedAt}
+                              </Typography>
+                            </Stack>
                           </Stack>
-                        </Stack>
 
-                        <Box
-                          sx={{
-                            mt: "auto",
-                            pt: 2,
-                            display: "flex",
-                            justifyContent: "flex-end",
-                          }}
-                        >
-                          <Button
-                            variant="contained"
-                            endIcon={
-                              <ArrowForwardIosIcon sx={{ fontSize: 16 }} />
-                            }
+                          <Box
                             sx={{
-                              minWidth: 158,
-                              height: 54,
-                              fontWeight: 800,
-                              fontSize: "1rem",
-                              borderRadius: "16px",
+                              mt: "auto",
+                              pt: 2,
+                              display: "flex",
+                              justifyContent: "flex-end",
                             }}
-                            onClick={() => navigate(`/spreadsheet/${item.id}`)}
                           >
-                            Abrir
-                          </Button>
-                        </Box>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </Box>
+                            <Button
+                              variant="contained"
+                              endIcon={
+                                <ArrowForwardIosIcon sx={{ fontSize: 16 }} />
+                              }
+                              sx={{
+                                minWidth: 158,
+                                height: 54,
+                                fontWeight: 800,
+                                fontSize: "1rem",
+                                borderRadius: "16px",
+                              }}
+                              onClick={() => navigate(`/spreadsheet/${item.id}`)}
+                            >
+                              Abrir
+                            </Button>
+                          </Box>
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </Box>
+            )}
 
-            {filteredItems.length === 0 && (
+            {!loading && !error && filteredItems.length === 0 && (
               <Box
                 sx={{
                   py: 9,
