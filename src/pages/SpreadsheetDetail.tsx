@@ -41,10 +41,12 @@ import PercentOutlinedIcon from "@mui/icons-material/PercentOutlined";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import BugReportOutlinedIcon from "@mui/icons-material/BugReportOutlined";
+import LogoutIcon from "@mui/icons-material/Logout";
 import { useNavigate, useParams } from "react-router-dom";
 import { getSpreadsheetById } from "../lib/api";
 import { getStatusStyles } from "./Home";
 import { SpreadsheetDetailData } from "../types/spreadsheet";
+import { useAuth } from "../auth/AuthContext";
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", {
@@ -56,6 +58,7 @@ function formatCurrency(value: number) {
 export default function SpreadsheetDetail() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { logout, user } = useAuth();
 
   const [data, setData] = useState<SpreadsheetDetailData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,12 +135,49 @@ export default function SpreadsheetDetail() {
         }}
       >
         <AppBar position="static" elevation={0}>
-          <Toolbar sx={{ minHeight: 68, px: { xs: 2, md: 4 } }}>
+          <Toolbar
+            sx={{
+              minHeight: 68,
+              px: { xs: 2, md: 4 },
+              justifyContent: "space-between",
+            }}
+          >
             <Stack direction="row" spacing={1.5} alignItems="center">
               <TableChartIcon />
               <Typography variant="h6" sx={{ fontWeight: 800 }}>
                 PlanilhaDEX
               </Typography>
+            </Stack>
+
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "rgba(255,255,255,0.92)",
+                  fontWeight: 600,
+                  display: { xs: "none", md: "block" },
+                }}
+              >
+                Usuário: {user?.username || "admin"}
+              </Typography>
+
+              <Button
+                variant="outlined"
+                startIcon={<LogoutIcon />}
+                onClick={logout}
+                sx={{
+                  color: "#fff",
+                  borderColor: "rgba(255,255,255,0.45)",
+                  "&:hover": {
+                    borderColor: "#fff",
+                    backgroundColor: "rgba(255,255,255,0.08)",
+                  },
+                  borderRadius: "12px",
+                  fontWeight: 700,
+                }}
+              >
+                Sair
+              </Button>
             </Stack>
           </Toolbar>
         </AppBar>
@@ -177,12 +217,49 @@ export default function SpreadsheetDetail() {
         }}
       >
         <AppBar position="static" elevation={0}>
-          <Toolbar sx={{ minHeight: 68, px: { xs: 2, md: 4 } }}>
+          <Toolbar
+            sx={{
+              minHeight: 68,
+              px: { xs: 2, md: 4 },
+              justifyContent: "space-between",
+            }}
+          >
             <Stack direction="row" spacing={1.5} alignItems="center">
               <TableChartIcon />
               <Typography variant="h6" sx={{ fontWeight: 800 }}>
                 PlanilhaDEX
               </Typography>
+            </Stack>
+
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "rgba(255,255,255,0.92)",
+                  fontWeight: 600,
+                  display: { xs: "none", md: "block" },
+                }}
+              >
+                Usuário: {user?.username || "admin"}
+              </Typography>
+
+              <Button
+                variant="outlined"
+                startIcon={<LogoutIcon />}
+                onClick={logout}
+                sx={{
+                  color: "#fff",
+                  borderColor: "rgba(255,255,255,0.45)",
+                  "&:hover": {
+                    borderColor: "#fff",
+                    backgroundColor: "rgba(255,255,255,0.08)",
+                  },
+                  borderRadius: "12px",
+                  fontWeight: 700,
+                }}
+              >
+                Sair
+              </Button>
             </Stack>
           </Toolbar>
         </AppBar>
@@ -280,12 +357,49 @@ export default function SpreadsheetDetail() {
       }}
     >
       <AppBar position="static" elevation={0}>
-        <Toolbar sx={{ minHeight: 68, px: { xs: 2, md: 4 } }}>
+        <Toolbar
+          sx={{
+            minHeight: 68,
+            px: { xs: 2, md: 4 },
+            justifyContent: "space-between",
+          }}
+        >
           <Stack direction="row" spacing={1.5} alignItems="center">
             <TableChartIcon />
             <Typography variant="h6" sx={{ fontWeight: 800 }}>
               PlanilhaDEX
             </Typography>
+          </Stack>
+
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Typography
+              variant="body2"
+              sx={{
+                color: "rgba(255,255,255,0.92)",
+                fontWeight: 600,
+                display: { xs: "none", md: "block" },
+              }}
+            >
+              Usuário: {user?.username || "admin"}
+            </Typography>
+
+            <Button
+              variant="outlined"
+              startIcon={<LogoutIcon />}
+              onClick={logout}
+              sx={{
+                color: "#fff",
+                borderColor: "rgba(255,255,255,0.45)",
+                "&:hover": {
+                  borderColor: "#fff",
+                  backgroundColor: "rgba(255,255,255,0.08)",
+                },
+                borderRadius: "12px",
+                fontWeight: 700,
+              }}
+            >
+              Sair
+            </Button>
           </Stack>
         </Toolbar>
       </AppBar>
