@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   Alert,
   AppBar,
@@ -39,6 +39,8 @@ import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import MonetizationOnOutlinedIcon from "@mui/icons-material/MonetizationOnOutlined";
 import PercentOutlinedIcon from "@mui/icons-material/PercentOutlined";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import BugReportOutlinedIcon from "@mui/icons-material/BugReportOutlined";
 import { useNavigate, useParams } from "react-router-dom";
 import { getSpreadsheetById } from "../lib/api";
 import { getStatusStyles } from "./Home";
@@ -58,47 +60,40 @@ export default function SpreadsheetDetail() {
   const [data, setData] = useState<SpreadsheetDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [technicalError, setTechnicalError] = useState("");
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadDetail() {
-      if (!id) {
-        setError("Identificador inválido.");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setError("");
-
-        const response = await getSpreadsheetById(id);
-
-        if (isMounted) {
-          setData(response);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Não foi possível carregar o detalhe da planilha."
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
+  const loadDetail = useCallback(async () => {
+    if (!id) {
+      setError("Identificador inválido.");
+      setTechnicalError("A rota foi aberta sem um parâmetro de ID válido.");
+      setLoading(false);
+      return;
     }
 
-    loadDetail();
+    try {
+      setLoading(true);
+      setError("");
+      setTechnicalError("");
 
-    return () => {
-      isMounted = false;
-    };
+      const response = await getSpreadsheetById(id);
+      setData(response);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Não foi possível carregar o detalhe da planilha.";
+
+      setError("Não foi possível carregar o detalhe da planilha.");
+      setTechnicalError(message);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  React.useEffect(() => {
+    loadDetail();
+  }, [loadDetail]);
 
   const totalGeral = useMemo(() => {
     if (!data) return 0;
@@ -109,7 +104,11 @@ export default function SpreadsheetDetail() {
     if (!data) return 0;
     return data.rows.filter((row) => {
       const status = row.status.toLowerCase();
-      return status === "conferido" || status === "concluído" || status === "concluido";
+      return (
+        status === "conferido" ||
+        status === "concluído" ||
+        status === "concluido"
+      );
     }).length;
   }, [data]);
 
@@ -143,17 +142,26 @@ export default function SpreadsheetDetail() {
           </Toolbar>
         </AppBar>
 
-        <Container maxWidth="lg" sx={{ py: 6 }}>
-          <Box
+        <Container maxWidth="md" sx={{ py: 8 }}>
+          <Card
             sx={{
-              minHeight: "50vh",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              borderRadius: "24px",
+              boxShadow: "0 20px 40px rgba(81, 52, 96, 0.10)",
             }}
           >
-            <CircularProgress />
-          </Box>
+            <CardContent sx={{ p: 5 }}>
+              <Stack spacing={3} alignItems="center" textAlign="center">
+                <CircularProgress />
+                <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                  Carregando detalhe da planilha
+                </Typography>
+                <Typography color="text.secondary" sx={{ maxWidth: 560 }}>
+                  Estamos buscando as informações do módulo selecionado para montar
+                  a visualização detalhada.
+                </Typography>
+              </Stack>
+            </CardContent>
+          </Card>
         </Container>
       </Box>
     );
@@ -179,22 +187,82 @@ export default function SpreadsheetDetail() {
           </Toolbar>
         </AppBar>
 
-        <Container maxWidth="md" sx={{ py: 6 }}>
+        <Container maxWidth="md" sx={{ py: 8 }}>
           <Stack spacing={3}>
-            <Alert severity="error">
-              {error || "Não foi possível localizar os dados da planilha."}
-            </Alert>
+            <Card
+              sx={{
+                borderRadius: "24px",
+                boxShadow: "0 20px 40px rgba(81, 52, 96, 0.10)",
+              }}
+            >
+              <CardContent sx={{ p: 4 }}>
+                <Stack spacing={3}>
+                  <Alert severity="error">{error}</Alert>
 
-            <Box>
-              <Button
-                variant="contained"
-                startIcon={<ArrowBackIcon />}
-                onClick={() => navigate("/")}
-                sx={{ borderRadius: "14px", fontWeight: 700 }}
-              >
-                Voltar para o painel
-              </Button>
-            </Box>
+                  <Box
+                    sx={{
+                      p: 3,
+                      borderRadius: "18px",
+                      backgroundColor: "#fcf7fa",
+                      border: "1px solid #f1d9df",
+                    }}
+                  >
+                    <Stack spacing={1.2}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <BugReportOutlinedIcon sx={{ color: "#b3261e" }} />
+                        <Typography sx={{ fontWeight: 800 }}>
+                          Detalhe técnico
+                        </Typography>
+                      </Stack>
+
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: "text.secondary",
+                          lineHeight: 1.8,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        {technicalError || "Nenhum detalhe técnico adicional foi retornado."}
+                      </Typography>
+                    </Stack>
+                  </Box>
+
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={2}
+                    justifyContent="flex-start"
+                  >
+                    <Button
+                      variant="contained"
+                      startIcon={<RefreshIcon />}
+                      onClick={loadDetail}
+                      sx={{
+                        borderRadius: "14px",
+                        fontWeight: 700,
+                        minWidth: 180,
+                      }}
+                    >
+                      Tentar novamente
+                    </Button>
+
+                    <Button
+                      variant="outlined"
+                      startIcon={<ArrowBackIcon />}
+                      onClick={() => navigate("/")}
+                      sx={{
+                        borderRadius: "14px",
+                        fontWeight: 700,
+                        minWidth: 180,
+                      }}
+                    >
+                      Voltar para o painel
+                    </Button>
+                  </Stack>
+                </Stack>
+              </CardContent>
+            </Card>
           </Stack>
         </Container>
       </Box>
