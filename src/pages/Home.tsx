@@ -69,7 +69,9 @@ const spreadsheetsMock: SpreadsheetItem[] = [
   },
 ];
 
-function getStatusChipColor(status: string): "default" | "primary" | "secondary" | "success" | "warning" {
+function getStatusChipColor(
+  status: string
+): "default" | "primary" | "secondary" | "success" | "warning" {
   const normalized = status.toLowerCase();
 
   if (normalized.includes("concluído") || normalized.includes("concluido")) {
@@ -173,8 +175,7 @@ export default function Home() {
                 }}
               >
                 Ambiente central para acompanhamento de planilhas, documentos,
-                cronogramas e materiais em desenvolvimento. Abaixo, você pode
-                localizar rapidamente os itens e acompanhar o status de cada um.
+                cronogramas e materiais em desenvolvimento.
               </Typography>
             </Stack>
           </Box>
@@ -202,7 +203,7 @@ export default function Home() {
 
           <Grid container spacing={3}>
             {filteredItems.map((item) => (
-              <Grid item xs={12} md={6} key={item.id}>
+              <Grid size={{ xs: 12, md: 6 }} key={item.id}>
                 <Card
                   sx={{
                     height: "100%",
@@ -300,8 +301,7 @@ export default function Home() {
                 Nenhum item encontrado
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Tente refinar os termos da pesquisa para localizar a planilha
-                desejada.
+                Tente refinar os termos da pesquisa.
               </Typography>
             </Box>
           )}
