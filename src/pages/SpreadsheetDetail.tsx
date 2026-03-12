@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   AppBar,
   Box,
   Breadcrumbs,
@@ -7,6 +8,7 @@ import {
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Container,
   Divider,
   Link,
@@ -38,64 +40,9 @@ import MonetizationOnOutlinedIcon from "@mui/icons-material/MonetizationOnOutlin
 import PercentOutlinedIcon from "@mui/icons-material/PercentOutlined";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import { useNavigate, useParams } from "react-router-dom";
-import { spreadsheetsMock } from "./Home";
-
-type SpreadsheetRow = {
-  item: string;
-  categoria: string;
-  quantidade: number;
-  valorUnitario: number;
-  subtotal: number;
-  status: string;
-};
-
-type VersionRow = {
-  versao: string;
-  data: string;
-  responsavel: string;
-  observacao: string;
-};
-
-type DocumentRow = {
-  nome: string;
-  tipo: string;
-  atualizacao: string;
-};
-
-function getStatusStyles(status: string) {
-  const normalized = status.toLowerCase();
-
-  if (normalized.includes("concluído") || normalized.includes("concluido")) {
-    return {
-      label: status,
-      sx: {
-        backgroundColor: "#e8f5e9",
-        color: "#2e7d32",
-        fontWeight: 700,
-      },
-    };
-  }
-
-  if (normalized.includes("elaboração") || normalized.includes("elaboracao")) {
-    return {
-      label: status,
-      sx: {
-        backgroundColor: "rgba(140, 88, 162, 0.12)",
-        color: "#6f3f84",
-        fontWeight: 700,
-      },
-    };
-  }
-
-  return {
-    label: status,
-    sx: {
-      backgroundColor: "rgba(140, 88, 162, 0.12)",
-      color: "#6f3f84",
-      fontWeight: 700,
-    },
-  };
-}
+import { getSpreadsheetById } from "../lib/api";
+import { getStatusStyles } from "./Home";
+import { SpreadsheetDetailData } from "../types/spreadsheet";
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", {
@@ -104,215 +51,115 @@ function formatCurrency(value: number) {
   });
 }
 
-function getSpreadsheetRows(id?: string): SpreadsheetRow[] {
-  const baseRows: Record<string, SpreadsheetRow[]> = {
-    "1": [
-      {
-        item: "Direção de Produção",
-        categoria: "Equipe técnica",
-        quantidade: 1,
-        valorUnitario: 4500,
-        subtotal: 4500,
-        status: "Conferido",
-      },
-      {
-        item: "Produção Executiva",
-        categoria: "Equipe técnica",
-        quantidade: 1,
-        valorUnitario: 4000,
-        subtotal: 4000,
-        status: "Conferido",
-      },
-      {
-        item: "Assessoria de Comunicação",
-        categoria: "Comunicação",
-        quantidade: 1,
-        valorUnitario: 3500,
-        subtotal: 3500,
-        status: "Em revisão",
-      },
-      {
-        item: "Custos Administrativos e Logísticos",
-        categoria: "Operacional",
-        quantidade: 1,
-        valorUnitario: 7000,
-        subtotal: 7000,
-        status: "Conferido",
-      },
-      {
-        item: "Impulsionamento e materiais gráficos",
-        categoria: "Divulgação",
-        quantidade: 1,
-        valorUnitario: 2200,
-        subtotal: 2200,
-        status: "Em revisão",
-      },
-      {
-        item: "Cachês artísticos",
-        categoria: "Artístico",
-        quantidade: 3,
-        valorUnitario: 2000,
-        subtotal: 6000,
-        status: "Pendente",
-      },
-    ],
-    "2": [
-      {
-        item: "Pré-produção",
-        categoria: "Fase",
-        quantidade: 2,
-        valorUnitario: 1,
-        subtotal: 2,
-        status: "Concluído",
-      },
-      {
-        item: "Produção",
-        categoria: "Fase",
-        quantidade: 2,
-        valorUnitario: 1,
-        subtotal: 2,
-        status: "Em andamento",
-      },
-      {
-        item: "Pós-produção",
-        categoria: "Fase",
-        quantidade: 3,
-        valorUnitario: 1,
-        subtotal: 3,
-        status: "Pendente",
-      },
-      {
-        item: "Plano de comunicação",
-        categoria: "Entrega",
-        quantidade: 12,
-        valorUnitario: 1,
-        subtotal: 12,
-        status: "Em andamento",
-      },
-    ],
-    "3": [
-      {
-        item: "Comprovantes financeiros",
-        categoria: "Prestação",
-        quantidade: 18,
-        valorUnitario: 1,
-        subtotal: 18,
-        status: "Em revisão",
-      },
-      {
-        item: "Relatório técnico",
-        categoria: "Prestação",
-        quantidade: 1,
-        valorUnitario: 1,
-        subtotal: 1,
-        status: "Pendente",
-      },
-      {
-        item: "Ata de encerramento",
-        categoria: "Prestação",
-        quantidade: 1,
-        valorUnitario: 1,
-        subtotal: 1,
-        status: "Pendente",
-      },
-      {
-        item: "Anexos comprobatórios",
-        categoria: "Prestação",
-        quantidade: 24,
-        valorUnitario: 1,
-        subtotal: 24,
-        status: "Em revisão",
-      },
-    ],
-    "4": [
-      {
-        item: "Identidade visual",
-        categoria: "Entregável",
-        quantidade: 1,
-        valorUnitario: 1,
-        subtotal: 1,
-        status: "Concluído",
-      },
-      {
-        item: "Teaser",
-        categoria: "Entregável",
-        quantidade: 1,
-        valorUnitario: 1,
-        subtotal: 1,
-        status: "Em andamento",
-      },
-      {
-        item: "Making of",
-        categoria: "Entregável",
-        quantidade: 1,
-        valorUnitario: 1,
-        subtotal: 1,
-        status: "Pendente",
-      },
-      {
-        item: "Book fotográfico",
-        categoria: "Entregável",
-        quantidade: 1,
-        valorUnitario: 1,
-        subtotal: 1,
-        status: "Pendente",
-      },
-    ],
-  };
-
-  return baseRows[id || "1"] || baseRows["1"];
-}
-
-function getVersionRows(): VersionRow[] {
-  return [
-    {
-      versao: "v1.0",
-      data: "11/03/2026",
-      responsavel: "Administração do sistema",
-      observacao: "Estrutura inicial do módulo criada.",
-    },
-    {
-      versao: "v1.1",
-      data: "11/03/2026",
-      responsavel: "Administração do sistema",
-      observacao: "Layout do painel e navegação habilitados.",
-    },
-    {
-      versao: "v1.2",
-      data: "11/03/2026",
-      responsavel: "Administração do sistema",
-      observacao: "Página de detalhe expandida com visão de planilha.",
-    },
-  ];
-}
-
-function getDocumentRows(): DocumentRow[] {
-  return [
-    {
-      nome: "Relatório Técnico.pdf",
-      tipo: "PDF",
-      atualizacao: "11/03/2026",
-    },
-    {
-      nome: "Cronograma Geral.xlsx",
-      tipo: "Planilha",
-      atualizacao: "11/03/2026",
-    },
-    {
-      nome: "Comprovantes.zip",
-      tipo: "Arquivo compactado",
-      atualizacao: "10/03/2026",
-    },
-  ];
-}
-
 export default function SpreadsheetDetail() {
   const navigate = useNavigate();
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
 
-  const spreadsheet = spreadsheetsMock.find((item) => item.id === id);
+  const [data, setData] = useState<SpreadsheetDetailData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  if (!spreadsheet) {
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadDetail() {
+      if (!id) {
+        setError("Identificador inválido.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await getSpreadsheetById(id);
+
+        if (isMounted) {
+          setData(response);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Não foi possível carregar o detalhe da planilha."
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadDetail();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
+
+  const totalGeral = useMemo(() => {
+    if (!data) return 0;
+    return data.rows.reduce((acc, row) => acc + row.subtotal, 0);
+  }, [data]);
+
+  const itensConferidos = useMemo(() => {
+    if (!data) return 0;
+    return data.rows.filter((row) => {
+      const status = row.status.toLowerCase();
+      return status === "conferido" || status === "concluído" || status === "concluido";
+    }).length;
+  }, [data]);
+
+  const percentualConferencia = useMemo(() => {
+    if (!data || data.rows.length === 0) return 0;
+    return Math.round((itensConferidos / data.rows.length) * 100);
+  }, [data, itensConferidos]);
+
+  const categoriasUnicas = useMemo(() => {
+    if (!data) return 0;
+    return new Set(data.rows.map((row) => row.categoria)).size;
+  }, [data]);
+
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          minHeight: "100vh",
+          background:
+            "linear-gradient(180deg, #f7f4f9 0%, #f4eef7 45%, #ffffff 100%)",
+        }}
+      >
+        <AppBar position="static" elevation={0}>
+          <Toolbar sx={{ minHeight: 68, px: { xs: 2, md: 4 } }}>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <TableChartIcon />
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                PlanilhaDEX
+              </Typography>
+            </Stack>
+          </Toolbar>
+        </AppBar>
+
+        <Container maxWidth="lg" sx={{ py: 6 }}>
+          <Box
+            sx={{
+              minHeight: "50vh",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <CircularProgress />
+          </Box>
+        </Container>
+      </Box>
+    );
+  }
+
+  if (error || !data) {
     return (
       <Box
         sx={{
@@ -333,44 +180,28 @@ export default function SpreadsheetDetail() {
         </AppBar>
 
         <Container maxWidth="md" sx={{ py: 6 }}>
-          <Card sx={{ borderRadius: "24px" }}>
-            <CardContent sx={{ p: 4 }}>
-              <Stack spacing={3}>
-                <Typography variant="h4" sx={{ fontWeight: 800 }}>
-                  Planilha não encontrada
-                </Typography>
-                <Typography color="text.secondary">
-                  O item solicitado não existe ou não está disponível nesta versão.
-                </Typography>
-                <Box>
-                  <Button
-                    variant="contained"
-                    startIcon={<ArrowBackIcon />}
-                    onClick={() => navigate("/")}
-                  >
-                    Voltar para o painel
-                  </Button>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
+          <Stack spacing={3}>
+            <Alert severity="error">
+              {error || "Não foi possível localizar os dados da planilha."}
+            </Alert>
+
+            <Box>
+              <Button
+                variant="contained"
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigate("/")}
+                sx={{ borderRadius: "14px", fontWeight: 700 }}
+              >
+                Voltar para o painel
+              </Button>
+            </Box>
+          </Stack>
         </Container>
       </Box>
     );
   }
 
-  const rows = getSpreadsheetRows(id);
-  const versions = getVersionRows();
-  const documents = getDocumentRows();
-  const statusConfig = getStatusStyles(spreadsheet.status);
-
-  const totalGeral = rows.reduce((acc, row) => acc + row.subtotal, 0);
-  const itensConferidos = rows.filter(
-    (row) => row.status.toLowerCase() === "conferido" || row.status.toLowerCase() === "concluído"
-  ).length;
-  const percentualConferencia =
-    rows.length > 0 ? Math.round((itensConferidos / rows.length) * 100) : 0;
-  const categoriasUnicas = new Set(rows.map((row) => row.categoria)).size;
+  const statusConfig = getStatusStyles(data.status);
 
   return (
     <Box
@@ -423,7 +254,7 @@ export default function SpreadsheetDetail() {
                     lineHeight: 1.15,
                   }}
                 >
-                  {spreadsheet.title}
+                  {data.title}
                 </Typography>
               </Stack>
 
@@ -474,7 +305,7 @@ export default function SpreadsheetDetail() {
                         color: "text.primary",
                       }}
                     >
-                      {spreadsheet.title}
+                      {data.title}
                     </Typography>
 
                     <Typography
@@ -485,7 +316,7 @@ export default function SpreadsheetDetail() {
                         lineHeight: 1.9,
                       }}
                     >
-                      {spreadsheet.description}
+                      {data.description}
                     </Typography>
                   </Box>
 
@@ -618,7 +449,7 @@ export default function SpreadsheetDetail() {
                           <Typography
                             sx={{ fontSize: "1.35rem", fontWeight: 800, color: "text.primary" }}
                           >
-                            {spreadsheet.updatedAt}
+                            {data.updatedAt}
                           </Typography>
                           <Typography color="text.secondary">
                             Última referência do módulo.
@@ -668,7 +499,7 @@ export default function SpreadsheetDetail() {
                           </Stack>
 
                           <Chip
-                            label={`${rows.length} registro(s)`}
+                            label={`${data.rows.length} registro(s)`}
                             sx={{
                               backgroundColor: "rgba(140, 88, 162, 0.10)",
                               color: "#6f3f84",
@@ -702,7 +533,7 @@ export default function SpreadsheetDetail() {
                             </TableHead>
 
                             <TableBody>
-                              {rows.map((row, index) => (
+                              {data.rows.map((row, index) => (
                                 <TableRow
                                   key={`${row.item}-${index}`}
                                   sx={{
@@ -730,17 +561,23 @@ export default function SpreadsheetDetail() {
                                       sx={{
                                         backgroundColor:
                                           row.status.toLowerCase() === "conferido" ||
-                                          row.status.toLowerCase() === "concluído"
+                                          row.status.toLowerCase() === "concluído" ||
+                                          row.status.toLowerCase() === "concluido"
                                             ? "#e8f5e9"
                                             : row.status.toLowerCase() === "pendente"
                                             ? "#fff3e0"
+                                            : row.status.toLowerCase().includes("revis")
+                                            ? "#fff8e1"
                                             : "rgba(140, 88, 162, 0.10)",
                                         color:
                                           row.status.toLowerCase() === "conferido" ||
-                                          row.status.toLowerCase() === "concluído"
+                                          row.status.toLowerCase() === "concluído" ||
+                                          row.status.toLowerCase() === "concluido"
                                             ? "#2e7d32"
                                             : row.status.toLowerCase() === "pendente"
                                             ? "#b26a00"
+                                            : row.status.toLowerCase().includes("revis")
+                                            ? "#8d6e00"
                                             : "#6f3f84",
                                         fontWeight: 700,
                                       }}
@@ -792,28 +629,28 @@ export default function SpreadsheetDetail() {
                               <Stack direction="row" spacing={1} alignItems="center">
                                 <CategoryIcon sx={{ color: "#8c58a2", fontSize: 20 }} />
                                 <Typography color="text.secondary">
-                                  Categoria: <strong>{spreadsheet.category}</strong>
+                                  Categoria: <strong>{data.category}</strong>
                                 </Typography>
                               </Stack>
 
                               <Stack direction="row" spacing={1} alignItems="center">
                                 <EditNoteIcon sx={{ color: "#8c58a2", fontSize: 20 }} />
                                 <Typography color="text.secondary">
-                                  Situação: <strong>{spreadsheet.status}</strong>
+                                  Situação: <strong>{data.status}</strong>
                                 </Typography>
                               </Stack>
 
                               <Stack direction="row" spacing={1} alignItems="center">
                                 <FolderOpenIcon sx={{ color: "#8c58a2", fontSize: 20 }} />
                                 <Typography color="text.secondary">
-                                  Identificador: <strong>#{spreadsheet.id}</strong>
+                                  Identificador: <strong>#{data.id}</strong>
                                 </Typography>
                               </Stack>
 
                               <Stack direction="row" spacing={1} alignItems="center">
                                 <CalendarMonthIcon sx={{ color: "#8c58a2", fontSize: 20 }} />
                                 <Typography color="text.secondary">
-                                  Última atualização: <strong>{spreadsheet.updatedAt}</strong>
+                                  Última atualização: <strong>{data.updatedAt}</strong>
                                 </Typography>
                               </Stack>
                             </Stack>
@@ -821,8 +658,9 @@ export default function SpreadsheetDetail() {
                             <Divider />
 
                             <Typography color="text.secondary" sx={{ lineHeight: 1.8 }}>
-                              Este painel pode evoluir para edição, exportação, versionamento
-                              e integração com dados reais do backend.
+                              Este painel já está conectado à API e pronto para evoluir
+                              para edição, exportação, versionamento e integração com
+                              documentos reais.
                             </Typography>
                           </Stack>
                         </CardContent>
@@ -933,7 +771,7 @@ export default function SpreadsheetDetail() {
                               </TableRow>
                             </TableHead>
                             <TableBody>
-                              {versions.map((version, index) => (
+                              {data.versions.map((version, index) => (
                                 <TableRow
                                   key={`${version.versao}-${index}`}
                                   sx={{
@@ -983,7 +821,7 @@ export default function SpreadsheetDetail() {
 
                       <CardContent sx={{ p: 3 }}>
                         <Stack spacing={2}>
-                          {documents.map((doc, index) => (
+                          {data.documents.map((doc, index) => (
                             <Box
                               key={`${doc.nome}-${index}`}
                               sx={{
