@@ -1,268 +1,309 @@
-import { useEffect, useState, type CSSProperties } from "react";
-import { Link, useRoute } from "wouter";
-import { supabase } from "../lib/supabase";
-import { theme, commonStyles, getStatusBadgeStyle } from "../theme";
+import React from "react";
+import {
+  AppBar,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Container,
+  Stack,
+  Toolbar,
+  Typography,
+  Divider,
+} from "@mui/material";
+import TableChartIcon from "@mui/icons-material/TableChart";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import CategoryIcon from "@mui/icons-material/Category";
+import EditNoteIcon from "@mui/icons-material/EditNote";
+import { useNavigate, useParams } from "react-router-dom";
+import { spreadsheetsMock } from "./Home";
 
-type Spreadsheet = {
-  id: number;
-  contract_id: number;
-  nome: string;
-  tipo_planilha: string;
-  status: string;
-};
+function getStatusStyles(status: string) {
+  const normalized = status.toLowerCase();
 
-type SpreadsheetVersion = {
-  id: number;
-  spreadsheet_id: number;
-  numero_versao: number;
-  tipo_versao: string;
-  status: string;
-};
+  if (normalized.includes("concluído") || normalized.includes("concluido")) {
+    return {
+      label: status,
+      sx: {
+        backgroundColor: "#e8f5e9",
+        color: "#2e7d32",
+        fontWeight: 700,
+      },
+    };
+  }
 
-export default function SpreadsheetDetail() {
-  const [match, params] = useRoute("/planilhas/:id");
-  const [spreadsheet, setSpreadsheet] = useState<Spreadsheet | null>(null);
-  const [versions, setVersions] = useState<SpreadsheetVersion[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  if (normalized.includes("elaboração") || normalized.includes("elaboracao")) {
+    return {
+      label: status,
+      sx: {
+        backgroundColor: "rgba(140, 88, 162, 0.12)",
+        color: "#6f3f84",
+        fontWeight: 700,
+      },
+    };
+  }
 
-  useEffect(() => {
-    async function loadData() {
-      if (!match || !params?.id) return;
-
-      const spreadsheetId = Number(params.id);
-
-      const { data: spreadsheetData, error: spreadsheetError } = await supabase
-        .from("spreadsheets")
-        .select("id, contract_id, nome, tipo_planilha, status")
-        .eq("id", spreadsheetId)
-        .single();
-
-      if (spreadsheetError) {
-        setError(spreadsheetError.message);
-        setLoading(false);
-        return;
-      }
-
-      setSpreadsheet(spreadsheetData);
-
-      const { data: versionsData, error: versionsError } = await supabase
-        .from("spreadsheet_versions")
-        .select("id, spreadsheet_id, numero_versao, tipo_versao, status")
-        .eq("spreadsheet_id", spreadsheetId)
-        .order("id", { ascending: true });
-
-      if (versionsError) {
-        setError(versionsError.message);
-        setLoading(false);
-        return;
-      }
-
-      setVersions(versionsData || []);
-      setLoading(false);
-    }
-
-    loadData();
-  }, [match, params?.id]);
-
-  return (
-    <main style={styles.page}>
-      <div style={styles.container}>
-        <div style={styles.navRow}>
-          <Link href="/" style={styles.backLink}>
-            ← Voltar para contratações
-          </Link>
-
-          {spreadsheet?.contract_id && (
-            <Link
-              href={`/contratacoes/${spreadsheet.contract_id}`}
-              style={styles.backLink}
-            >
-              ← Voltar para a contratação #{spreadsheet.contract_id}
-            </Link>
-          )}
-        </div>
-
-        {loading && <p style={styles.message}>Carregando planilha...</p>}
-
-        {error && (
-          <p style={{ ...styles.message, color: theme.colors.danger }}>
-            Erro ao carregar: {error}
-          </p>
-        )}
-
-        {!loading && !error && spreadsheet && (
-          <>
-            <div style={styles.headerCard}>
-              <div style={styles.headerTop}>
-                <div>
-                  <p style={styles.overline}>Planilha #{spreadsheet.id}</p>
-                  <h1 style={styles.title}>{spreadsheet.nome}</h1>
-                </div>
-
-                <span style={getStatusBadgeStyle(spreadsheet.status)}>
-                  {spreadsheet.status || "sem_status"}
-                </span>
-              </div>
-            </div>
-
-            <section style={styles.section}>
-              <div style={styles.infoGrid}>
-                <div style={styles.infoCard}>
-                  <span style={styles.infoLabel}>Tipo da planilha</span>
-                  <strong style={styles.infoValue}>
-                    {spreadsheet.tipo_planilha}
-                  </strong>
-                </div>
-
-                <div style={styles.infoCard}>
-                  <span style={styles.infoLabel}>Contratação vinculada</span>
-                  <strong style={styles.infoValue}>
-                    #{spreadsheet.contract_id}
-                  </strong>
-                </div>
-              </div>
-            </section>
-
-            <section style={styles.section}>
-              <h2 style={styles.sectionTitle}>Versões da planilha</h2>
-
-              <div style={styles.list}>
-                {versions.length === 0 ? (
-                  <div style={styles.emptyState}>
-                    Nenhuma versão encontrada para esta planilha.
-                  </div>
-                ) : (
-                  versions.map((version) => (
-                    <div key={version.id} style={styles.card}>
-                      <div style={styles.cardHeader}>
-                        <div>
-                          <p style={styles.cardOverline}>Versão #{version.id}</p>
-                          <h3 style={styles.cardTitle}>
-                            Versão {version.numero_versao}
-                          </h3>
-                          <p style={styles.cardText}>
-                            Tipo: {version.tipo_versao} • Status: {version.status}
-                          </p>
-                        </div>
-
-                        <Link
-                          href={`/versoes/${version.id}`}
-                          style={styles.primaryButton}
-                        >
-                          Abrir versão
-                        </Link>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-          </>
-        )}
-
-        {!loading && !error && !spreadsheet && (
-          <p style={styles.message}>Planilha não encontrada.</p>
-        )}
-      </div>
-    </main>
-  );
+  return {
+    label: status,
+    sx: {
+      backgroundColor: "rgba(140, 88, 162, 0.12)",
+      color: "#6f3f84",
+      fontWeight: 700,
+    },
+  };
 }
 
-const styles: Record<string, CSSProperties> = {
-  page: commonStyles.page,
-  container: commonStyles.container,
-  navRow: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-    marginBottom: "24px",
-  },
-  backLink: commonStyles.backLink,
-  headerCard: {
-    ...commonStyles.card,
-    marginBottom: "28px",
-  },
-  headerTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: "16px",
-    flexWrap: "wrap",
-  },
-  overline: {
-    margin: "0 0 8px 0",
-    fontSize: "14px",
-    color: theme.colors.textMuted,
-  },
-  title: {
-    margin: 0,
-    fontSize: "42px",
-    lineHeight: 1.1,
-    color: theme.colors.primaryDark,
-    fontWeight: 800,
-    maxWidth: "820px",
-  },
-  section: {
-    marginTop: "28px",
-  },
-  sectionTitle: commonStyles.sectionTitle,
-  infoGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: "20px",
-  },
-  infoCard: {
-    background: theme.colors.white,
-    border: `1px solid ${theme.colors.primaryBorder}`,
-    borderRadius: theme.radius.lg,
-    padding: "24px",
-  },
-  infoLabel: {
-    display: "block",
-    fontSize: "16px",
-    color: theme.colors.textSoft,
-    marginBottom: "10px",
-  },
-  infoValue: {
-    fontSize: "22px",
-    color: theme.colors.textStrong,
-    fontWeight: 700,
-  },
-  list: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "22px",
-  },
-  card: {
-    background: theme.colors.white,
-    border: `1px solid ${theme.colors.primaryBorder}`,
-    borderRadius: theme.radius.xl,
-    padding: "28px",
-  },
-  cardHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "16px",
-    flexWrap: "wrap",
-  },
-  cardOverline: {
-    margin: "0 0 8px 0",
-    fontSize: "14px",
-    color: theme.colors.textMuted,
-  },
-  cardTitle: {
-    margin: "0 0 10px 0",
-    fontSize: "24px",
-    color: theme.colors.textStrong,
-  },
-  cardText: {
-    margin: 0,
-    color: theme.colors.textSoft,
-    fontSize: "16px",
-  },
-  primaryButton: commonStyles.buttonPrimary,
-  emptyState: commonStyles.emptyState,
-  message: commonStyles.message,
-};
+export default function SpreadsheetDetail() {
+  const navigate = useNavigate();
+  const { id } = useParams();
+
+  const spreadsheet = spreadsheetsMock.find((item) => item.id === id);
+
+  if (!spreadsheet) {
+    return (
+      <Box
+        sx={{
+          minHeight: "100vh",
+          background:
+            "linear-gradient(180deg, #f7f4f9 0%, #f4eef7 45%, #ffffff 100%)",
+        }}
+      >
+        <AppBar position="static" elevation={0}>
+          <Toolbar sx={{ minHeight: 68, px: { xs: 2, md: 4 } }}>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <TableChartIcon />
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                PlanilhaDEX
+              </Typography>
+            </Stack>
+          </Toolbar>
+        </AppBar>
+
+        <Container maxWidth="md" sx={{ py: 6 }}>
+          <Card sx={{ borderRadius: "24px" }}>
+            <CardContent sx={{ p: 4 }}>
+              <Stack spacing={3}>
+                <Typography variant="h4" sx={{ fontWeight: 800 }}>
+                  Planilha não encontrada
+                </Typography>
+                <Typography color="text.secondary">
+                  O item solicitado não existe ou não está disponível nesta versão.
+                </Typography>
+                <Box>
+                  <Button
+                    variant="contained"
+                    startIcon={<ArrowBackIcon />}
+                    onClick={() => navigate("/")}
+                  >
+                    Voltar
+                  </Button>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Container>
+      </Box>
+    );
+  }
+
+  const statusConfig = getStatusStyles(spreadsheet.status);
+
+  return (
+    <Box
+      sx={{
+        minHeight: "100vh",
+        background:
+          "linear-gradient(180deg, #f7f4f9 0%, #f4eef7 45%, #ffffff 100%)",
+      }}
+    >
+      <AppBar position="static" elevation={0}>
+        <Toolbar sx={{ minHeight: 68, px: { xs: 2, md: 4 } }}>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <TableChartIcon />
+            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+              PlanilhaDEX
+            </Typography>
+          </Stack>
+        </Toolbar>
+      </AppBar>
+
+      <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+        <Stack spacing={3}>
+          <Box>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate("/")}
+              sx={{
+                borderRadius: "14px",
+                fontWeight: 700,
+              }}
+            >
+              Voltar para o painel
+            </Button>
+          </Box>
+
+          <Card
+            sx={{
+              borderRadius: "28px",
+              boxShadow: "0 20px 40px rgba(81, 52, 96, 0.10)",
+            }}
+          >
+            <CardContent sx={{ p: { xs: 3, md: 5 } }}>
+              <Stack spacing={4}>
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", md: "center" }}
+                  spacing={2}
+                >
+                  <Box>
+                    <Typography
+                      variant="h3"
+                      sx={{
+                        fontSize: { xs: "2rem", md: "2.5rem" },
+                        fontWeight: 800,
+                        lineHeight: 1.1,
+                        mb: 1.5,
+                      }}
+                    >
+                      {spreadsheet.title}
+                    </Typography>
+
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        color: "text.secondary",
+                        fontSize: "1.05rem",
+                        lineHeight: 1.8,
+                        maxWidth: 820,
+                      }}
+                    >
+                      {spreadsheet.description}
+                    </Typography>
+                  </Box>
+
+                  <Chip
+                    label={statusConfig.label}
+                    sx={{
+                      ...statusConfig.sx,
+                      borderRadius: "14px",
+                      fontSize: "1rem",
+                      height: 46,
+                      px: 1.5,
+                    }}
+                  />
+                </Stack>
+
+                <Divider />
+
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "1fr",
+                      md: "repeat(3, minmax(0, 1fr))",
+                    },
+                    gap: 2.5,
+                  }}
+                >
+                  <Card
+                    variant="outlined"
+                    sx={{ borderRadius: "18px", backgroundColor: "#fcfafe" }}
+                  >
+                    <CardContent>
+                      <Stack spacing={1.3}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <CategoryIcon sx={{ color: "#8c58a2" }} />
+                          <Typography sx={{ fontWeight: 700 }}>
+                            Categoria
+                          </Typography>
+                        </Stack>
+                        <Typography color="text.secondary">
+                          {spreadsheet.category}
+                        </Typography>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+
+                  <Card
+                    variant="outlined"
+                    sx={{ borderRadius: "18px", backgroundColor: "#fcfafe" }}
+                  >
+                    <CardContent>
+                      <Stack spacing={1.3}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <CalendarMonthIcon sx={{ color: "#8c58a2" }} />
+                          <Typography sx={{ fontWeight: 700 }}>
+                            Última atualização
+                          </Typography>
+                        </Stack>
+                        <Typography color="text.secondary">
+                          {spreadsheet.updatedAt}
+                        </Typography>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+
+                  <Card
+                    variant="outlined"
+                    sx={{ borderRadius: "18px", backgroundColor: "#fcfafe" }}
+                  >
+                    <CardContent>
+                      <Stack spacing={1.3}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <EditNoteIcon sx={{ color: "#8c58a2" }} />
+                          <Typography sx={{ fontWeight: 700 }}>
+                            Situação
+                          </Typography>
+                        </Stack>
+                        <Typography color="text.secondary">
+                          {spreadsheet.status}
+                        </Typography>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                </Box>
+
+                <Card
+                  variant="outlined"
+                  sx={{
+                    borderRadius: "22px",
+                    background:
+                      "linear-gradient(135deg, rgba(140,88,162,0.08) 0%, rgba(111,63,132,0.12) 100%)",
+                  }}
+                >
+                  <CardContent sx={{ p: 4 }}>
+                    <Stack spacing={2}>
+                      <Stack direction="row" spacing={1.2} alignItems="center">
+                        <DescriptionOutlinedIcon sx={{ color: "#8c58a2" }} />
+                        <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                          Área de conteúdo
+                        </Typography>
+                      </Stack>
+
+                      <Typography color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                        Esta é a página de detalhe da planilha selecionada. Nesta
+                        próxima etapa, você poderá conectar dados reais, versões,
+                        documentos vinculados, histórico de atualização, planilhas
+                        anexas, ações disponíveis e integrações com o backend.
+                      </Typography>
+
+                      <Typography color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                        No momento, esta visualização está preparada como estrutura
+                        base funcional para navegação e expansão futura.
+                      </Typography>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Stack>
+      </Container>
+    </Box>
+  );
+}
