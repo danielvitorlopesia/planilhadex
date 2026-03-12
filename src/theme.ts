@@ -24,18 +24,6 @@ const theme = createTheme({
       secondary: "#6f6277",
     },
     divider: "#e7ddeb",
-    success: {
-      main: "#2e7d32",
-    },
-    warning: {
-      main: "#ed6c02",
-    },
-    error: {
-      main: "#d32f2f",
-    },
-    info: {
-      main: "#0288d1",
-    },
   },
   shape: {
     borderRadius: 14,
@@ -48,24 +36,12 @@ const theme = createTheme({
       "Arial",
       "sans-serif",
     ].join(","),
-    h1: {
-      fontWeight: 700,
-    },
-    h2: {
-      fontWeight: 700,
-    },
-    h3: {
-      fontWeight: 700,
-    },
-    h4: {
-      fontWeight: 700,
-    },
-    h5: {
-      fontWeight: 700,
-    },
-    h6: {
-      fontWeight: 700,
-    },
+    h1: { fontWeight: 700 },
+    h2: { fontWeight: 700 },
+    h3: { fontWeight: 700 },
+    h4: { fontWeight: 700 },
+    h5: { fontWeight: 700 },
+    h6: { fontWeight: 700 },
     button: {
       textTransform: "none",
       fontWeight: 600,
@@ -107,9 +83,6 @@ const theme = createTheme({
           borderRadius: 12,
           paddingInline: 16,
           paddingBlock: 10,
-        },
-        containedPrimary: {
-          boxShadow: "0 8px 18px rgba(140, 88, 162, 0.25)",
         },
       },
     },
