@@ -10,37 +10,55 @@ function buildUrl(path: string): string {
     return path;
   }
 
-  if (path.startsWith("/")) {
-    return `${API_BASE_URL}${path}`;
+  return `${API_BASE_URL}${path}`;
+}
+
+async function parseResponseBody(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+  const rawText = await response.text();
+
+  if (contentType.includes("application/json")) {
+    try {
+      return JSON.parse(rawText);
+    } catch {
+      throw new Error("A API retornou JSON inválido.");
+    }
   }
 
-  return `${API_BASE_URL}/${path}`;
+  if (!rawText.trim()) {
+    return null;
+  }
+
+  throw new Error(
+    `A API não retornou JSON. Resposta recebida: ${rawText.slice(0, 180)}`
+  );
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
+  const data = await parseResponseBody(response);
+
   if (!response.ok) {
-    let message = `Erro ${response.status}`;
+    const message =
+      data && typeof data === "object" && "message" in data
+        ? String((data as { message?: string }).message || `Erro ${response.status}`)
+        : `Erro ${response.status}`;
 
-    try {
-      const data = await response.json();
-      if (data?.message) {
-        message = data.message;
-      }
-    } catch {
-      // mantém a mensagem padrão
-    }
+    const detail =
+      data && typeof data === "object" && "detail" in data
+        ? String((data as { detail?: string }).detail || "")
+        : "";
 
-    throw new Error(message);
+    throw new Error(detail ? `${message} ${detail}` : message);
   }
 
-  return response.json() as Promise<T>;
+  return data as T;
 }
 
 export async function getSpreadsheets(): Promise<SpreadsheetListItem[]> {
   const response = await fetch(buildUrl("/api/spreadsheets"), {
     method: "GET",
     headers: {
-      "Content-Type": "application/json",
+      Accept: "application/json",
     },
   });
 
@@ -51,7 +69,7 @@ export async function getSpreadsheetById(id: string): Promise<SpreadsheetDetailD
   const response = await fetch(buildUrl(`/api/spreadsheets/${id}`), {
     method: "GET",
     headers: {
-      "Content-Type": "application/json",
+      Accept: "application/json",
     },
   });
 
