@@ -67,39 +67,21 @@ export type AnalysisOpinionBundle = {
   };
 };
 
-export type AnalysisLookupRow = {
-  id: string;
+export type ExecutabilityAnalysisListItem = {
+  analysis_id: string;
+  interaction_id: string | null;
+  session_id: string | null;
   spreadsheet_id: string;
   spreadsheet_version_id: number;
   analysis_type: string;
   status: string;
+  score_global: number | null;
+  risk_level: string | null;
+  summary_text: string | null;
+  analysis_json: Record<string, unknown> | null;
   created_at: string;
+  updated_at: string;
 };
-
-export async function getLatestExecutabilityAnalysisBySpreadsheetId(
-  spreadsheetId: string
-): Promise<AnalysisLookupRow | null> {
-  if (!spreadsheetId?.trim()) {
-    return null;
-  }
-
-  const { data, error } = await supabaseAi
-    .from("analyses")
-    .select(
-      "id, spreadsheet_id, spreadsheet_version_id, analysis_type, status, created_at"
-    )
-    .eq("spreadsheet_id", spreadsheetId)
-    .eq("analysis_type", "executability_v1")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle<AnalysisLookupRow>();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data ?? null;
-}
 
 export async function getAnalysisOpinionBundle(
   analysisId: string
@@ -121,13 +103,41 @@ export async function getAnalysisOpinionBundle(
 export async function getLatestAnalysisOpinionBundleBySpreadsheetId(
   spreadsheetId: string
 ): Promise<AnalysisOpinionBundle | null> {
-  const analysis = await getLatestExecutabilityAnalysisBySpreadsheetId(
-    spreadsheetId
-  );
-
-  if (!analysis?.id) {
+  if (!spreadsheetId?.trim()) {
     return null;
   }
 
-  return getAnalysisOpinionBundle(analysis.id);
+  const { data, error } = await supabaseAi.rpc(
+    "fn_get_latest_analysis_opinion_bundle_by_spreadsheet_id",
+    {
+      p_spreadsheet_id: spreadsheetId,
+    }
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data as AnalysisOpinionBundle | null) ?? null;
+}
+
+export async function listExecutabilityAnalysesBySpreadsheetId(
+  spreadsheetId: string
+): Promise<ExecutabilityAnalysisListItem[]> {
+  if (!spreadsheetId?.trim()) {
+    return [];
+  }
+
+  const { data, error } = await supabaseAi.rpc(
+    "fn_list_executability_analyses_by_spreadsheet_id",
+    {
+      p_spreadsheet_id: spreadsheetId,
+    }
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data as ExecutabilityAnalysisListItem[] | null) ?? [];
 }
