@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 import { theme, commonStyles, getStatusBadgeStyle } from "../theme";
 import ExecutabilityOpinionView, {
   DEMO_DOCUMENT,
+  type ExecutabilityOpinionDocument,
 } from "../components/ExecutabilityOpinionView";
 
 type SpreadsheetVersion = {
@@ -25,17 +26,35 @@ type Spreadsheet = {
 
 type SpreadsheetTotal = Record<string, string | number | null>;
 
+type OpinionDocumentRow = {
+  opinion_id: string;
+  executability_analysis_id: string;
+  spreadsheet_id: string;
+  spreadsheet_version_id: number;
+  procurement_id?: string | null;
+  organization_id?: string | null;
+  opinion_status: string;
+  opinion_version: number;
+  generated_at?: string | null;
+  document_payload: ExecutabilityOpinionDocument;
+};
+
 export default function VersionDetail() {
   const [match, params] = useRoute("/versoes/:id");
   const [version, setVersion] = useState<SpreadsheetVersion | null>(null);
   const [spreadsheet, setSpreadsheet] = useState<Spreadsheet | null>(null);
   const [totals, setTotals] = useState<SpreadsheetTotal[]>([]);
+  const [opinionDocument, setOpinionDocument] =
+    useState<ExecutabilityOpinionDocument | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
       if (!match || !params?.id) return;
+
+      setLoading(true);
+      setError(null);
 
       const versionId = Number(params.id);
 
@@ -80,6 +99,24 @@ export default function VersionDetail() {
       }
 
       setTotals(totalsData || []);
+
+      const { data: opinionData, error: opinionError } = await supabase
+        .schema("ai")
+        .from("v_executability_opinion_documents")
+        .select(
+          "opinion_id, executability_analysis_id, spreadsheet_id, spreadsheet_version_id, procurement_id, organization_id, opinion_status, opinion_version, generated_at, document_payload"
+        )
+        .eq("spreadsheet_version_id", versionId)
+        .order("generated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<OpinionDocumentRow>();
+
+      if (!opinionError && opinionData?.document_payload) {
+        setOpinionDocument(opinionData.document_payload);
+      } else {
+        setOpinionDocument(null);
+      }
+
       setLoading(false);
     }
 
@@ -98,7 +135,7 @@ export default function VersionDetail() {
     });
   }, [resumo]);
 
-  const opinionDocument = useMemo(() => {
+  const fallbackDocument = useMemo<ExecutabilityOpinionDocument>(() => {
     if (!version) return DEMO_DOCUMENT;
 
     return {
@@ -114,6 +151,8 @@ export default function VersionDetail() {
       },
     };
   }, [version]);
+
+  const finalOpinionDocument = opinionDocument || fallbackDocument;
 
   return (
     <main style={styles.page}>
@@ -252,7 +291,7 @@ export default function VersionDetail() {
             <section style={styles.section}>
               <h2 style={styles.sectionTitle}>Parecer consolidado</h2>
               <div style={styles.opinionWrapper}>
-                <ExecutabilityOpinionView document={opinionDocument} />
+                <ExecutabilityOpinionView document={finalOpinionDocument} />
               </div>
             </section>
           </>
@@ -304,11 +343,8 @@ function InfoCard({
 
 function formatDate(value?: string | null) {
   if (!value) return "Não informado";
-
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) return value;
-
   return date.toLocaleString("pt-BR");
 }
 
@@ -321,9 +357,7 @@ function formatCurrency(value?: number | null) {
 }
 
 function beautifyKey(key: string) {
-  return key
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  return key.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function formatDynamicValue(
