@@ -1,6 +1,7 @@
 export const spreadsheets = [
   {
     id: "1",
+    spreadsheet_id: "30db5807-27ac-412d-909b-306fdc54ba43",
     title: "Planilha Orçamentária",
     description:
       "Controle e organização de custos, categorias financeiras e projeções orçamentárias do projeto.",
@@ -97,6 +98,7 @@ export const spreadsheets = [
   },
   {
     id: "2",
+    spreadsheet_id: null,
     title: "Cronograma de Execução",
     description:
       "Planejamento temporal das etapas do projeto, com acompanhamento das ações previstas.",
@@ -166,6 +168,7 @@ export const spreadsheets = [
   },
   {
     id: "3",
+    spreadsheet_id: null,
     title: "Relatório de Prestação de Contas",
     description:
       "Consolidação de dados e documentos para prestação de contas e monitoramento da execução.",
@@ -229,6 +232,7 @@ export const spreadsheets = [
   },
   {
     id: "4",
+    spreadsheet_id: null,
     title: "Mapa de Entregáveis",
     description:
       "Visão geral dos produtos, documentos e marcos de acompanhamento do projeto.",
