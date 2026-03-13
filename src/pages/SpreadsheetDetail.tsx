@@ -111,6 +111,45 @@ function buildUrl(path: string) {
   return `${API_BASE_URL}${path}`;
 }
 
+function getDecisionStorageKey(spreadsheetId?: string | null) {
+  return `spreadsheet-detail:internal-decisions:${spreadsheetId || "unknown"}`;
+}
+
+function readDecisionStateFromStorage(
+  spreadsheetId?: string | null
+): Record<string, InternalDecisionState> {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(getDecisionStorageKey(spreadsheetId));
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function writeDecisionStateToStorage(
+  spreadsheetId: string | null | undefined,
+  value: Record<string, InternalDecisionState>
+) {
+  if (typeof window === "undefined") return;
+  if (!spreadsheetId) return;
+
+  try {
+    window.localStorage.setItem(
+      getDecisionStorageKey(spreadsheetId),
+      JSON.stringify(value)
+    );
+  } catch {
+    // silencioso
+  }
+}
+
 function formatDateTime(value?: string | null): string {
   if (!value) return "—";
 
@@ -1167,6 +1206,9 @@ export default function SpreadsheetDetail() {
 
       setHistory(normalizedHistory);
 
+      const restoredDecisions = readDecisionStateFromStorage(id);
+      setDecisionByAnalysis(restoredDecisions);
+
       const requestedAnalysisId = searchParams.get("analysisId");
       const existingRequestedAnalysis = normalizedHistory.find(
         (item) => item.analysisId === requestedAnalysisId
@@ -1197,6 +1239,11 @@ export default function SpreadsheetDetail() {
   useEffect(() => {
     loadPage();
   }, [loadPage]);
+
+  useEffect(() => {
+    if (!id) return;
+    writeDecisionStateToStorage(id, decisionByAnalysis);
+  }, [decisionByAnalysis, id]);
 
   useEffect(() => {
     if (!filteredHistory.length) return;
