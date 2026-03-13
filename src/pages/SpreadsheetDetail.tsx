@@ -54,7 +54,9 @@ import ExecutabilityOpinionView, {
 } from "../components/ExecutabilityOpinionView";
 import {
   getLatestAnalysisOpinionBundleBySpreadsheetId,
+  listExecutabilityAnalysesBySpreadsheetId,
   type AnalysisOpinionBundle,
+  type ExecutabilityAnalysisListItem,
 } from "../services/analysisOpinions";
 
 function formatCurrency(value: number) {
@@ -62,6 +64,18 @@ function formatCurrency(value: number) {
     style: "currency",
     currency: "BRL",
   });
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("pt-BR");
 }
 
 function resolveRealSpreadsheetId(
@@ -167,6 +181,7 @@ export default function SpreadsheetDetail() {
   const [opinionDocument, setOpinionDocument] =
     useState<ExecutabilityOpinionDocument | null>(null);
   const [bundle, setBundle] = useState<AnalysisOpinionBundle | null>(null);
+  const [analyses, setAnalyses] = useState<ExecutabilityAnalysisListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [technicalError, setTechnicalError] = useState("");
@@ -184,6 +199,7 @@ export default function SpreadsheetDetail() {
       setError("");
       setTechnicalError("");
       setBundle(null);
+      setAnalyses([]);
 
       const response = await getSpreadsheetById(id);
       setData(response);
@@ -196,12 +212,16 @@ export default function SpreadsheetDetail() {
         );
         setOpinionDocument(null);
         setBundle(null);
+        setAnalyses([]);
         return;
       }
 
-      const opinionBundle = await getLatestAnalysisOpinionBundleBySpreadsheetId(
-        realSpreadsheetId
-      );
+      const [opinionBundle, analysisHistory] = await Promise.all([
+        getLatestAnalysisOpinionBundleBySpreadsheetId(realSpreadsheetId),
+        listExecutabilityAnalysesBySpreadsheetId(realSpreadsheetId),
+      ]);
+
+      setAnalyses(analysisHistory);
 
       if (!opinionBundle) {
         setTechnicalError(
@@ -225,6 +245,7 @@ export default function SpreadsheetDetail() {
       setData(null);
       setOpinionDocument(null);
       setBundle(null);
+      setAnalyses([]);
     } finally {
       setLoading(false);
     }
@@ -1327,6 +1348,90 @@ export default function SpreadsheetDetail() {
                       </Card>
                     </Stack>
                   </Box>
+
+                  <Card
+                    variant="outlined"
+                    sx={{
+                      borderRadius: "24px",
+                      borderColor: "#eadff0",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        px: 3,
+                        py: 2.2,
+                        borderBottom: "1px solid #eadff0",
+                        backgroundColor: "#fcfafe",
+                      }}
+                    >
+                      <Stack direction="row" spacing={1.2} alignItems="center">
+                        <HistoryIcon sx={{ color: "#8c58a2" }} />
+                        <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                          Histórico de análises de exequibilidade
+                        </Typography>
+                      </Stack>
+                    </Box>
+
+                    <CardContent sx={{ p: 0 }}>
+                      <Paper elevation={0} sx={{ width: "100%", overflowX: "auto" }}>
+                        <Table sx={{ minWidth: 900 }}>
+                          <TableHead>
+                            <TableRow
+                              sx={{
+                                "& th": {
+                                  fontWeight: 800,
+                                  color: "#4e3c59",
+                                  backgroundColor: "#faf7fc",
+                                  borderBottom: "1px solid #eadff0",
+                                },
+                              }}
+                            >
+                              <TableCell>Analysis ID</TableCell>
+                              <TableCell>Versão</TableCell>
+                              <TableCell>Status</TableCell>
+                              <TableCell>Score</TableCell>
+                              <TableCell>Risco</TableCell>
+                              <TableCell>Criado em</TableCell>
+                              <TableCell>Atualizado em</TableCell>
+                            </TableRow>
+                          </TableHead>
+
+                          <TableBody>
+                            {analyses.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={7}>
+                                  <Typography color="text.secondary">
+                                    Nenhuma análise de exequibilidade encontrada para esta planilha.
+                                  </Typography>
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              analyses.map((analysis) => (
+                                <TableRow
+                                  key={analysis.analysis_id}
+                                  sx={{
+                                    "&:last-child td": { borderBottom: 0 },
+                                    "& td": { borderBottom: "1px solid #f0e8f4" },
+                                  }}
+                                >
+                                  <TableCell sx={{ fontWeight: 700 }}>
+                                    {analysis.analysis_id}
+                                  </TableCell>
+                                  <TableCell>{analysis.spreadsheet_version_id}</TableCell>
+                                  <TableCell>{analysis.status}</TableCell>
+                                  <TableCell>{analysis.score_global ?? "-"}</TableCell>
+                                  <TableCell>{analysis.risk_level ?? "-"}</TableCell>
+                                  <TableCell>{formatDateTime(analysis.created_at)}</TableCell>
+                                  <TableCell>{formatDateTime(analysis.updated_at)}</TableCell>
+                                </TableRow>
+                              ))
+                            )}
+                          </TableBody>
+                        </Table>
+                      </Paper>
+                    </CardContent>
+                  </Card>
 
                   <Box
                     sx={{
