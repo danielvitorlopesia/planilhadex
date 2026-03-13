@@ -53,8 +53,9 @@ import TaskAltRoundedIcon from "@mui/icons-material/TaskAltRounded";
 import RuleRoundedIcon from "@mui/icons-material/RuleRounded";
 import ErrorOutlineRoundedIcon from "@mui/icons-material/ErrorOutlineRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
-import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
+import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
+import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordRounded";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import {
   AnalysisDetail,
@@ -74,7 +75,13 @@ type SpreadsheetDetailData = {
   updatedAt?: string | null;
 };
 
-type DetailViewTab = "summary" | "comparison" | "opinion" | "explanations";
+type DetailViewTab =
+  | "summary"
+  | "comparison"
+  | "opinion"
+  | "explanations"
+  | "timeline";
+
 type InternalDecision =
   | "approved"
   | "approved_with_remarks"
@@ -692,6 +699,136 @@ function ComparisonRow({
   );
 }
 
+function TimelineEventCard({
+  item,
+  isSelected,
+  isMostRecent,
+  decisionState,
+}: {
+  item: AnalysisHistoryItem;
+  isSelected: boolean;
+  isMostRecent: boolean;
+  decisionState?: InternalDecisionState;
+}) {
+  return (
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: "20px 1fr",
+        gap: 1.5,
+        alignItems: "start",
+      }}
+    >
+      <Stack alignItems="center" spacing={0}>
+        <FiberManualRecordRoundedIcon
+          fontSize="small"
+          color={isSelected ? "primary" : "disabled"}
+        />
+        <Box
+          sx={{
+            width: "2px",
+            flex: 1,
+            minHeight: 56,
+            bgcolor: "divider",
+            mt: 0.5,
+          }}
+        />
+      </Stack>
+
+      <Card
+        variant="outlined"
+        sx={{
+          borderColor: isSelected ? "primary.main" : "divider",
+        }}
+      >
+        <CardContent>
+          <Stack spacing={1.5}>
+            <Stack
+              direction="row"
+              spacing={1}
+              flexWrap="wrap"
+              useFlexGap
+              alignItems="center"
+            >
+              <Typography variant="subtitle2" fontWeight={700}>
+                {formatLabel(item.analysisType || "Análise")}
+              </Typography>
+
+              <Chip
+                size="small"
+                label={formatLabel(item.executabilityStatus || item.finalStatus)}
+                color={getStatusChipColor(item.executabilityStatus || item.finalStatus)}
+                variant="outlined"
+              />
+
+              <Chip
+                size="small"
+                label={`Risco: ${formatLabel(item.riskLevel)}`}
+                color={getRiskChipColor(item.riskLevel)}
+                variant="outlined"
+              />
+
+              {isMostRecent ? (
+                <Chip size="small" label="Mais recente" color="primary" variant="outlined" />
+              ) : null}
+
+              {isSelected ? (
+                <Chip size="small" label="Selecionada" color="primary" />
+              ) : null}
+            </Stack>
+
+            <Typography variant="body2" color="text.secondary">
+              <strong>Analysis ID:</strong> {item.analysisId}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Versão da planilha:</strong> {item.spreadsheetVersionId ?? "—"}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Criada em:</strong> {formatDateTime(item.createdAt)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Score global:</strong>{" "}
+              {item.scoreGlobal !== null && item.scoreGlobal !== undefined
+                ? item.scoreGlobal
+                : "—"}
+            </Typography>
+
+            <Divider />
+
+            <Stack
+              direction="row"
+              spacing={1}
+              flexWrap="wrap"
+              useFlexGap
+              alignItems="center"
+            >
+              <Chip
+                size="small"
+                label={getDecisionLabel(decisionState?.decision || null)}
+                color={getDecisionChipColor(decisionState?.decision || null)}
+                variant="outlined"
+              />
+              <Typography variant="caption" color="text.secondary">
+                Despacho em: {formatDateTime(decisionState?.decidedAt)}
+              </Typography>
+            </Stack>
+
+            {decisionState?.despacho ? (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}
+              >
+                {decisionState.despacho}
+              </Typography>
+            ) : null}
+          </Stack>
+        </CardContent>
+      </Card>
+    </Box>
+  );
+}
+
 function RightPanelHeader({
   currentTab,
   onChange,
@@ -714,30 +851,11 @@ function RightPanelHeader({
             scrollButtons="auto"
             allowScrollButtonsMobile
           >
-            <Tab
-              value="summary"
-              label="Resumo"
-              icon={<DashboardRoundedIcon />}
-              iconPosition="start"
-            />
-            <Tab
-              value="comparison"
-              label="Comparação"
-              icon={<CompareArrowsRoundedIcon />}
-              iconPosition="start"
-            />
-            <Tab
-              value="opinion"
-              label="Parecer"
-              icon={<ArticleRoundedIcon />}
-              iconPosition="start"
-            />
-            <Tab
-              value="explanations"
-              label="Explicações"
-              icon={<NotesRoundedIcon />}
-              iconPosition="start"
-            />
+            <Tab value="summary" label="Resumo" icon={<DashboardRoundedIcon />} iconPosition="start" />
+            <Tab value="comparison" label="Comparação" icon={<CompareArrowsRoundedIcon />} iconPosition="start" />
+            <Tab value="opinion" label="Parecer" icon={<ArticleRoundedIcon />} iconPosition="start" />
+            <Tab value="explanations" label="Explicações" icon={<NotesRoundedIcon />} iconPosition="start" />
+            <Tab value="timeline" label="Linha do tempo" icon={<TimelineRoundedIcon />} iconPosition="start" />
           </Tabs>
         </Stack>
       </CardContent>
@@ -798,29 +916,6 @@ function downloadTextFile(filename: string, content: string) {
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
-}
-
-function normalizeRiskOrder(risk?: string | null): number {
-  const value = (risk || "").toLowerCase();
-
-  if (value.includes("low") || value.includes("baixo")) return 1;
-  if (value.includes("medium") || value.includes("médio") || value.includes("medio")) {
-    return 2;
-  }
-  if (value.includes("high") || value.includes("alto")) return 3;
-
-  return 0;
-}
-
-function normalizeStatusOrder(status?: string | null): number {
-  const value = (status || "").toLowerCase();
-
-  if (value.includes("inexequivel")) return 1;
-  if (value.includes("ressalvas")) return 2;
-  if (value.includes("diligencia")) return 3;
-  if (value.includes("exequivel")) return 4;
-
-  return 0;
 }
 
 export default function SpreadsheetDetail() {
@@ -1033,8 +1128,21 @@ export default function SpreadsheetDetail() {
         ? "down"
         : "same";
 
-    const currentRiskOrder = normalizeRiskOrder(analysisDetail.riskLevel);
-    const previousRiskOrder = normalizeRiskOrder(previousHistoryItem.riskLevel);
+    const currentRiskOrder = (() => {
+      const value = (analysisDetail.riskLevel || "").toLowerCase();
+      if (value.includes("low") || value.includes("baixo")) return 1;
+      if (value.includes("medium") || value.includes("médio") || value.includes("medio")) return 2;
+      if (value.includes("high") || value.includes("alto")) return 3;
+      return 0;
+    })();
+
+    const previousRiskOrder = (() => {
+      const value = (previousHistoryItem.riskLevel || "").toLowerCase();
+      if (value.includes("low") || value.includes("baixo")) return 1;
+      if (value.includes("medium") || value.includes("médio") || value.includes("medio")) return 2;
+      if (value.includes("high") || value.includes("alto")) return 3;
+      return 0;
+    })();
 
     const riskDirection =
       currentRiskOrder === 0 || previousRiskOrder === 0
@@ -1045,8 +1153,23 @@ export default function SpreadsheetDetail() {
         ? "down"
         : "same";
 
-    const currentStatusOrder = normalizeStatusOrder(currentStatus);
-    const previousStatusOrder = normalizeStatusOrder(previousStatus);
+    const currentStatusOrder = (() => {
+      const value = (currentStatus || "").toLowerCase();
+      if (value.includes("inexequivel")) return 1;
+      if (value.includes("ressalvas")) return 2;
+      if (value.includes("diligencia")) return 3;
+      if (value.includes("exequivel")) return 4;
+      return 0;
+    })();
+
+    const previousStatusOrder = (() => {
+      const value = (previousStatus || "").toLowerCase();
+      if (value.includes("inexequivel")) return 1;
+      if (value.includes("ressalvas")) return 2;
+      if (value.includes("diligencia")) return 3;
+      if (value.includes("exequivel")) return 4;
+      return 0;
+    })();
 
     const statusDirection =
       currentStatusOrder === 0 || previousStatusOrder === 0
@@ -2049,6 +2172,39 @@ export default function SpreadsheetDetail() {
                           Esta análise não possui explicações detalhadas disponíveis.
                         </Alert>
                       )}
+                    </Stack>
+                  ) : null}
+
+                  {detailViewTab === "timeline" ? (
+                    <Stack spacing={2}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Stack spacing={2}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <TimelineRoundedIcon />
+                              <Typography variant="h6" fontWeight={800}>
+                                Linha do tempo da análise
+                              </Typography>
+                            </Stack>
+
+                            <Typography variant="body2" color="text.secondary">
+                              Sequência cronológica das análises da planilha, com status
+                              técnico, versão, decisão interna e indicação da análise
+                              atualmente selecionada.
+                            </Typography>
+                          </Stack>
+                        </CardContent>
+                      </Card>
+
+                      {history.map((item, index) => (
+                        <TimelineEventCard
+                          key={`timeline-${item.analysisId}`}
+                          item={item}
+                          isSelected={item.analysisId === selectedAnalysisId}
+                          isMostRecent={index === 0}
+                          decisionState={decisionByAnalysis[item.analysisId]}
+                        />
+                      ))}
                     </Stack>
                   ) : null}
                 </>
