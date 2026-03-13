@@ -18,6 +18,14 @@ export type InternalDecision =
   | "reprovado"
   | "pendente";
 
+export type AnalysisTimelineItem = {
+  id: string;
+  date: string;
+  title: string;
+  description: string;
+  type: "system" | "analysis" | "decision" | "version";
+};
+
 export type AnalysisHistoryItem = {
   id: string;
   analysisId: string;
@@ -42,13 +50,7 @@ export type AnalysisHistoryItem = {
   technicalLegalSummary: string;
   managerSummary: string;
   recommendationSummary: string;
-  timeline: Array<{
-    id: string;
-    date: string;
-    title: string;
-    description: string;
-    type: "system" | "analysis" | "decision" | "version";
-  }>;
+  timeline: AnalysisTimelineItem[];
 };
 
 export const analysisHistoryMocks: AnalysisHistoryItem[] = [
@@ -241,12 +243,9 @@ export const analysisHistoryMocks: AnalysisHistoryItem[] = [
     internalDecision: "pendente",
     shortDispatch:
       "Aguardando finalização do processamento para emissão de despacho.",
-    technicalSummary:
-      "Análise ainda em processamento.",
-    technicalLegalSummary:
-      "Análise ainda em processamento.",
-    managerSummary:
-      "Análise ainda em processamento.",
+    technicalSummary: "Análise ainda em processamento.",
+    technicalLegalSummary: "Análise ainda em processamento.",
+    managerSummary: "Análise ainda em processamento.",
     recommendationSummary:
       "Aguardar conclusão do motor antes de deliberar.",
     timeline: [
@@ -294,3 +293,10 @@ export const internalDecisionOptions: Array<{
   { value: "reprovado", label: "Reprovado" },
   { value: "pendente", label: "Pendente" },
 ];
+
+export function buildMockAnalysisHistory(): AnalysisHistoryItem[] {
+  return [...analysisHistoryMocks].sort(
+    (a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
