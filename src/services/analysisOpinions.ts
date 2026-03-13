@@ -85,7 +85,9 @@ export async function getLatestExecutabilityAnalysisBySpreadsheetId(
 
   const { data, error } = await supabaseAi
     .from("analyses")
-    .select("id, spreadsheet_id, spreadsheet_version_id, analysis_type, status, created_at")
+    .select(
+      "id, spreadsheet_id, spreadsheet_version_id, analysis_type, status, created_at"
+    )
     .eq("spreadsheet_id", spreadsheetId)
     .eq("analysis_type", "executability_v1")
     .order("created_at", { ascending: false })
@@ -119,7 +121,9 @@ export async function getAnalysisOpinionBundle(
 export async function getLatestAnalysisOpinionBundleBySpreadsheetId(
   spreadsheetId: string
 ): Promise<AnalysisOpinionBundle | null> {
-  const analysis = await getLatestExecutabilityAnalysisBySpreadsheetId(spreadsheetId);
+  const analysis = await getLatestExecutabilityAnalysisBySpreadsheetId(
+    spreadsheetId
+  );
 
   if (!analysis?.id) {
     return null;
