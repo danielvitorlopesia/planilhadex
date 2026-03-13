@@ -19,6 +19,7 @@ import {
   Stack,
   Tab,
   Tabs,
+  TextField,
   Toolbar,
   Typography,
 } from "@mui/material";
@@ -47,6 +48,13 @@ import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import KeyboardDoubleArrowUpRoundedIcon from "@mui/icons-material/KeyboardDoubleArrowUpRounded";
 import SwapHorizRoundedIcon from "@mui/icons-material/SwapHorizRounded";
 import DifferenceRoundedIcon from "@mui/icons-material/DifferenceRounded";
+import FactCheckRoundedIcon from "@mui/icons-material/FactCheckRounded";
+import TaskAltRoundedIcon from "@mui/icons-material/TaskAltRounded";
+import RuleRoundedIcon from "@mui/icons-material/RuleRounded";
+import ErrorOutlineRoundedIcon from "@mui/icons-material/ErrorOutlineRounded";
+import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
+import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import {
   AnalysisDetail,
@@ -67,6 +75,18 @@ type SpreadsheetDetailData = {
 };
 
 type DetailViewTab = "summary" | "comparison" | "opinion" | "explanations";
+type InternalDecision =
+  | "approved"
+  | "approved_with_remarks"
+  | "diligence_requested"
+  | "rejected"
+  | null;
+
+type InternalDecisionState = {
+  decision: InternalDecision;
+  despacho: string;
+  decidedAt: string | null;
+};
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const ENABLE_MOCK_ANALYSIS_HISTORY = true;
@@ -180,6 +200,60 @@ function getStatusChipColor(
   }
 
   return "default";
+}
+
+function getDecisionLabel(decision: InternalDecision): string {
+  switch (decision) {
+    case "approved":
+      return "Aprovada";
+    case "approved_with_remarks":
+      return "Aprovada com ressalvas";
+    case "diligence_requested":
+      return "Diligência solicitada";
+    case "rejected":
+      return "Rejeitada";
+    default:
+      return "Sem decisão";
+  }
+}
+
+function getDecisionChipColor(
+  decision: InternalDecision
+):
+  | "default"
+  | "success"
+  | "warning"
+  | "error"
+  | "info"
+  | "primary"
+  | "secondary" {
+  switch (decision) {
+    case "approved":
+      return "success";
+    case "approved_with_remarks":
+      return "warning";
+    case "diligence_requested":
+      return "info";
+    case "rejected":
+      return "error";
+    default:
+      return "default";
+  }
+}
+
+function getDecisionIcon(decision: InternalDecision) {
+  switch (decision) {
+    case "approved":
+      return <TaskAltRoundedIcon fontSize="small" />;
+    case "approved_with_remarks":
+      return <RuleRoundedIcon fontSize="small" />;
+    case "diligence_requested":
+      return <SearchRoundedIcon fontSize="small" />;
+    case "rejected":
+      return <ErrorOutlineRoundedIcon fontSize="small" />;
+    default:
+      return <FactCheckRoundedIcon fontSize="small" />;
+  }
 }
 
 function normalizeSpreadsheet(payload: any): SpreadsheetDetailData {
@@ -554,29 +628,6 @@ function TextDiffSection({
   );
 }
 
-function normalizeRiskOrder(risk?: string | null): number {
-  const value = (risk || "").toLowerCase();
-
-  if (value.includes("low") || value.includes("baixo")) return 1;
-  if (value.includes("medium") || value.includes("médio") || value.includes("medio")) {
-    return 2;
-  }
-  if (value.includes("high") || value.includes("alto")) return 3;
-
-  return 0;
-}
-
-function normalizeStatusOrder(status?: string | null): number {
-  const value = (status || "").toLowerCase();
-
-  if (value.includes("inexequivel")) return 1;
-  if (value.includes("ressalvas")) return 2;
-  if (value.includes("diligencia")) return 3;
-  if (value.includes("exequivel")) return 4;
-
-  return 0;
-}
-
 function ComparisonRow({
   label,
   current,
@@ -749,6 +800,29 @@ function downloadTextFile(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
+function normalizeRiskOrder(risk?: string | null): number {
+  const value = (risk || "").toLowerCase();
+
+  if (value.includes("low") || value.includes("baixo")) return 1;
+  if (value.includes("medium") || value.includes("médio") || value.includes("medio")) {
+    return 2;
+  }
+  if (value.includes("high") || value.includes("alto")) return 3;
+
+  return 0;
+}
+
+function normalizeStatusOrder(status?: string | null): number {
+  const value = (status || "").toLowerCase();
+
+  if (value.includes("inexequivel")) return 1;
+  if (value.includes("ressalvas")) return 2;
+  if (value.includes("diligencia")) return 3;
+  if (value.includes("exequivel")) return 4;
+
+  return 0;
+}
+
 export default function SpreadsheetDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -765,6 +839,11 @@ export default function SpreadsheetDetail() {
   const [usingMockData, setUsingMockData] = useState(false);
   const [detailViewTab, setDetailViewTab] = useState<DetailViewTab>("summary");
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+
+  const [despachoDraft, setDespachoDraft] = useState("");
+  const [decisionByAnalysis, setDecisionByAnalysis] = useState<
+    Record<string, InternalDecisionState>
+  >({});
 
   const selectedHistoryItem = useMemo(() => {
     return history.find((item) => item.analysisId === selectedAnalysisId) || null;
@@ -787,6 +866,17 @@ export default function SpreadsheetDetail() {
     if (!mostRecentHistoryItem || !selectedHistoryItem) return false;
     return mostRecentHistoryItem.analysisId === selectedHistoryItem.analysisId;
   }, [mostRecentHistoryItem, selectedHistoryItem]);
+
+  const currentInternalDecision = useMemo(() => {
+    if (!selectedAnalysisId) return null;
+    return (
+      decisionByAnalysis[selectedAnalysisId] || {
+        decision: null,
+        despacho: "",
+        decidedAt: null,
+      }
+    );
+  }, [decisionByAnalysis, selectedAnalysisId]);
 
   const loadAnalysisDetail = useCallback(
     async (analysisId: string, spreadsheetIdForMock?: string, forceMock = false) => {
@@ -995,6 +1085,10 @@ export default function SpreadsheetDetail() {
     setActionMessage(null);
   }, [selectedAnalysisId]);
 
+  useEffect(() => {
+    setDespachoDraft(currentInternalDecision?.despacho || "");
+  }, [currentInternalDecision?.despacho, selectedAnalysisId]);
+
   const handleCopyOpinion = async () => {
     try {
       const content = buildOpinionText(analysisDetail);
@@ -1038,6 +1132,10 @@ export default function SpreadsheetDetail() {
       buildOpinionText(analysisDetail),
       "",
       buildExplanationsText(analysisDetail),
+      "",
+      "DESPACHO INTERNO",
+      getDecisionLabel(currentInternalDecision?.decision || null),
+      currentInternalDecision?.despacho || "—",
     ].join("\n");
 
     downloadTextFile(`${titleBase}_analise.txt`, content);
@@ -1063,6 +1161,36 @@ export default function SpreadsheetDetail() {
 
     setDetailViewTab("comparison");
     setActionMessage("Comparação com a análise mais recente aberta.");
+  };
+
+  const handleSaveDecision = (decision: InternalDecision) => {
+    if (!selectedAnalysisId) return;
+
+    setDecisionByAnalysis((prev) => ({
+      ...prev,
+      [selectedAnalysisId]: {
+        decision,
+        despacho: despachoDraft.trim(),
+        decidedAt: new Date().toISOString(),
+      },
+    }));
+
+    setActionMessage(`Despacho interno salvo como: ${getDecisionLabel(decision)}.`);
+  };
+
+  const handleResetDecision = () => {
+    if (!selectedAnalysisId) return;
+
+    setDecisionByAnalysis((prev) => ({
+      ...prev,
+      [selectedAnalysisId]: {
+        decision: null,
+        despacho: "",
+        decidedAt: null,
+      },
+    }));
+    setDespachoDraft("");
+    setActionMessage("Despacho interno removido.");
   };
 
   const currentOpinion = analysisDetail?.consolidatedOpinion || null;
@@ -1223,6 +1351,7 @@ export default function SpreadsheetDetail() {
                 <List disablePadding>
                   {history.map((item, index) => {
                     const selected = item.analysisId === selectedAnalysisId;
+                    const savedDecision = decisionByAnalysis[item.analysisId]?.decision || null;
 
                     return (
                       <React.Fragment key={item.analysisId}>
@@ -1268,6 +1397,15 @@ export default function SpreadsheetDetail() {
                                     )}
                                     variant={selected ? "filled" : "outlined"}
                                   />
+
+                                  {savedDecision ? (
+                                    <Chip
+                                      size="small"
+                                      label={getDecisionLabel(savedDecision)}
+                                      color={getDecisionChipColor(savedDecision)}
+                                      variant="outlined"
+                                    />
+                                  ) : null}
                                 </Stack>
 
                                 <Stack
@@ -1350,12 +1488,7 @@ export default function SpreadsheetDetail() {
                           Ações rápidas
                         </Typography>
 
-                        <Stack
-                          direction="row"
-                          spacing={1}
-                          flexWrap="wrap"
-                          useFlexGap
-                        >
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                           <Button
                             variant="outlined"
                             startIcon={<ContentCopyRoundedIcon />}
@@ -1398,6 +1531,113 @@ export default function SpreadsheetDetail() {
                             Comparar com a mais recente
                           </Button>
                         </Stack>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Stack spacing={2}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          {getDecisionIcon(currentInternalDecision?.decision || null)}
+                          <Typography variant="h6" fontWeight={800}>
+                            Aprovação interna
+                          </Typography>
+                        </Stack>
+
+                        <Typography variant="body2" color="text.secondary">
+                          Registre uma deliberação interna resumida para esta análise,
+                          com despacho curto e status decisório.
+                        </Typography>
+
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          flexWrap="wrap"
+                          useFlexGap
+                          alignItems="center"
+                        >
+                          <Chip
+                            label={getDecisionLabel(currentInternalDecision?.decision || null)}
+                            color={getDecisionChipColor(
+                              currentInternalDecision?.decision || null
+                            )}
+                            variant="outlined"
+                          />
+                          <Typography variant="caption" color="text.secondary">
+                            Último registro: {formatDateTime(currentInternalDecision?.decidedAt)}
+                          </Typography>
+                        </Stack>
+
+                        <TextField
+                          label="Despacho curto do analista"
+                          value={despachoDraft}
+                          onChange={(event) => setDespachoDraft(event.target.value)}
+                          placeholder="Ex.: A análise pode seguir, desde que a memória de cálculo seja complementada antes da validação conclusiva."
+                          multiline
+                          minRows={3}
+                          fullWidth
+                        />
+
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                          <Button
+                            variant="contained"
+                            color="success"
+                            startIcon={<TaskAltRoundedIcon />}
+                            onClick={() => handleSaveDecision("approved")}
+                          >
+                            Aprovar
+                          </Button>
+
+                          <Button
+                            variant="contained"
+                            color="warning"
+                            startIcon={<RuleRoundedIcon />}
+                            onClick={() => handleSaveDecision("approved_with_remarks")}
+                          >
+                            Aprovar com ressalvas
+                          </Button>
+
+                          <Button
+                            variant="contained"
+                            color="info"
+                            startIcon={<SearchRoundedIcon />}
+                            onClick={() => handleSaveDecision("diligence_requested")}
+                          >
+                            Solicitar diligência
+                          </Button>
+
+                          <Button
+                            variant="contained"
+                            color="error"
+                            startIcon={<ErrorOutlineRoundedIcon />}
+                            onClick={() => handleSaveDecision("rejected")}
+                          >
+                            Rejeitar
+                          </Button>
+
+                          <Button
+                            variant="outlined"
+                            startIcon={<RestartAltRoundedIcon />}
+                            onClick={handleResetDecision}
+                          >
+                            Limpar decisão
+                          </Button>
+                        </Stack>
+
+                        {currentInternalDecision?.despacho ? (
+                          <Paper variant="outlined" sx={{ p: 2 }}>
+                            <Typography variant="caption" color="text.secondary">
+                              Despacho registrado
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              sx={{ mt: 1, whiteSpace: "pre-wrap", lineHeight: 1.75 }}
+                            >
+                              {currentInternalDecision.despacho}
+                            </Typography>
+                          </Paper>
+                        ) : null}
                       </Stack>
                     </CardContent>
                   </Card>
