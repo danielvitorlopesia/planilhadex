@@ -17,6 +17,8 @@ import {
   ListItemText,
   Paper,
   Stack,
+  Tab,
+  Tabs,
   Toolbar,
   Typography,
 } from "@mui/material";
@@ -38,6 +40,8 @@ import TrendingDownRoundedIcon from "@mui/icons-material/TrendingDownRounded";
 import TrendingFlatRoundedIcon from "@mui/icons-material/TrendingFlatRounded";
 import CompareArrowsRoundedIcon from "@mui/icons-material/CompareArrowsRounded";
 import ArticleRoundedIcon from "@mui/icons-material/ArticleRounded";
+import NotesRoundedIcon from "@mui/icons-material/NotesRounded";
+import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import {
   AnalysisDetail,
@@ -56,6 +60,8 @@ type SpreadsheetDetailData = {
   category?: string | null;
   updatedAt?: string | null;
 };
+
+type DetailViewTab = "summary" | "comparison" | "opinion" | "explanations";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const ENABLE_MOCK_ANALYSIS_HISTORY = true;
@@ -555,6 +561,59 @@ function ComparisonRow({
   );
 }
 
+function RightPanelHeader({
+  currentTab,
+  onChange,
+}: {
+  currentTab: DetailViewTab;
+  onChange: (tab: DetailViewTab) => void;
+}) {
+  return (
+    <Card variant="outlined">
+      <CardContent sx={{ pb: "16px !important" }}>
+        <Stack spacing={2}>
+          <Typography variant="h6" fontWeight={800}>
+            Navegação da análise
+          </Typography>
+
+          <Tabs
+            value={currentTab}
+            onChange={(_, value: DetailViewTab) => onChange(value)}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
+          >
+            <Tab
+              value="summary"
+              label="Resumo"
+              icon={<DashboardRoundedIcon />}
+              iconPosition="start"
+            />
+            <Tab
+              value="comparison"
+              label="Comparação"
+              icon={<CompareArrowsRoundedIcon />}
+              iconPosition="start"
+            />
+            <Tab
+              value="opinion"
+              label="Parecer"
+              icon={<ArticleRoundedIcon />}
+              iconPosition="start"
+            />
+            <Tab
+              value="explanations"
+              label="Explicações"
+              icon={<NotesRoundedIcon />}
+              iconPosition="start"
+            />
+          </Tabs>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SpreadsheetDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -569,6 +628,7 @@ export default function SpreadsheetDetail() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [historyWarning, setHistoryWarning] = useState<string | null>(null);
   const [usingMockData, setUsingMockData] = useState(false);
+  const [detailViewTab, setDetailViewTab] = useState<DetailViewTab>("summary");
 
   const selectedHistoryItem = useMemo(() => {
     return history.find((item) => item.analysisId === selectedAnalysisId) || null;
@@ -783,6 +843,10 @@ export default function SpreadsheetDetail() {
       balanceDirection,
     };
   }, [analysisDetail, previousDetail, previousHistoryItem]);
+
+  useEffect(() => {
+    setDetailViewTab("summary");
+  }, [selectedAnalysisId]);
 
   if (pageLoading) {
     return (
@@ -1058,360 +1122,383 @@ export default function SpreadsheetDetail() {
                 </Paper>
               ) : analysisDetail ? (
                 <>
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Stack spacing={2.5}>
-                        <Stack
-                          direction={{ xs: "column", md: "row" }}
-                          justifyContent="space-between"
-                          spacing={2}
-                        >
-                          <Box>
-                            <Stack direction="row" spacing={1} alignItems="center" mb={1}>
-                              <InsightsOutlinedIcon />
+                  <RightPanelHeader
+                    currentTab={detailViewTab}
+                    onChange={setDetailViewTab}
+                  />
+
+                  {detailViewTab === "summary" ? (
+                    <>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Stack spacing={2.5}>
+                            <Stack
+                              direction={{ xs: "column", md: "row" }}
+                              justifyContent="space-between"
+                              spacing={2}
+                            >
+                              <Box>
+                                <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+                                  <InsightsOutlinedIcon />
+                                  <Typography variant="h6" fontWeight={800}>
+                                    Análise selecionada
+                                  </Typography>
+                                </Stack>
+
+                                <Typography variant="body2" color="text.secondary">
+                                  Utilize este painel para revisar os principais
+                                  metadados e indicadores da análise selecionada.
+                                </Typography>
+                              </Box>
+
+                              <Stack
+                                direction="row"
+                                spacing={1}
+                                flexWrap="wrap"
+                                useFlexGap
+                                alignItems="flex-start"
+                              >
+                                <Chip
+                                  label={formatLabel(analysisDetail.analysisType)}
+                                  variant="outlined"
+                                />
+                                <Chip
+                                  label={formatLabel(
+                                    analysisDetail.executabilityStatus ||
+                                      analysisDetail.finalStatus
+                                  )}
+                                  color={getStatusChipColor(
+                                    analysisDetail.executabilityStatus ||
+                                      analysisDetail.finalStatus
+                                  )}
+                                />
+                                <Chip
+                                  label={`Risco: ${formatLabel(analysisDetail.riskLevel)}`}
+                                  color={getRiskChipColor(analysisDetail.riskLevel)}
+                                  variant="outlined"
+                                />
+                              </Stack>
+                            </Stack>
+
+                            <Divider />
+
+                            <Box
+                              sx={{
+                                display: "grid",
+                                gridTemplateColumns: {
+                                  xs: "1fr",
+                                  sm: "repeat(2, minmax(0, 1fr))",
+                                  xl: "repeat(4, minmax(0, 1fr))",
+                                },
+                                gap: 2,
+                              }}
+                            >
+                              <MetricCard
+                                title="Score global"
+                                value={
+                                  analysisDetail.scoreGlobal !== null &&
+                                  analysisDetail.scoreGlobal !== undefined
+                                    ? String(analysisDetail.scoreGlobal)
+                                    : "—"
+                                }
+                                icon={<CheckCircleOutlineIcon fontSize="small" />}
+                              />
+
+                              <MetricCard
+                                title="Valor proposto"
+                                value={formatCurrency(analysisDetail.proposedTotalValue)}
+                                icon={<SummarizeRoundedIcon fontSize="small" />}
+                              />
+
+                              <MetricCard
+                                title="Custo obrigatório"
+                                value={formatCurrency(analysisDetail.mandatoryCostTotal)}
+                                icon={<GavelRoundedIcon fontSize="small" />}
+                              />
+
+                              <MetricCard
+                                title="Saldo de exequibilidade"
+                                value={formatCurrency(analysisDetail.executabilityBalance)}
+                                icon={<WarningAmberRoundedIcon fontSize="small" />}
+                              />
+                            </Box>
+
+                            <Box
+                              sx={{
+                                display: "grid",
+                                gridTemplateColumns: {
+                                  xs: "1fr",
+                                  md: "repeat(2, minmax(0, 1fr))",
+                                },
+                                gap: 2,
+                              }}
+                            >
+                              <Card variant="outlined">
+                                <CardContent>
+                                  <Typography variant="subtitle2" color="text.secondary" mb={1}>
+                                    Metadados da análise
+                                  </Typography>
+
+                                  <Stack spacing={0.75}>
+                                    <Typography variant="body2">
+                                      <strong>Analysis ID:</strong> {analysisDetail.analysisId}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      <strong>Versão da planilha:</strong>{" "}
+                                      {analysisDetail.spreadsheetVersionId ?? "—"}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      <strong>Tipo:</strong>{" "}
+                                      {formatLabel(analysisDetail.analysisType)}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      <strong>Processamento:</strong>{" "}
+                                      {formatLabel(analysisDetail.processingStatus)}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      <strong>Criada em:</strong>{" "}
+                                      {formatDateTime(analysisDetail.createdAt)}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      <strong>Atualizada em:</strong>{" "}
+                                      {formatDateTime(analysisDetail.updatedAt)}
+                                    </Typography>
+                                  </Stack>
+                                </CardContent>
+                              </Card>
+
+                              <Card variant="outlined">
+                                <CardContent>
+                                  <Typography variant="subtitle2" color="text.secondary" mb={1}>
+                                    Totais auxiliares
+                                  </Typography>
+
+                                  <Stack spacing={0.75}>
+                                    <Typography variant="body2">
+                                      <strong>Custo evidenciário:</strong>{" "}
+                                      {formatCurrency(analysisDetail.evidentiaryCostTotal)}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      <strong>Retenções:</strong>{" "}
+                                      {formatCurrency(analysisDetail.retentionTotal)}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      <strong>Status final:</strong>{" "}
+                                      {formatLabel(
+                                        analysisDetail.executabilityStatus ||
+                                          analysisDetail.finalStatus
+                                      )}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      <strong>Risco:</strong>{" "}
+                                      {formatLabel(analysisDetail.riskLevel)}
+                                    </Typography>
+                                  </Stack>
+                                </CardContent>
+                              </Card>
+                            </Box>
+                          </Stack>
+                        </CardContent>
+                      </Card>
+
+                      {selectedHistoryItem ? (
+                        <Card variant="outlined">
+                          <CardContent>
+                            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                              Resumo da seleção atual
+                            </Typography>
+
+                            <Typography variant="body2" color="text.secondary">
+                              Você está visualizando a análise{" "}
+                              <strong>{selectedHistoryItem.analysisId}</strong>, vinculada à
+                              versão{" "}
+                              <strong>
+                                {selectedHistoryItem.spreadsheetVersionId ?? "—"}
+                              </strong>{" "}
+                              da planilha, criada em{" "}
+                              <strong>{formatDateTime(selectedHistoryItem.createdAt)}</strong>.
+                            </Typography>
+                          </CardContent>
+                        </Card>
+                      ) : null}
+                    </>
+                  ) : null}
+
+                  {detailViewTab === "comparison" ? (
+                    previousHistoryItem ? (
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Stack spacing={2}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <CompareArrowsRoundedIcon />
                               <Typography variant="h6" fontWeight={800}>
-                                Análise selecionada
+                                Comparação com a análise anterior
                               </Typography>
                             </Stack>
 
                             <Typography variant="body2" color="text.secondary">
-                              Utilize este painel para revisar análises anteriores da
-                              mesma planilha e comparar o racional já emitido ao longo
-                              do histórico.
+                              Comparativo entre a análise selecionada e a versão
+                              imediatamente anterior do histórico.
                             </Typography>
-                          </Box>
 
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            flexWrap="wrap"
-                            useFlexGap
-                            alignItems="flex-start"
-                          >
-                            <Chip
-                              label={formatLabel(analysisDetail.analysisType)}
-                              variant="outlined"
+                            <Divider />
+
+                            <ComparisonRow
+                              label="Score global"
+                              current={
+                                analysisDetail.scoreGlobal !== null &&
+                                analysisDetail.scoreGlobal !== undefined
+                                  ? String(analysisDetail.scoreGlobal)
+                                  : "—"
+                              }
+                              previous={
+                                previousHistoryItem.scoreGlobal !== null &&
+                                previousHistoryItem.scoreGlobal !== undefined
+                                  ? String(previousHistoryItem.scoreGlobal)
+                                  : "—"
+                              }
+                              direction={comparisonSummary?.scoreDirection || "same"}
                             />
-                            <Chip
-                              label={formatLabel(
+
+                            <Divider />
+
+                            <ComparisonRow
+                              label="Saldo de exequibilidade"
+                              current={formatCurrency(
+                                analysisDetail.executabilityBalance
+                              )}
+                              previous={formatCurrency(
+                                previousDetail?.executabilityBalance
+                              )}
+                              direction={comparisonSummary?.balanceDirection || "same"}
+                            />
+
+                            <Divider />
+
+                            <ComparisonRow
+                              label="Risco"
+                              current={formatLabel(analysisDetail.riskLevel)}
+                              previous={formatLabel(previousHistoryItem.riskLevel)}
+                              direction={comparisonSummary?.riskDirection || "same"}
+                            />
+
+                            <Divider />
+
+                            <ComparisonRow
+                              label="Status final"
+                              current={formatLabel(
                                 analysisDetail.executabilityStatus ||
                                   analysisDetail.finalStatus
                               )}
-                              color={getStatusChipColor(
-                                analysisDetail.executabilityStatus ||
-                                  analysisDetail.finalStatus
+                              previous={formatLabel(
+                                previousHistoryItem.executabilityStatus ||
+                                  previousHistoryItem.finalStatus
                               )}
-                            />
-                            <Chip
-                              label={`Risco: ${formatLabel(analysisDetail.riskLevel)}`}
-                              color={getRiskChipColor(analysisDetail.riskLevel)}
-                              variant="outlined"
+                              direction={comparisonSummary?.statusDirection || "same"}
                             />
                           </Stack>
-                        </Stack>
-
-                        <Divider />
-
-                        <Box
-                          sx={{
-                            display: "grid",
-                            gridTemplateColumns: {
-                              xs: "1fr",
-                              sm: "repeat(2, minmax(0, 1fr))",
-                              xl: "repeat(4, minmax(0, 1fr))",
-                            },
-                            gap: 2,
-                          }}
-                        >
-                          <MetricCard
-                            title="Score global"
-                            value={
-                              analysisDetail.scoreGlobal !== null &&
-                              analysisDetail.scoreGlobal !== undefined
-                                ? String(analysisDetail.scoreGlobal)
-                                : "—"
-                            }
-                            icon={<CheckCircleOutlineIcon fontSize="small" />}
-                          />
-
-                          <MetricCard
-                            title="Valor proposto"
-                            value={formatCurrency(analysisDetail.proposedTotalValue)}
-                            icon={<SummarizeRoundedIcon fontSize="small" />}
-                          />
-
-                          <MetricCard
-                            title="Custo obrigatório"
-                            value={formatCurrency(analysisDetail.mandatoryCostTotal)}
-                            icon={<GavelRoundedIcon fontSize="small" />}
-                          />
-
-                          <MetricCard
-                            title="Saldo de exequibilidade"
-                            value={formatCurrency(analysisDetail.executabilityBalance)}
-                            icon={<WarningAmberRoundedIcon fontSize="small" />}
-                          />
-                        </Box>
-
-                        <Box
-                          sx={{
-                            display: "grid",
-                            gridTemplateColumns: {
-                              xs: "1fr",
-                              md: "repeat(2, minmax(0, 1fr))",
-                            },
-                            gap: 2,
-                          }}
-                        >
-                          <Card variant="outlined">
-                            <CardContent>
-                              <Typography variant="subtitle2" color="text.secondary" mb={1}>
-                                Metadados da análise
-                              </Typography>
-
-                              <Stack spacing={0.75}>
-                                <Typography variant="body2">
-                                  <strong>Analysis ID:</strong> {analysisDetail.analysisId}
-                                </Typography>
-                                <Typography variant="body2">
-                                  <strong>Versão da planilha:</strong>{" "}
-                                  {analysisDetail.spreadsheetVersionId ?? "—"}
-                                </Typography>
-                                <Typography variant="body2">
-                                  <strong>Tipo:</strong>{" "}
-                                  {formatLabel(analysisDetail.analysisType)}
-                                </Typography>
-                                <Typography variant="body2">
-                                  <strong>Processamento:</strong>{" "}
-                                  {formatLabel(analysisDetail.processingStatus)}
-                                </Typography>
-                                <Typography variant="body2">
-                                  <strong>Criada em:</strong>{" "}
-                                  {formatDateTime(analysisDetail.createdAt)}
-                                </Typography>
-                                <Typography variant="body2">
-                                  <strong>Atualizada em:</strong>{" "}
-                                  {formatDateTime(analysisDetail.updatedAt)}
-                                </Typography>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-
-                          <Card variant="outlined">
-                            <CardContent>
-                              <Typography variant="subtitle2" color="text.secondary" mb={1}>
-                                Totais auxiliares
-                              </Typography>
-
-                              <Stack spacing={0.75}>
-                                <Typography variant="body2">
-                                  <strong>Custo evidenciário:</strong>{" "}
-                                  {formatCurrency(analysisDetail.evidentiaryCostTotal)}
-                                </Typography>
-                                <Typography variant="body2">
-                                  <strong>Retenções:</strong>{" "}
-                                  {formatCurrency(analysisDetail.retentionTotal)}
-                                </Typography>
-                                <Typography variant="body2">
-                                  <strong>Status final:</strong>{" "}
-                                  {formatLabel(
-                                    analysisDetail.executabilityStatus ||
-                                      analysisDetail.finalStatus
-                                  )}
-                                </Typography>
-                                <Typography variant="body2">
-                                  <strong>Risco:</strong>{" "}
-                                  {formatLabel(analysisDetail.riskLevel)}
-                                </Typography>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        </Box>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-
-                  {previousHistoryItem ? (
-                    <Card variant="outlined">
-                      <CardContent>
-                        <Stack spacing={2}>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <CompareArrowsRoundedIcon />
-                            <Typography variant="h6" fontWeight={800}>
-                              Comparação com a análise anterior
-                            </Typography>
-                          </Stack>
-
-                          <Typography variant="body2" color="text.secondary">
-                            Comparativo entre a análise selecionada e a versão
-                            imediatamente anterior do histórico.
-                          </Typography>
-
-                          <Divider />
-
-                          <ComparisonRow
-                            label="Score global"
-                            current={
-                              analysisDetail.scoreGlobal !== null &&
-                              analysisDetail.scoreGlobal !== undefined
-                                ? String(analysisDetail.scoreGlobal)
-                                : "—"
-                            }
-                            previous={
-                              previousHistoryItem.scoreGlobal !== null &&
-                              previousHistoryItem.scoreGlobal !== undefined
-                                ? String(previousHistoryItem.scoreGlobal)
-                                : "—"
-                            }
-                            direction={comparisonSummary?.scoreDirection || "same"}
-                          />
-
-                          <Divider />
-
-                          <ComparisonRow
-                            label="Saldo de exequibilidade"
-                            current={formatCurrency(
-                              analysisDetail.executabilityBalance
-                            )}
-                            previous={formatCurrency(
-                              previousDetail?.executabilityBalance
-                            )}
-                            direction={comparisonSummary?.balanceDirection || "same"}
-                          />
-
-                          <Divider />
-
-                          <ComparisonRow
-                            label="Risco"
-                            current={formatLabel(analysisDetail.riskLevel)}
-                            previous={formatLabel(previousHistoryItem.riskLevel)}
-                            direction={comparisonSummary?.riskDirection || "same"}
-                          />
-
-                          <Divider />
-
-                          <ComparisonRow
-                            label="Status final"
-                            current={formatLabel(
-                              analysisDetail.executabilityStatus ||
-                                analysisDetail.finalStatus
-                            )}
-                            previous={formatLabel(
-                              previousHistoryItem.executabilityStatus ||
-                                previousHistoryItem.finalStatus
-                            )}
-                            direction={comparisonSummary?.statusDirection || "same"}
-                          />
-                        </Stack>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <Alert severity="info">
-                      Não existe análise anterior suficiente para comparação.
-                    </Alert>
-                  )}
-
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Stack spacing={2}>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <ArticleRoundedIcon />
-                          <Typography variant="h6" fontWeight={800}>
-                            Parecer consolidado
-                          </Typography>
-                        </Stack>
-
-                        <Typography variant="body2" color="text.secondary">
-                          Estrutura consolidada da manifestação analítica da versão
-                          selecionada, já organizada em linguagem técnica e executiva.
-                        </Typography>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-
-                  <OpinionSection
-                    title="Ementa"
-                    content={analysisDetail.consolidatedOpinion?.ementa}
-                  />
-
-                  <OpinionSection
-                    title="Conclusão"
-                    content={analysisDetail.consolidatedOpinion?.conclusao}
-                  />
-
-                  <OpinionSection
-                    title="Fundamentação técnica"
-                    content={
-                      analysisDetail.consolidatedOpinion?.fundamentacaoTecnica
-                    }
-                  />
-
-                  <OpinionSection
-                    title="Fundamentação técnico-jurídica"
-                    content={
-                      analysisDetail.consolidatedOpinion
-                        ?.fundamentacaoTecnicoJuridica
-                    }
-                  />
-
-                  <OpinionSection
-                    title="Versão para gestor leigo"
-                    content={
-                      analysisDetail.consolidatedOpinion?.versaoGestorLeigo
-                    }
-                  />
-
-                  <OpinionSection
-                    title="Recomendação final"
-                    content={analysisDetail.consolidatedOpinion?.recomendacaoFinal}
-                  />
-
-                  <Stack spacing={2}>
-                    <Typography variant="h6" fontWeight={800}>
-                      Explicações vinculadas à análise
-                    </Typography>
-
-                    {analysisDetail.explanations &&
-                    analysisDetail.explanations.length > 0 ? (
-                      analysisDetail.explanations.map((explanation, index) => (
-                        <ExplanationBlock
-                          key={`${explanation.explanationType}-${index}`}
-                          explanation={explanation}
-                        />
-                      ))
+                        </CardContent>
+                      </Card>
                     ) : (
                       <Alert severity="info">
-                        Esta análise não possui explicações detalhadas disponíveis.
+                        Não existe análise anterior suficiente para comparação.
                       </Alert>
-                    )}
-                  </Stack>
+                    )
+                  ) : null}
+
+                  {detailViewTab === "opinion" ? (
+                    <>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Stack spacing={2}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <ArticleRoundedIcon />
+                              <Typography variant="h6" fontWeight={800}>
+                                Parecer consolidado
+                              </Typography>
+                            </Stack>
+
+                            <Typography variant="body2" color="text.secondary">
+                              Estrutura consolidada da manifestação analítica da versão
+                              selecionada, já organizada em linguagem técnica e executiva.
+                            </Typography>
+                          </Stack>
+                        </CardContent>
+                      </Card>
+
+                      <OpinionSection
+                        title="Ementa"
+                        content={analysisDetail.consolidatedOpinion?.ementa}
+                      />
+
+                      <OpinionSection
+                        title="Conclusão"
+                        content={analysisDetail.consolidatedOpinion?.conclusao}
+                      />
+
+                      <OpinionSection
+                        title="Fundamentação técnica"
+                        content={
+                          analysisDetail.consolidatedOpinion?.fundamentacaoTecnica
+                        }
+                      />
+
+                      <OpinionSection
+                        title="Fundamentação técnico-jurídica"
+                        content={
+                          analysisDetail.consolidatedOpinion
+                            ?.fundamentacaoTecnicoJuridica
+                        }
+                      />
+
+                      <OpinionSection
+                        title="Versão para gestor leigo"
+                        content={
+                          analysisDetail.consolidatedOpinion?.versaoGestorLeigo
+                        }
+                      />
+
+                      <OpinionSection
+                        title="Recomendação final"
+                        content={analysisDetail.consolidatedOpinion?.recomendacaoFinal}
+                      />
+                    </>
+                  ) : null}
+
+                  {detailViewTab === "explanations" ? (
+                    <Stack spacing={2}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <NotesRoundedIcon />
+                            <Typography variant="h6" fontWeight={800}>
+                              Explicações vinculadas à análise
+                            </Typography>
+                          </Stack>
+                        </CardContent>
+                      </Card>
+
+                      {analysisDetail.explanations &&
+                      analysisDetail.explanations.length > 0 ? (
+                        analysisDetail.explanations.map((explanation, index) => (
+                          <ExplanationBlock
+                            key={`${explanation.explanationType}-${index}`}
+                            explanation={explanation}
+                          />
+                        ))
+                      ) : (
+                        <Alert severity="info">
+                          Esta análise não possui explicações detalhadas disponíveis.
+                        </Alert>
+                      )}
+                    </Stack>
+                  ) : null}
                 </>
               ) : (
                 <Alert severity="info">
                   Nenhuma análise foi selecionada ou encontrada para esta planilha.
                 </Alert>
               )}
-
-              {selectedHistoryItem ? (
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-                      Resumo da seleção atual
-                    </Typography>
-
-                    <Typography variant="body2" color="text.secondary">
-                      Você está visualizando a análise{" "}
-                      <strong>{selectedHistoryItem.analysisId}</strong>, vinculada à
-                      versão{" "}
-                      <strong>
-                        {selectedHistoryItem.spreadsheetVersionId ?? "—"}
-                      </strong>{" "}
-                      da planilha, criada em{" "}
-                      <strong>{formatDateTime(selectedHistoryItem.createdAt)}</strong>.
-                    </Typography>
-                  </CardContent>
-                </Card>
-              ) : null}
             </Stack>
           </Box>
         </Stack>
