@@ -15,6 +15,7 @@ import {
   List,
   ListItemButton,
   ListItemText,
+  MenuItem,
   Paper,
   Stack,
   Tab,
@@ -56,6 +57,7 @@ import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
 import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
 import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordRounded";
+import FilterAltRoundedIcon from "@mui/icons-material/FilterAltRounded";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import {
   AnalysisDetail,
@@ -940,6 +942,10 @@ export default function SpreadsheetDetail() {
     Record<string, InternalDecisionState>
   >({});
 
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyStatusFilter, setHistoryStatusFilter] = useState("all");
+  const [historyRiskFilter, setHistoryRiskFilter] = useState("all");
+
   const selectedHistoryItem = useMemo(() => {
     return history.find((item) => item.analysisId === selectedAnalysisId) || null;
   }, [history, selectedAnalysisId]);
@@ -957,10 +963,48 @@ export default function SpreadsheetDetail() {
     return history[0] || null;
   }, [history]);
 
-  const isViewingMostRecent = useMemo(() => {
-    if (!mostRecentHistoryItem || !selectedHistoryItem) return false;
-    return mostRecentHistoryItem.analysisId === selectedHistoryItem.analysisId;
-  }, [mostRecentHistoryItem, selectedHistoryItem]);
+  const filteredHistory = useMemo(() => {
+    const term = normalizeWhitespace(historySearch).toLowerCase();
+
+    return history.filter((item) => {
+      const searchableText = [
+        item.analysisId,
+        item.analysisType,
+        item.executabilityStatus,
+        item.finalStatus,
+        item.processingStatus,
+        item.riskLevel,
+        item.spreadsheetVersionId !== null && item.spreadsheetVersionId !== undefined
+          ? String(item.spreadsheetVersionId)
+          : "",
+        item.spreadsheetVersionId !== null && item.spreadsheetVersionId !== undefined
+          ? `versão ${item.spreadsheetVersionId}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      const statusValue = (
+        item.executabilityStatus ||
+        item.finalStatus ||
+        item.processingStatus ||
+        ""
+      ).toLowerCase();
+
+      const riskValue = (item.riskLevel || "").toLowerCase();
+
+      const matchesSearch = !term || searchableText.includes(term);
+      const matchesStatus =
+        historyStatusFilter === "all" ||
+        statusValue.includes(historyStatusFilter.toLowerCase());
+      const matchesRisk =
+        historyRiskFilter === "all" ||
+        riskValue.includes(historyRiskFilter.toLowerCase());
+
+      return matchesSearch && matchesStatus && matchesRisk;
+    });
+  }, [history, historySearch, historyStatusFilter, historyRiskFilter]);
 
   const currentInternalDecision = useMemo(() => {
     if (!selectedAnalysisId) return null;
@@ -1093,6 +1137,30 @@ export default function SpreadsheetDetail() {
   useEffect(() => {
     loadPage();
   }, [loadPage]);
+
+  useEffect(() => {
+    if (!filteredHistory.length) return;
+
+    const stillVisible = filteredHistory.some(
+      (item) => item.analysisId === selectedAnalysisId
+    );
+
+    if (!stillVisible) {
+      setSelectedAnalysisId(filteredHistory[0].analysisId);
+    }
+  }, [filteredHistory, selectedAnalysisId]);
+
+  useEffect(() => {
+    if (!id || !selectedAnalysisId) return;
+
+    const selectedInFiltered = filteredHistory.find(
+      (item) => item.analysisId === selectedAnalysisId
+    );
+
+    if (!selectedInFiltered) return;
+
+    loadAnalysisDetail(selectedAnalysisId, id);
+  }, [selectedAnalysisId, filteredHistory, id, loadAnalysisDetail]);
 
   const handleSelectAnalysis = async (analysisId: string) => {
     if (!analysisId || analysisId === selectedAnalysisId || !id) return;
@@ -1316,8 +1384,20 @@ export default function SpreadsheetDetail() {
     setActionMessage("Despacho interno removido.");
   };
 
+  const handleClearHistoryFilters = () => {
+    setHistorySearch("");
+    setHistoryStatusFilter("all");
+    setHistoryRiskFilter("all");
+  };
+
   const currentOpinion = analysisDetail?.consolidatedOpinion || null;
   const previousOpinion = previousDetail?.consolidatedOpinion || null;
+
+  const activeHistoryFilterCount = [
+    historySearch.trim() !== "",
+    historyStatusFilter !== "all",
+    historyRiskFilter !== "all",
+  ].filter(Boolean).length;
 
   if (pageLoading) {
     return (
@@ -1464,15 +1544,94 @@ export default function SpreadsheetDetail() {
                 </Stack>
               </Box>
 
-              {history.length === 0 ? (
+              <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+                <Stack spacing={2}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <FilterAltRoundedIcon fontSize="small" />
+                    <Typography variant="subtitle2" fontWeight={700}>
+                      Busca e filtros
+                    </Typography>
+                  </Stack>
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Buscar no histórico"
+                    placeholder="Analysis ID, tipo, status, risco ou versão"
+                    value={historySearch}
+                    onChange={(event) => setHistorySearch(event.target.value)}
+                    InputProps={{
+                      startAdornment: <SearchRoundedIcon fontSize="small" sx={{ mr: 1 }} />,
+                    }}
+                  />
+
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="Filtrar por status"
+                    value={historyStatusFilter}
+                    onChange={(event) => setHistoryStatusFilter(event.target.value)}
+                  >
+                    <MenuItem value="all">Todos</MenuItem>
+                    <MenuItem value="exequivel">Exequível</MenuItem>
+                    <MenuItem value="diligencia">Diligência</MenuItem>
+                    <MenuItem value="pendente">Pendente</MenuItem>
+                    <MenuItem value="inexequivel">Inexequível</MenuItem>
+                    <MenuItem value="completed">Completed</MenuItem>
+                    <MenuItem value="processing">Processing</MenuItem>
+                  </TextField>
+
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="Filtrar por risco"
+                    value={historyRiskFilter}
+                    onChange={(event) => setHistoryRiskFilter(event.target.value)}
+                  >
+                    <MenuItem value="all">Todos</MenuItem>
+                    <MenuItem value="low">Baixo</MenuItem>
+                    <MenuItem value="medium">Médio</MenuItem>
+                    <MenuItem value="high">Alto</MenuItem>
+                    <MenuItem value="baixo">Baixo</MenuItem>
+                    <MenuItem value="médio">Médio</MenuItem>
+                    <MenuItem value="alto">Alto</MenuItem>
+                  </TextField>
+
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    <Chip
+                      size="small"
+                      label={`${filteredHistory.length} resultado(s)`}
+                      color="primary"
+                      variant="outlined"
+                    />
+                    <Chip
+                      size="small"
+                      label={`${activeHistoryFilterCount} filtro(s) ativo(s)`}
+                      variant="outlined"
+                    />
+                  </Stack>
+
+                  <Button
+                    variant="outlined"
+                    startIcon={<RestartAltRoundedIcon />}
+                    onClick={handleClearHistoryFilters}
+                  >
+                    Limpar filtros
+                  </Button>
+                </Stack>
+              </Box>
+
+              {filteredHistory.length === 0 ? (
                 <Box sx={{ p: 2 }}>
                   <Alert severity="info" icon={<InfoOutlinedIcon />}>
-                    Ainda não há análises registradas para esta planilha.
+                    Nenhuma análise encontrada com os filtros atuais.
                   </Alert>
                 </Box>
               ) : (
                 <List disablePadding>
-                  {history.map((item, index) => {
+                  {filteredHistory.map((item, index) => {
                     const selected = item.analysisId === selectedAnalysisId;
                     const savedDecision = decisionByAnalysis[item.analysisId]?.decision || null;
 
@@ -1576,7 +1735,7 @@ export default function SpreadsheetDetail() {
                           />
                         </ListItemButton>
 
-                        {index < history.length - 1 ? <Divider /> : null}
+                        {index < filteredHistory.length - 1 ? <Divider /> : null}
                       </React.Fragment>
                     );
                   })}
@@ -1640,7 +1799,7 @@ export default function SpreadsheetDetail() {
                             variant="outlined"
                             startIcon={<KeyboardDoubleArrowUpRoundedIcon />}
                             onClick={handleGoToMostRecent}
-                            disabled={isViewingMostRecent}
+                            disabled={!!mostRecentHistoryItem && selectedAnalysisId === mostRecentHistoryItem.analysisId}
                           >
                             Ir para a mais recente
                           </Button>
