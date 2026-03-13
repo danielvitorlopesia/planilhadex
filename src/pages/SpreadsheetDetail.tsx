@@ -58,6 +58,9 @@ import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
 import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
 import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordRounded";
 import FilterAltRoundedIcon from "@mui/icons-material/FilterAltRounded";
+import CloudDoneRoundedIcon from "@mui/icons-material/CloudDoneRounded";
+import SaveAsRoundedIcon from "@mui/icons-material/SaveAsRounded";
+import StorageRoundedIcon from "@mui/icons-material/StorageRounded";
 import { Link as RouterLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   AnalysisDetail,
@@ -96,6 +99,8 @@ type InternalDecisionState = {
   despacho: string;
   decidedAt: string | null;
 };
+
+type DecisionPersistenceMode = "backend" | "local";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const ENABLE_MOCK_ANALYSIS_HISTORY = true;
@@ -146,7 +151,7 @@ function writeDecisionStateToStorage(
       JSON.stringify(value)
     );
   } catch {
-    // silencioso
+    // noop
   }
 }
 
@@ -481,6 +486,61 @@ function normalizeAnalysisDetail(payload: any): AnalysisDetail {
   };
 }
 
+function normalizeInternalDecisionMap(
+  payload: any
+): Record<string, InternalDecisionState> {
+  const source =
+    payload?.data ??
+    payload?.items ??
+    payload?.decisions ??
+    payload?.internalDecisions ??
+    payload;
+
+  if (Array.isArray(source)) {
+    return source.reduce<Record<string, InternalDecisionState>>((acc, item) => {
+      const analysisId = String(
+        item.analysisId ??
+          item.analysis_id ??
+          item.id ??
+          ""
+      ).trim();
+
+      if (!analysisId) return acc;
+
+      acc[analysisId] = {
+        decision: (item.decision ?? item.status ?? null) as InternalDecision,
+        despacho: item.despacho ?? item.dispatch ?? "",
+        decidedAt: item.decidedAt ?? item.decided_at ?? item.updatedAt ?? item.updated_at ?? null,
+      };
+
+      return acc;
+    }, {});
+  }
+
+  if (source && typeof source === "object") {
+    const output: Record<string, InternalDecisionState> = {};
+
+    Object.entries(source).forEach(([analysisId, value]: [string, any]) => {
+      if (!analysisId) return;
+
+      output[analysisId] = {
+        decision: (value?.decision ?? value?.status ?? null) as InternalDecision,
+        despacho: value?.despacho ?? value?.dispatch ?? "",
+        decidedAt:
+          value?.decidedAt ??
+          value?.decided_at ??
+          value?.updatedAt ??
+          value?.updated_at ??
+          null,
+      };
+    });
+
+    return output;
+  }
+
+  return {};
+}
+
 async function fetchRequiredJson<T = any>(url: string): Promise<T> {
   const response = await fetch(url, {
     credentials: "include",
@@ -530,6 +590,99 @@ async function tryFetchFirstAvailable<T = any>(urls: string[]): Promise<T | null
   }
 
   return null;
+}
+
+async function tryMutateFirstAvailable(
+  urls: string[],
+  options: RequestInit
+): Promise<boolean> {
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(options.headers || {}),
+        },
+        ...options,
+      });
+
+      if (response.ok) {
+        return true;
+      }
+
+      if (response.status === 404 || response.status === 405) {
+        continue;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return false;
+}
+
+async function tryLoadInternalDecisionsFromBackend(
+  spreadsheetId: string
+): Promise<Record<string, InternalDecisionState> | null> {
+  const payload = await tryFetchFirstAvailable([
+    buildUrl(`/api/spreadsheets/${spreadsheetId}/internal-decisions`),
+    buildUrl(`/api/spreadsheets/${spreadsheetId}/decisions`),
+    buildUrl(`/api/internal-decisions?spreadsheetId=${spreadsheetId}`),
+    buildUrl(`/api/decisions?spreadsheetId=${spreadsheetId}`),
+  ]);
+
+  if (!payload) return null;
+
+  return normalizeInternalDecisionMap(payload);
+}
+
+async function trySaveInternalDecisionToBackend(params: {
+  spreadsheetId: string;
+  analysisId: string;
+  state: InternalDecisionState;
+}): Promise<boolean> {
+  const { spreadsheetId, analysisId, state } = params;
+
+  const body = JSON.stringify({
+    spreadsheetId,
+    analysisId,
+    decision: state.decision,
+    despacho: state.despacho,
+    decidedAt: state.decidedAt,
+  });
+
+  return tryMutateFirstAvailable(
+    [
+      buildUrl(`/api/spreadsheets/${spreadsheetId}/internal-decisions`),
+      buildUrl(`/api/spreadsheets/${spreadsheetId}/analyses/${analysisId}/internal-decision`),
+      buildUrl(`/api/internal-decisions`),
+      buildUrl(`/api/decisions`),
+    ],
+    {
+      method: "POST",
+      body,
+    }
+  );
+}
+
+async function tryDeleteInternalDecisionFromBackend(params: {
+  spreadsheetId: string;
+  analysisId: string;
+}): Promise<boolean> {
+  const { spreadsheetId, analysisId } = params;
+
+  return tryMutateFirstAvailable(
+    [
+      buildUrl(`/api/spreadsheets/${spreadsheetId}/analyses/${analysisId}/internal-decision`),
+      buildUrl(`/api/spreadsheets/${spreadsheetId}/internal-decisions/${analysisId}`),
+      buildUrl(`/api/internal-decisions/${analysisId}?spreadsheetId=${spreadsheetId}`),
+      buildUrl(`/api/decisions/${analysisId}?spreadsheetId=${spreadsheetId}`),
+    ],
+    {
+      method: "DELETE",
+    }
+  );
 }
 
 function MetricCard({
@@ -996,6 +1149,9 @@ export default function SpreadsheetDetail() {
   const [decisionByAnalysis, setDecisionByAnalysis] = useState<
     Record<string, InternalDecisionState>
   >({});
+  const [decisionPersistenceMode, setDecisionPersistenceMode] =
+    useState<DecisionPersistenceMode>("local");
+  const [decisionSyncLoading, setDecisionSyncLoading] = useState(false);
 
   const [historySearch, setHistorySearch] = useState(searchParams.get("q") || "");
   const [historyStatusFilter, setHistoryStatusFilter] = useState(
@@ -1206,8 +1362,16 @@ export default function SpreadsheetDetail() {
 
       setHistory(normalizedHistory);
 
-      const restoredDecisions = readDecisionStateFromStorage(id);
-      setDecisionByAnalysis(restoredDecisions);
+      const backendDecisions = await tryLoadInternalDecisionsFromBackend(id);
+      if (backendDecisions) {
+        setDecisionByAnalysis(backendDecisions);
+        setDecisionPersistenceMode("backend");
+        writeDecisionStateToStorage(id, backendDecisions);
+      } else {
+        const restoredDecisions = readDecisionStateFromStorage(id);
+        setDecisionByAnalysis(restoredDecisions);
+        setDecisionPersistenceMode("local");
+      }
 
       const requestedAnalysisId = searchParams.get("analysisId");
       const existingRequestedAnalysis = normalizedHistory.find(
@@ -1232,7 +1396,7 @@ export default function SpreadsheetDetail() {
         err?.message || "Não foi possível carregar os dados da planilha."
       );
     } finally {
-      setPageLoading(false);
+        setPageLoading(false);
     }
   }, [id, loadAnalysisDetail, searchParams]);
 
@@ -1471,23 +1635,47 @@ export default function SpreadsheetDetail() {
     setActionMessage("Comparação com a análise mais recente aberta.");
   };
 
-  const handleSaveDecision = (decision: InternalDecision) => {
-    if (!selectedAnalysisId) return;
+  const handleSaveDecision = async (decision: InternalDecision) => {
+    if (!selectedAnalysisId || !id) return;
+
+    const nextState: InternalDecisionState = {
+      decision,
+      despacho: despachoDraft.trim(),
+      decidedAt: new Date().toISOString(),
+    };
+
+    setDecisionSyncLoading(true);
 
     setDecisionByAnalysis((prev) => ({
       ...prev,
-      [selectedAnalysisId]: {
-        decision,
-        despacho: despachoDraft.trim(),
-        decidedAt: new Date().toISOString(),
-      },
+      [selectedAnalysisId]: nextState,
     }));
 
-    setActionMessage(`Despacho interno salvo como: ${getDecisionLabel(decision)}.`);
+    const savedInBackend = await trySaveInternalDecisionToBackend({
+      spreadsheetId: id,
+      analysisId: selectedAnalysisId,
+      state: nextState,
+    });
+
+    if (savedInBackend) {
+      setDecisionPersistenceMode("backend");
+      setActionMessage(
+        `Despacho interno salvo no backend como: ${getDecisionLabel(decision)}.`
+      );
+    } else {
+      setDecisionPersistenceMode("local");
+      setActionMessage(
+        `Despacho salvo localmente como: ${getDecisionLabel(decision)}. O endpoint do backend ainda não respondeu.`
+      );
+    }
+
+    setDecisionSyncLoading(false);
   };
 
-  const handleResetDecision = () => {
-    if (!selectedAnalysisId) return;
+  const handleResetDecision = async () => {
+    if (!selectedAnalysisId || !id) return;
+
+    setDecisionSyncLoading(true);
 
     setDecisionByAnalysis((prev) => ({
       ...prev,
@@ -1498,7 +1686,23 @@ export default function SpreadsheetDetail() {
       },
     }));
     setDespachoDraft("");
-    setActionMessage("Despacho interno removido.");
+
+    const removedInBackend = await tryDeleteInternalDecisionFromBackend({
+      spreadsheetId: id,
+      analysisId: selectedAnalysisId,
+    });
+
+    if (removedInBackend) {
+      setDecisionPersistenceMode("backend");
+      setActionMessage("Despacho interno removido no backend.");
+    } else {
+      setDecisionPersistenceMode("local");
+      setActionMessage(
+        "Despacho interno removido localmente. O endpoint do backend ainda não respondeu."
+      );
+    }
+
+    setDecisionSyncLoading(false);
   };
 
   const handleClearHistoryFilters = () => {
@@ -1937,11 +2141,46 @@ export default function SpreadsheetDetail() {
                   <Card variant="outlined">
                     <CardContent>
                       <Stack spacing={2}>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          {getDecisionIcon(currentInternalDecision?.decision || null)}
-                          <Typography variant="h6" fontWeight={800}>
-                            Aprovação interna
-                          </Typography>
+                        <Stack
+                          direction={{ xs: "column", md: "row" }}
+                          justifyContent="space-between"
+                          spacing={1}
+                        >
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            {getDecisionIcon(currentInternalDecision?.decision || null)}
+                            <Typography variant="h6" fontWeight={800}>
+                              Aprovação interna
+                            </Typography>
+                          </Stack>
+
+                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                            <Chip
+                              size="small"
+                              icon={
+                                decisionPersistenceMode === "backend" ? (
+                                  <CloudDoneRoundedIcon fontSize="small" />
+                                ) : (
+                                  <StorageRoundedIcon fontSize="small" />
+                                )
+                              }
+                              label={
+                                decisionPersistenceMode === "backend"
+                                  ? "Persistência: backend"
+                                  : "Persistência: local"
+                              }
+                              color={decisionPersistenceMode === "backend" ? "success" : "warning"}
+                              variant="outlined"
+                            />
+                            {decisionSyncLoading ? (
+                              <Chip
+                                size="small"
+                                icon={<SaveAsRoundedIcon fontSize="small" />}
+                                label="Sincronizando..."
+                                color="info"
+                                variant="outlined"
+                              />
+                            ) : null}
+                          </Stack>
                         </Stack>
 
                         <Typography variant="body2" color="text.secondary">
@@ -1984,6 +2223,7 @@ export default function SpreadsheetDetail() {
                             color="success"
                             startIcon={<TaskAltRoundedIcon />}
                             onClick={() => handleSaveDecision("approved")}
+                            disabled={decisionSyncLoading}
                           >
                             Aprovar
                           </Button>
@@ -1993,6 +2233,7 @@ export default function SpreadsheetDetail() {
                             color="warning"
                             startIcon={<RuleRoundedIcon />}
                             onClick={() => handleSaveDecision("approved_with_remarks")}
+                            disabled={decisionSyncLoading}
                           >
                             Aprovar com ressalvas
                           </Button>
@@ -2002,6 +2243,7 @@ export default function SpreadsheetDetail() {
                             color="info"
                             startIcon={<SearchRoundedIcon />}
                             onClick={() => handleSaveDecision("diligence_requested")}
+                            disabled={decisionSyncLoading}
                           >
                             Solicitar diligência
                           </Button>
@@ -2011,6 +2253,7 @@ export default function SpreadsheetDetail() {
                             color="error"
                             startIcon={<ErrorOutlineRoundedIcon />}
                             onClick={() => handleSaveDecision("rejected")}
+                            disabled={decisionSyncLoading}
                           >
                             Rejeitar
                           </Button>
@@ -2019,6 +2262,7 @@ export default function SpreadsheetDetail() {
                             variant="outlined"
                             startIcon={<RestartAltRoundedIcon />}
                             onClick={handleResetDecision}
+                            disabled={decisionSyncLoading}
                           >
                             Limpar decisão
                           </Button>
