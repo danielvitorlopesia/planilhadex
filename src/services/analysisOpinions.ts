@@ -67,6 +67,38 @@ export type AnalysisOpinionBundle = {
   };
 };
 
+export type AnalysisLookupRow = {
+  id: string;
+  spreadsheet_id: string;
+  spreadsheet_version_id: number;
+  analysis_type: string;
+  status: string;
+  created_at: string;
+};
+
+export async function getLatestExecutabilityAnalysisBySpreadsheetId(
+  spreadsheetId: string
+): Promise<AnalysisLookupRow | null> {
+  if (!spreadsheetId?.trim()) {
+    return null;
+  }
+
+  const { data, error } = await supabaseAi
+    .from("analyses")
+    .select("id, spreadsheet_id, spreadsheet_version_id, analysis_type, status, created_at")
+    .eq("spreadsheet_id", spreadsheetId)
+    .eq("analysis_type", "executability_v1")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<AnalysisLookupRow>();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data ?? null;
+}
+
 export async function getAnalysisOpinionBundle(
   analysisId: string
 ): Promise<AnalysisOpinionBundle> {
@@ -82,4 +114,16 @@ export async function getAnalysisOpinionBundle(
   }
 
   return data as AnalysisOpinionBundle;
+}
+
+export async function getLatestAnalysisOpinionBundleBySpreadsheetId(
+  spreadsheetId: string
+): Promise<AnalysisOpinionBundle | null> {
+  const analysis = await getLatestExecutabilityAnalysisBySpreadsheetId(spreadsheetId);
+
+  if (!analysis?.id) {
+    return null;
+  }
+
+  return getAnalysisOpinionBundle(analysis.id);
 }
