@@ -37,11 +37,13 @@ import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
 import TrendingDownRoundedIcon from "@mui/icons-material/TrendingDownRounded";
 import TrendingFlatRoundedIcon from "@mui/icons-material/TrendingFlatRounded";
 import CompareArrowsRoundedIcon from "@mui/icons-material/CompareArrowsRounded";
+import ArticleRoundedIcon from "@mui/icons-material/ArticleRounded";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import {
   AnalysisDetail,
   AnalysisExplanation,
   AnalysisHistoryItem,
+  ConsolidatedOpinion,
   buildMockAnalysisDetail,
   buildMockAnalysisHistory,
 } from "../mocks/analysisHistoryMocks";
@@ -242,6 +244,35 @@ function normalizeAnalysisDetail(payload: any): AnalysisDetail {
       }))
     : [];
 
+  const consolidatedOpinionRaw =
+    source.consolidatedOpinion ??
+    source.consolidated_opinion ??
+    null;
+
+  const consolidatedOpinion: ConsolidatedOpinion | null =
+    consolidatedOpinionRaw
+      ? {
+          ementa: consolidatedOpinionRaw.ementa ?? "",
+          conclusao: consolidatedOpinionRaw.conclusao ?? "",
+          fundamentacaoTecnica:
+            consolidatedOpinionRaw.fundamentacaoTecnica ??
+            consolidatedOpinionRaw.fundamentacao_tecnica ??
+            "",
+          fundamentacaoTecnicoJuridica:
+            consolidatedOpinionRaw.fundamentacaoTecnicoJuridica ??
+            consolidatedOpinionRaw.fundamentacao_tecnico_juridica ??
+            "",
+          versaoGestorLeigo:
+            consolidatedOpinionRaw.versaoGestorLeigo ??
+            consolidatedOpinionRaw.versao_gestor_leigo ??
+            "",
+          recomendacaoFinal:
+            consolidatedOpinionRaw.recomendacaoFinal ??
+            consolidatedOpinionRaw.recomendacao_final ??
+            "",
+        }
+      : null;
+
   return {
     analysisId: String(source.analysisId ?? source.analysis_id ?? source.id ?? ""),
     spreadsheetId: source.spreadsheetId ?? source.spreadsheet_id ?? null,
@@ -298,6 +329,7 @@ function normalizeAnalysisDetail(payload: any): AnalysisDetail {
     createdAt: source.createdAt ?? source.created_at ?? null,
     updatedAt: source.updatedAt ?? source.updated_at ?? null,
     explanations,
+    consolidatedOpinion,
   };
 }
 
@@ -411,6 +443,31 @@ function ExplanationBlock({
   );
 }
 
+function OpinionSection({
+  title,
+  content,
+}: {
+  title: string;
+  content?: string | null;
+}) {
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+          {title}
+        </Typography>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ whiteSpace: "pre-wrap", lineHeight: 1.75 }}
+        >
+          {content || "Conteúdo não disponível."}
+        </Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
 function normalizeRiskOrder(risk?: string | null): number {
   const value = (risk || "").toLowerCase();
 
@@ -490,7 +547,7 @@ function ComparisonRow({
         Anterior: <strong>{previous}</strong>
       </Typography>
 
-      <Stack direction="row" spacing={1} alignItems="center" justifyContent="flex-start">
+      <Stack direction="row" spacing={1} alignItems="center">
         {icon}
         <Chip size="small" label={chipLabel} color={chipColor} variant="outlined" />
       </Stack>
@@ -525,81 +582,6 @@ export default function SpreadsheetDetail() {
     if (selectedHistoryIndex < 0) return null;
     return history[selectedHistoryIndex + 1] || null;
   }, [history, selectedHistoryIndex]);
-
-  const comparisonSummary = useMemo(() => {
-    if (!analysisDetail || !previousHistoryItem) return null;
-
-    const currentStatus =
-      analysisDetail.executabilityStatus || analysisDetail.finalStatus || null;
-    const previousStatus =
-      previousHistoryItem.executabilityStatus || previousHistoryItem.finalStatus || null;
-
-    const currentScore = analysisDetail.scoreGlobal ?? null;
-    const previousScore = previousHistoryItem.scoreGlobal ?? null;
-
-    const currentBalance = analysisDetail.executabilityBalance ?? null;
-
-    const scoreDirection =
-      currentScore === null || previousScore === null
-        ? "same"
-        : currentScore > previousScore
-        ? "up"
-        : currentScore < previousScore
-        ? "down"
-        : "same";
-
-    const balanceDirection =
-      currentBalance === null
-        ? "same"
-        : previousHistoryItem.analysisId && previousHistoryItem.analysisId
-        ? analysisDetail.executabilityBalance !== null &&
-          analysisDetail.executabilityBalance !== undefined &&
-          previousHistoryItem.analysisId
-          ? "same"
-          : "same"
-        : "same";
-
-    const previousRiskOrder = normalizeRiskOrder(previousHistoryItem.riskLevel);
-    const currentRiskOrder = normalizeRiskOrder(analysisDetail.riskLevel);
-
-    const riskDirection =
-      currentRiskOrder === 0 || previousRiskOrder === 0
-        ? "same"
-        : currentRiskOrder < previousRiskOrder
-        ? "up"
-        : currentRiskOrder > previousRiskOrder
-        ? "down"
-        : "same";
-
-    const previousStatusOrder = normalizeStatusOrder(previousStatus);
-    const currentStatusOrder = normalizeStatusOrder(currentStatus);
-
-    const statusDirection =
-      currentStatusOrder === 0 || previousStatusOrder === 0
-        ? "same"
-        : currentStatusOrder > previousStatusOrder
-        ? "up"
-        : currentStatusOrder < previousStatusOrder
-        ? "down"
-        : "same";
-
-    return {
-      currentStatus,
-      previousStatus,
-      currentScore,
-      previousScore,
-      currentBalance,
-      previousBalance: null,
-      scoreDirection,
-      riskDirection,
-      statusDirection,
-      balanceDirection:
-        analysisDetail.executabilityBalance === null ||
-        analysisDetail.executabilityBalance === undefined
-          ? "same"
-          : "same",
-    };
-  }, [analysisDetail, previousHistoryItem]);
 
   const loadAnalysisDetail = useCallback(
     async (analysisId: string, spreadsheetIdForMock?: string, forceMock = false) => {
@@ -735,28 +717,72 @@ export default function SpreadsheetDetail() {
     return buildMockAnalysisDetail(previousHistoryItem.analysisId, id);
   }, [id, previousHistoryItem]);
 
-  const balanceComparisonDirection = useMemo(() => {
-    if (
-      !analysisDetail ||
-      !previousDetail ||
-      analysisDetail.executabilityBalance === null ||
-      analysisDetail.executabilityBalance === undefined ||
-      previousDetail.executabilityBalance === null ||
-      previousDetail.executabilityBalance === undefined
-    ) {
-      return "same" as const;
-    }
+  const comparisonSummary = useMemo(() => {
+    if (!analysisDetail || !previousHistoryItem || !previousDetail) return null;
 
-    if (analysisDetail.executabilityBalance > previousDetail.executabilityBalance) {
-      return "up" as const;
-    }
+    const currentStatus =
+      analysisDetail.executabilityStatus || analysisDetail.finalStatus || null;
+    const previousStatus =
+      previousHistoryItem.executabilityStatus || previousHistoryItem.finalStatus || null;
 
-    if (analysisDetail.executabilityBalance < previousDetail.executabilityBalance) {
-      return "down" as const;
-    }
+    const currentScore = analysisDetail.scoreGlobal ?? null;
+    const previousScore = previousHistoryItem.scoreGlobal ?? null;
 
-    return "same" as const;
-  }, [analysisDetail, previousDetail]);
+    const scoreDirection =
+      currentScore === null || previousScore === null
+        ? "same"
+        : currentScore > previousScore
+        ? "up"
+        : currentScore < previousScore
+        ? "down"
+        : "same";
+
+    const currentRiskOrder = normalizeRiskOrder(analysisDetail.riskLevel);
+    const previousRiskOrder = normalizeRiskOrder(previousHistoryItem.riskLevel);
+
+    const riskDirection =
+      currentRiskOrder === 0 || previousRiskOrder === 0
+        ? "same"
+        : currentRiskOrder < previousRiskOrder
+        ? "up"
+        : currentRiskOrder > previousRiskOrder
+        ? "down"
+        : "same";
+
+    const currentStatusOrder = normalizeStatusOrder(currentStatus);
+    const previousStatusOrder = normalizeStatusOrder(previousStatus);
+
+    const statusDirection =
+      currentStatusOrder === 0 || previousStatusOrder === 0
+        ? "same"
+        : currentStatusOrder > previousStatusOrder
+        ? "up"
+        : currentStatusOrder < previousStatusOrder
+        ? "down"
+        : "same";
+
+    const currentBalance = analysisDetail.executabilityBalance;
+    const previousBalance = previousDetail.executabilityBalance;
+
+    const balanceDirection =
+      currentBalance === null ||
+      currentBalance === undefined ||
+      previousBalance === null ||
+      previousBalance === undefined
+        ? "same"
+        : currentBalance > previousBalance
+        ? "up"
+        : currentBalance < previousBalance
+        ? "down"
+        : "same";
+
+    return {
+      scoreDirection,
+      riskDirection,
+      statusDirection,
+      balanceDirection,
+    };
+  }, [analysisDetail, previousDetail, previousHistoryItem]);
 
   if (pageLoading) {
     return (
@@ -1237,9 +1263,7 @@ export default function SpreadsheetDetail() {
                                 ? String(previousHistoryItem.scoreGlobal)
                                 : "—"
                             }
-                            direction={
-                              comparisonSummary?.scoreDirection || "same"
-                            }
+                            direction={comparisonSummary?.scoreDirection || "same"}
                           />
 
                           <Divider />
@@ -1252,7 +1276,7 @@ export default function SpreadsheetDetail() {
                             previous={formatCurrency(
                               previousDetail?.executabilityBalance
                             )}
-                            direction={balanceComparisonDirection}
+                            direction={comparisonSummary?.balanceDirection || "same"}
                           />
 
                           <Divider />
@@ -1261,9 +1285,7 @@ export default function SpreadsheetDetail() {
                             label="Risco"
                             current={formatLabel(analysisDetail.riskLevel)}
                             previous={formatLabel(previousHistoryItem.riskLevel)}
-                            direction={
-                              comparisonSummary?.riskDirection || "same"
-                            }
+                            direction={comparisonSummary?.riskDirection || "same"}
                           />
 
                           <Divider />
@@ -1278,9 +1300,7 @@ export default function SpreadsheetDetail() {
                               previousHistoryItem.executabilityStatus ||
                                 previousHistoryItem.finalStatus
                             )}
-                            direction={
-                              comparisonSummary?.statusDirection || "same"
-                            }
+                            direction={comparisonSummary?.statusDirection || "same"}
                           />
                         </Stack>
                       </CardContent>
@@ -1290,6 +1310,61 @@ export default function SpreadsheetDetail() {
                       Não existe análise anterior suficiente para comparação.
                     </Alert>
                   )}
+
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Stack spacing={2}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <ArticleRoundedIcon />
+                          <Typography variant="h6" fontWeight={800}>
+                            Parecer consolidado
+                          </Typography>
+                        </Stack>
+
+                        <Typography variant="body2" color="text.secondary">
+                          Estrutura consolidada da manifestação analítica da versão
+                          selecionada, já organizada em linguagem técnica e executiva.
+                        </Typography>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+
+                  <OpinionSection
+                    title="Ementa"
+                    content={analysisDetail.consolidatedOpinion?.ementa}
+                  />
+
+                  <OpinionSection
+                    title="Conclusão"
+                    content={analysisDetail.consolidatedOpinion?.conclusao}
+                  />
+
+                  <OpinionSection
+                    title="Fundamentação técnica"
+                    content={
+                      analysisDetail.consolidatedOpinion?.fundamentacaoTecnica
+                    }
+                  />
+
+                  <OpinionSection
+                    title="Fundamentação técnico-jurídica"
+                    content={
+                      analysisDetail.consolidatedOpinion
+                        ?.fundamentacaoTecnicoJuridica
+                    }
+                  />
+
+                  <OpinionSection
+                    title="Versão para gestor leigo"
+                    content={
+                      analysisDetail.consolidatedOpinion?.versaoGestorLeigo
+                    }
+                  />
+
+                  <OpinionSection
+                    title="Recomendação final"
+                    content={analysisDetail.consolidatedOpinion?.recomendacaoFinal}
+                  />
 
                   <Stack spacing={2}>
                     <Typography variant="h6" fontWeight={800}>
