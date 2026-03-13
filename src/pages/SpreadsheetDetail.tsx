@@ -58,7 +58,7 @@ import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
 import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
 import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordRounded";
 import FilterAltRoundedIcon from "@mui/icons-material/FilterAltRounded";
-import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
+import { Link as RouterLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   AnalysisDetail,
   AnalysisExplanation,
@@ -99,6 +99,13 @@ type InternalDecisionState = {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const ENABLE_MOCK_ANALYSIS_HISTORY = true;
+const VALID_TABS: DetailViewTab[] = [
+  "summary",
+  "comparison",
+  "opinion",
+  "explanations",
+  "timeline",
+];
 
 function buildUrl(path: string) {
   return `${API_BASE_URL}${path}`;
@@ -923,18 +930,27 @@ function downloadTextFile(filename: string, content: string) {
 export default function SpreadsheetDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [spreadsheet, setSpreadsheet] = useState<SpreadsheetDetailData | null>(null);
   const [history, setHistory] = useState<AnalysisHistoryItem[]>([]);
-  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
+  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(
+    searchParams.get("analysisId")
+  );
   const [analysisDetail, setAnalysisDetail] = useState<AnalysisDetail | null>(null);
+
+  const initialTab = searchParams.get("tab");
+  const [detailViewTab, setDetailViewTab] = useState<DetailViewTab>(
+    VALID_TABS.includes(initialTab as DetailViewTab)
+      ? (initialTab as DetailViewTab)
+      : "summary"
+  );
 
   const [pageLoading, setPageLoading] = useState(true);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [historyWarning, setHistoryWarning] = useState<string | null>(null);
   const [usingMockData, setUsingMockData] = useState(false);
-  const [detailViewTab, setDetailViewTab] = useState<DetailViewTab>("summary");
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const [despachoDraft, setDespachoDraft] = useState("");
@@ -942,9 +958,13 @@ export default function SpreadsheetDetail() {
     Record<string, InternalDecisionState>
   >({});
 
-  const [historySearch, setHistorySearch] = useState("");
-  const [historyStatusFilter, setHistoryStatusFilter] = useState("all");
-  const [historyRiskFilter, setHistoryRiskFilter] = useState("all");
+  const [historySearch, setHistorySearch] = useState(searchParams.get("q") || "");
+  const [historyStatusFilter, setHistoryStatusFilter] = useState(
+    searchParams.get("status") || "all"
+  );
+  const [historyRiskFilter, setHistoryRiskFilter] = useState(
+    searchParams.get("risk") || "all"
+  );
 
   const selectedHistoryItem = useMemo(() => {
     return history.find((item) => item.analysisId === selectedAnalysisId) || null;
@@ -1016,6 +1036,40 @@ export default function SpreadsheetDetail() {
       }
     );
   }, [decisionByAnalysis, selectedAnalysisId]);
+
+  const syncUrlParams = useCallback(
+    (overrides?: Partial<Record<"q" | "status" | "risk" | "tab" | "analysisId", string | null>>) => {
+      const next = new URLSearchParams(searchParams);
+
+      const values = {
+        q: historySearch || null,
+        status: historyStatusFilter !== "all" ? historyStatusFilter : null,
+        risk: historyRiskFilter !== "all" ? historyRiskFilter : null,
+        tab: detailViewTab !== "summary" ? detailViewTab : null,
+        analysisId: selectedAnalysisId || null,
+        ...overrides,
+      };
+
+      Object.entries(values).forEach(([key, value]) => {
+        if (!value || value === "all") {
+          next.delete(key);
+        } else {
+          next.set(key, value);
+        }
+      });
+
+      setSearchParams(next, { replace: true });
+    },
+    [
+      detailViewTab,
+      historyRiskFilter,
+      historySearch,
+      historyStatusFilter,
+      searchParams,
+      selectedAnalysisId,
+      setSearchParams,
+    ]
+  );
 
   const loadAnalysisDetail = useCallback(
     async (analysisId: string, spreadsheetIdForMock?: string, forceMock = false) => {
@@ -1113,7 +1167,13 @@ export default function SpreadsheetDetail() {
 
       setHistory(normalizedHistory);
 
+      const requestedAnalysisId = searchParams.get("analysisId");
+      const existingRequestedAnalysis = normalizedHistory.find(
+        (item) => item.analysisId === requestedAnalysisId
+      );
+
       const initialAnalysisId =
+        existingRequestedAnalysis?.analysisId ||
         normalizedHistory.find((item) => item.isLatest)?.analysisId ||
         normalizedHistory[0]?.analysisId ||
         null;
@@ -1132,7 +1192,7 @@ export default function SpreadsheetDetail() {
     } finally {
       setPageLoading(false);
     }
-  }, [id, loadAnalysisDetail]);
+  }, [id, loadAnalysisDetail, searchParams]);
 
   useEffect(() => {
     loadPage();
@@ -1161,6 +1221,17 @@ export default function SpreadsheetDetail() {
 
     loadAnalysisDetail(selectedAnalysisId, id);
   }, [selectedAnalysisId, filteredHistory, id, loadAnalysisDetail]);
+
+  useEffect(() => {
+    syncUrlParams();
+  }, [
+    historySearch,
+    historyStatusFilter,
+    historyRiskFilter,
+    detailViewTab,
+    selectedAnalysisId,
+    syncUrlParams,
+  ]);
 
   const handleSelectAnalysis = async (analysisId: string) => {
     if (!analysisId || analysisId === selectedAnalysisId || !id) return;
@@ -1272,7 +1343,6 @@ export default function SpreadsheetDetail() {
   }, [analysisDetail, previousDetail, previousHistoryItem]);
 
   useEffect(() => {
-    setDetailViewTab("summary");
     setActionMessage(null);
   }, [selectedAnalysisId]);
 
