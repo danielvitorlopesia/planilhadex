@@ -32,9 +32,8 @@ import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import GavelRoundedIcon from "@mui/icons-material/GavelRounded";
 import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
 import SummarizeRoundedIcon from "@mui/icons-material/SummarizeRounded";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
-
-type Nullable<T> = T | null | undefined;
 
 type SpreadsheetDetailData = {
   id: string;
@@ -88,14 +87,9 @@ type AnalysisDetail = {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
-const ENDPOINTS = {
-  spreadsheetDetail: (spreadsheetId: string) =>
-    `${API_BASE_URL}/api/spreadsheets/${spreadsheetId}`,
-  spreadsheetAnalyses: (spreadsheetId: string) =>
-    `${API_BASE_URL}/api/spreadsheets/${spreadsheetId}/analyses`,
-  analysisDetail: (analysisId: string) =>
-    `${API_BASE_URL}/api/analyses/${analysisId}`,
-};
+function buildUrl(path: string) {
+  return `${API_BASE_URL}${path}`;
+}
 
 function formatDateTime(value?: string | null): string {
   if (!value) return "—";
@@ -196,15 +190,37 @@ function getStatusChipColor(
 }
 
 function normalizeSpreadsheet(payload: any): SpreadsheetDetailData {
-  const source = payload?.data || payload?.spreadsheet || payload || {};
+  const source =
+    payload?.data ||
+    payload?.spreadsheet ||
+    payload?.item ||
+    payload ||
+    {};
 
   return {
     id: String(source.id ?? ""),
-    title: source.title ?? source.name ?? "Planilha sem título",
-    description: source.description ?? null,
-    status: source.status ?? null,
-    category: source.category ?? null,
-    updatedAt: source.updatedAt ?? source.updated_at ?? null,
+    title:
+      source.title ??
+      source.name ??
+      source.nome ??
+      "Planilha sem título",
+    description:
+      source.description ??
+      source.descricao ??
+      null,
+    status:
+      source.status ??
+      source.situacao ??
+      null,
+    category:
+      source.category ??
+      source.categoria ??
+      null,
+    updatedAt:
+      source.updatedAt ??
+      source.updated_at ??
+      source.updatedat ??
+      null,
   };
 }
 
@@ -213,7 +229,9 @@ function normalizeAnalysisHistory(payload: any): AnalysisHistoryItem[] {
     payload?.data ||
     payload?.items ||
     payload?.analyses ||
+    payload?.analysises ||
     payload?.history ||
+    payload?.results ||
     payload ||
     [];
 
@@ -327,7 +345,7 @@ function normalizeAnalysisDetail(payload: any): AnalysisDetail {
   };
 }
 
-async function fetchJson<T = any>(url: string): Promise<T> {
+async function fetchRequiredJson<T = any>(url: string): Promise<T> {
   const response = await fetch(url, {
     credentials: "include",
     headers: {
@@ -343,6 +361,39 @@ async function fetchJson<T = any>(url: string): Promise<T> {
   }
 
   return response.json();
+}
+
+async function fetchOptionalJson<T = any>(url: string): Promise<T | null> {
+  const response = await fetch(url, {
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(
+      `Falha ao carregar ${url}. Status ${response.status}. ${text || ""}`.trim()
+    );
+  }
+
+  return response.json();
+}
+
+async function tryFetchFirstAvailable<T = any>(urls: string[]): Promise<T | null> {
+  for (const url of urls) {
+    const payload = await fetchOptionalJson<T>(url);
+    if (payload !== null) {
+      return payload;
+    }
+  }
+
+  return null;
 }
 
 function MetricCard({
@@ -415,7 +466,8 @@ export default function SpreadsheetDetail() {
 
   const [pageLoading, setPageLoading] = useState(true);
   const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [historyWarning, setHistoryWarning] = useState<string | null>(null);
 
   const selectedHistoryItem = useMemo(() => {
     return history.find((item) => item.analysisId === selectedAnalysisId) || null;
@@ -425,11 +477,20 @@ export default function SpreadsheetDetail() {
     setAnalysisLoading(true);
 
     try {
-      const payload = await fetchJson(ENDPOINTS.analysisDetail(analysisId));
+      const payload = await tryFetchFirstAvailable([
+        buildUrl(`/api/analyses/${analysisId}`),
+        buildUrl(`/api/analysis/${analysisId}`),
+      ]);
+
+      if (!payload) {
+        setAnalysisDetail(null);
+        return;
+      }
+
       const normalized = normalizeAnalysisDetail(payload);
       setAnalysisDetail(normalized);
     } catch (err: any) {
-      setError(
+      setPageError(
         err?.message ||
           "Não foi possível carregar os detalhes da análise selecionada."
       );
@@ -440,28 +501,45 @@ export default function SpreadsheetDetail() {
 
   const loadPage = useCallback(async () => {
     if (!id) {
-      setError("ID da planilha não informado.");
+      setPageError("ID da planilha não informado.");
       setPageLoading(false);
       return;
     }
 
     setPageLoading(true);
-    setError(null);
+    setPageError(null);
+    setHistoryWarning(null);
 
     try {
-      const [spreadsheetPayload, historyPayload] = await Promise.all([
-        fetchJson(ENDPOINTS.spreadsheetDetail(id)),
-        fetchJson(ENDPOINTS.spreadsheetAnalyses(id)),
+      const spreadsheetPayload = await fetchRequiredJson(
+        buildUrl(`/api/spreadsheets/${id}`)
+      );
+      const normalizedSpreadsheet = normalizeSpreadsheet(spreadsheetPayload);
+      setSpreadsheet(normalizedSpreadsheet);
+
+      const historyPayload = await tryFetchFirstAvailable([
+        buildUrl(`/api/spreadsheets/${id}/analyses`),
+        buildUrl(`/api/spreadsheets/${id}/analysis`),
+        buildUrl(`/api/analyses?spreadsheetId=${id}`),
+        buildUrl(`/api/analysis?spreadsheetId=${id}`),
       ]);
 
-      const normalizedSpreadsheet = normalizeSpreadsheet(spreadsheetPayload);
+      if (!historyPayload) {
+        setHistory([]);
+        setSelectedAnalysisId(null);
+        setAnalysisDetail(null);
+        setHistoryWarning(
+          "O histórico de análises ainda não possui endpoint disponível no backend."
+        );
+        return;
+      }
+
       const normalizedHistory = normalizeAnalysisHistory(historyPayload).sort((a, b) => {
         const dateA = new Date(a.createdAt || a.updatedAt || 0).getTime();
         const dateB = new Date(b.createdAt || b.updatedAt || 0).getTime();
         return dateB - dateA;
       });
 
-      setSpreadsheet(normalizedSpreadsheet);
       setHistory(normalizedHistory);
 
       const initialAnalysisId =
@@ -477,9 +555,9 @@ export default function SpreadsheetDetail() {
         setAnalysisDetail(null);
       }
     } catch (err: any) {
-      setError(
+      setPageError(
         err?.message ||
-          "Não foi possível carregar os dados da planilha e do histórico de análises."
+          "Não foi possível carregar os dados da planilha."
       );
     } finally {
       setPageLoading(false);
@@ -494,7 +572,7 @@ export default function SpreadsheetDetail() {
     if (!analysisId || analysisId === selectedAnalysisId) return;
 
     setSelectedAnalysisId(analysisId);
-    setError(null);
+    setPageError(null);
     await loadAnalysisDetail(analysisId);
   };
 
@@ -563,7 +641,8 @@ export default function SpreadsheetDetail() {
             </Typography>
           </Breadcrumbs>
 
-          {error ? <Alert severity="error">{error}</Alert> : null}
+          {pageError ? <Alert severity="error">{pageError}</Alert> : null}
+          {historyWarning ? <Alert severity="info">{historyWarning}</Alert> : null}
 
           <Card variant="outlined">
             <CardContent>
@@ -640,7 +719,7 @@ export default function SpreadsheetDetail() {
 
               {history.length === 0 ? (
                 <Box sx={{ p: 2 }}>
-                  <Alert severity="info">
+                  <Alert severity="info" icon={<InfoOutlinedIcon />}>
                     Ainda não há análises registradas para esta planilha.
                   </Alert>
                 </Box>
