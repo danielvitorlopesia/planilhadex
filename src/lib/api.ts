@@ -54,6 +54,30 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return data as T;
 }
 
+type SpreadsheetApiShape = SpreadsheetListItem & {
+  spreadsheet_uuid?: string | null;
+  spreadsheetId?: string | null;
+  spreadsheet_id?: string | null;
+  real_id?: string | null;
+  realId?: string | null;
+};
+
+function normalizeSpreadsheetIds<T extends SpreadsheetApiShape>(item: T): T {
+  const resolvedSpreadsheetId =
+    item.spreadsheet_id ??
+    item.spreadsheetId ??
+    item.spreadsheet_uuid ??
+    item.real_id ??
+    item.realId ??
+    null;
+
+  return {
+    ...item,
+    spreadsheet_id: resolvedSpreadsheetId,
+    spreadsheetId: resolvedSpreadsheetId,
+  };
+}
+
 export async function getSpreadsheets(): Promise<SpreadsheetListItem[]> {
   const response = await fetch(buildUrl("/api/spreadsheets"), {
     method: "GET",
@@ -62,7 +86,8 @@ export async function getSpreadsheets(): Promise<SpreadsheetListItem[]> {
     },
   });
 
-  return handleResponse<SpreadsheetListItem[]>(response);
+  const data = await handleResponse<SpreadsheetApiShape[]>(response);
+  return data.map(normalizeSpreadsheetIds);
 }
 
 export async function getSpreadsheetById(id: string): Promise<SpreadsheetDetailData> {
@@ -73,5 +98,6 @@ export async function getSpreadsheetById(id: string): Promise<SpreadsheetDetailD
     },
   });
 
-  return handleResponse<SpreadsheetDetailData>(response);
+  const data = await handleResponse<SpreadsheetApiShape & SpreadsheetDetailData>(response);
+  return normalizeSpreadsheetIds(data);
 }
