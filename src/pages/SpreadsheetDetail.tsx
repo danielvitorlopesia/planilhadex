@@ -53,7 +53,7 @@ import ExecutabilityOpinionView, {
   type ExecutabilityOpinionDocument,
 } from "../components/ExecutabilityOpinionView";
 import {
-  getAnalysisOpinionBundle,
+  getLatestAnalysisOpinionBundleBySpreadsheetId,
   type AnalysisOpinionBundle,
 } from "../services/analysisOpinions";
 
@@ -86,13 +86,7 @@ function resolveRealSpreadsheetId(
 
 function extractTextFromPayload(payload: Record<string, any> | undefined | null) {
   if (!payload || typeof payload !== "object") return "";
-  return (
-    payload.texto ||
-    payload.text ||
-    payload.content ||
-    payload.summary ||
-    ""
-  );
+  return payload.texto || payload.text || payload.content || payload.summary || "";
 }
 
 function buildOpinionDocumentFromBundle(
@@ -134,8 +128,7 @@ function buildOpinionDocumentFromBundle(
       },
       {
         key: "fundamentacao_tecnica",
-        title:
-          bundle.fundamentacao_tecnica?.title || "Fundamentação Técnica",
+        title: bundle.fundamentacao_tecnica?.title || "Fundamentação Técnica",
         content: extractTextFromPayload(bundle.fundamentacao_tecnica?.payload),
         sort_order: 3,
       },
@@ -195,24 +188,32 @@ export default function SpreadsheetDetail() {
       const response = await getSpreadsheetById(id);
       setData(response);
 
-      try {
-        const opinionBundle = await getAnalysisOpinionBundle(
-          "9ad0fc6f-be95-4655-8c48-9b55c8e0a222"
-        );
+      const realSpreadsheetId = resolveRealSpreadsheetId(response, id);
 
-        setBundle(opinionBundle);
-        setOpinionDocument(buildOpinionDocumentFromBundle(opinionBundle));
-      } catch (bundleError) {
-        const message =
-          bundleError instanceof Error
-            ? bundleError.message
-            : "Falha ao buscar o bundle do parecer consolidado.";
-
+      if (!realSpreadsheetId) {
         setTechnicalError(
-          `Falha ao buscar o parecer consolidado via RPC: ${message}`
+          "Não foi possível resolver o identificador efetivo da planilha para consultar o parecer consolidado."
         );
         setOpinionDocument(null);
+        setBundle(null);
+        return;
       }
+
+      const opinionBundle = await getLatestAnalysisOpinionBundleBySpreadsheetId(
+        realSpreadsheetId
+      );
+
+      if (!opinionBundle) {
+        setTechnicalError(
+          "Nenhuma análise de exequibilidade foi localizada para a planilha selecionada."
+        );
+        setOpinionDocument(null);
+        setBundle(null);
+        return;
+      }
+
+      setBundle(opinionBundle);
+      setOpinionDocument(buildOpinionDocumentFromBundle(opinionBundle));
     } catch (err) {
       const message =
         err instanceof Error
