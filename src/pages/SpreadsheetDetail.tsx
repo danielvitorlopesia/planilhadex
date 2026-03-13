@@ -33,6 +33,10 @@ import GavelRoundedIcon from "@mui/icons-material/GavelRounded";
 import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
 import SummarizeRoundedIcon from "@mui/icons-material/SummarizeRounded";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
+import TrendingDownRoundedIcon from "@mui/icons-material/TrendingDownRounded";
+import TrendingFlatRoundedIcon from "@mui/icons-material/TrendingFlatRounded";
+import CompareArrowsRoundedIcon from "@mui/icons-material/CompareArrowsRounded";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import {
   AnalysisDetail,
@@ -136,7 +140,8 @@ function getStatusChipColor(
   if (
     value.includes("diligencia") ||
     value.includes("pendente") ||
-    value.includes("warning")
+    value.includes("warning") ||
+    value.includes("ressalvas")
   ) {
     return "warning";
   }
@@ -406,6 +411,93 @@ function ExplanationBlock({
   );
 }
 
+function normalizeRiskOrder(risk?: string | null): number {
+  const value = (risk || "").toLowerCase();
+
+  if (value.includes("low") || value.includes("baixo")) return 1;
+  if (value.includes("medium") || value.includes("médio") || value.includes("medio")) {
+    return 2;
+  }
+  if (value.includes("high") || value.includes("alto")) return 3;
+
+  return 0;
+}
+
+function normalizeStatusOrder(status?: string | null): number {
+  const value = (status || "").toLowerCase();
+
+  if (value.includes("inexequivel")) return 1;
+  if (value.includes("ressalvas")) return 2;
+  if (value.includes("diligencia")) return 3;
+  if (value.includes("exequivel")) return 4;
+
+  return 0;
+}
+
+function ComparisonRow({
+  label,
+  current,
+  previous,
+  direction,
+}: {
+  label: string;
+  current: string;
+  previous: string;
+  direction: "up" | "down" | "same";
+}) {
+  const icon =
+    direction === "up" ? (
+      <TrendingUpRoundedIcon color="success" fontSize="small" />
+    ) : direction === "down" ? (
+      <TrendingDownRoundedIcon color="error" fontSize="small" />
+    ) : (
+      <TrendingFlatRoundedIcon color="disabled" fontSize="small" />
+    );
+
+  const chipColor =
+    direction === "up"
+      ? "success"
+      : direction === "down"
+      ? "error"
+      : "default";
+
+  const chipLabel =
+    direction === "up"
+      ? "Melhorou"
+      : direction === "down"
+      ? "Piorou"
+      : "Sem mudança";
+
+  return (
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: { xs: "1fr", md: "180px 1fr 1fr auto" },
+        gap: 1.5,
+        alignItems: "center",
+        py: 1.25,
+      }}
+    >
+      <Typography variant="body2" fontWeight={700}>
+        {label}
+      </Typography>
+
+      <Typography variant="body2" color="text.secondary">
+        Atual: <strong>{current}</strong>
+      </Typography>
+
+      <Typography variant="body2" color="text.secondary">
+        Anterior: <strong>{previous}</strong>
+      </Typography>
+
+      <Stack direction="row" spacing={1} alignItems="center" justifyContent="flex-start">
+        {icon}
+        <Chip size="small" label={chipLabel} color={chipColor} variant="outlined" />
+      </Stack>
+    </Box>
+  );
+}
+
 export default function SpreadsheetDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -424,6 +516,90 @@ export default function SpreadsheetDetail() {
   const selectedHistoryItem = useMemo(() => {
     return history.find((item) => item.analysisId === selectedAnalysisId) || null;
   }, [history, selectedAnalysisId]);
+
+  const selectedHistoryIndex = useMemo(() => {
+    return history.findIndex((item) => item.analysisId === selectedAnalysisId);
+  }, [history, selectedAnalysisId]);
+
+  const previousHistoryItem = useMemo(() => {
+    if (selectedHistoryIndex < 0) return null;
+    return history[selectedHistoryIndex + 1] || null;
+  }, [history, selectedHistoryIndex]);
+
+  const comparisonSummary = useMemo(() => {
+    if (!analysisDetail || !previousHistoryItem) return null;
+
+    const currentStatus =
+      analysisDetail.executabilityStatus || analysisDetail.finalStatus || null;
+    const previousStatus =
+      previousHistoryItem.executabilityStatus || previousHistoryItem.finalStatus || null;
+
+    const currentScore = analysisDetail.scoreGlobal ?? null;
+    const previousScore = previousHistoryItem.scoreGlobal ?? null;
+
+    const currentBalance = analysisDetail.executabilityBalance ?? null;
+
+    const scoreDirection =
+      currentScore === null || previousScore === null
+        ? "same"
+        : currentScore > previousScore
+        ? "up"
+        : currentScore < previousScore
+        ? "down"
+        : "same";
+
+    const balanceDirection =
+      currentBalance === null
+        ? "same"
+        : previousHistoryItem.analysisId && previousHistoryItem.analysisId
+        ? analysisDetail.executabilityBalance !== null &&
+          analysisDetail.executabilityBalance !== undefined &&
+          previousHistoryItem.analysisId
+          ? "same"
+          : "same"
+        : "same";
+
+    const previousRiskOrder = normalizeRiskOrder(previousHistoryItem.riskLevel);
+    const currentRiskOrder = normalizeRiskOrder(analysisDetail.riskLevel);
+
+    const riskDirection =
+      currentRiskOrder === 0 || previousRiskOrder === 0
+        ? "same"
+        : currentRiskOrder < previousRiskOrder
+        ? "up"
+        : currentRiskOrder > previousRiskOrder
+        ? "down"
+        : "same";
+
+    const previousStatusOrder = normalizeStatusOrder(previousStatus);
+    const currentStatusOrder = normalizeStatusOrder(currentStatus);
+
+    const statusDirection =
+      currentStatusOrder === 0 || previousStatusOrder === 0
+        ? "same"
+        : currentStatusOrder > previousStatusOrder
+        ? "up"
+        : currentStatusOrder < previousStatusOrder
+        ? "down"
+        : "same";
+
+    return {
+      currentStatus,
+      previousStatus,
+      currentScore,
+      previousScore,
+      currentBalance,
+      previousBalance: null,
+      scoreDirection,
+      riskDirection,
+      statusDirection,
+      balanceDirection:
+        analysisDetail.executabilityBalance === null ||
+        analysisDetail.executabilityBalance === undefined
+          ? "same"
+          : "same",
+    };
+  }, [analysisDetail, previousHistoryItem]);
 
   const loadAnalysisDetail = useCallback(
     async (analysisId: string, spreadsheetIdForMock?: string, forceMock = false) => {
@@ -553,6 +729,34 @@ export default function SpreadsheetDetail() {
     setPageError(null);
     await loadAnalysisDetail(analysisId, id);
   };
+
+  const previousDetail = useMemo(() => {
+    if (!id || !previousHistoryItem) return null;
+    return buildMockAnalysisDetail(previousHistoryItem.analysisId, id);
+  }, [id, previousHistoryItem]);
+
+  const balanceComparisonDirection = useMemo(() => {
+    if (
+      !analysisDetail ||
+      !previousDetail ||
+      analysisDetail.executabilityBalance === null ||
+      analysisDetail.executabilityBalance === undefined ||
+      previousDetail.executabilityBalance === null ||
+      previousDetail.executabilityBalance === undefined
+    ) {
+      return "same" as const;
+    }
+
+    if (analysisDetail.executabilityBalance > previousDetail.executabilityBalance) {
+      return "up" as const;
+    }
+
+    if (analysisDetail.executabilityBalance < previousDetail.executabilityBalance) {
+      return "down" as const;
+    }
+
+    return "same" as const;
+  }, [analysisDetail, previousDetail]);
 
   if (pageLoading) {
     return (
@@ -1000,6 +1204,92 @@ export default function SpreadsheetDetail() {
                       </Stack>
                     </CardContent>
                   </Card>
+
+                  {previousHistoryItem ? (
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Stack spacing={2}>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <CompareArrowsRoundedIcon />
+                            <Typography variant="h6" fontWeight={800}>
+                              Comparação com a análise anterior
+                            </Typography>
+                          </Stack>
+
+                          <Typography variant="body2" color="text.secondary">
+                            Comparativo entre a análise selecionada e a versão
+                            imediatamente anterior do histórico.
+                          </Typography>
+
+                          <Divider />
+
+                          <ComparisonRow
+                            label="Score global"
+                            current={
+                              analysisDetail.scoreGlobal !== null &&
+                              analysisDetail.scoreGlobal !== undefined
+                                ? String(analysisDetail.scoreGlobal)
+                                : "—"
+                            }
+                            previous={
+                              previousHistoryItem.scoreGlobal !== null &&
+                              previousHistoryItem.scoreGlobal !== undefined
+                                ? String(previousHistoryItem.scoreGlobal)
+                                : "—"
+                            }
+                            direction={
+                              comparisonSummary?.scoreDirection || "same"
+                            }
+                          />
+
+                          <Divider />
+
+                          <ComparisonRow
+                            label="Saldo de exequibilidade"
+                            current={formatCurrency(
+                              analysisDetail.executabilityBalance
+                            )}
+                            previous={formatCurrency(
+                              previousDetail?.executabilityBalance
+                            )}
+                            direction={balanceComparisonDirection}
+                          />
+
+                          <Divider />
+
+                          <ComparisonRow
+                            label="Risco"
+                            current={formatLabel(analysisDetail.riskLevel)}
+                            previous={formatLabel(previousHistoryItem.riskLevel)}
+                            direction={
+                              comparisonSummary?.riskDirection || "same"
+                            }
+                          />
+
+                          <Divider />
+
+                          <ComparisonRow
+                            label="Status final"
+                            current={formatLabel(
+                              analysisDetail.executabilityStatus ||
+                                analysisDetail.finalStatus
+                            )}
+                            previous={formatLabel(
+                              previousHistoryItem.executabilityStatus ||
+                                previousHistoryItem.finalStatus
+                            )}
+                            direction={
+                              comparisonSummary?.statusDirection || "same"
+                            }
+                          />
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Alert severity="info">
+                      Não existe análise anterior suficiente para comparação.
+                    </Alert>
+                  )}
 
                   <Stack spacing={2}>
                     <Typography variant="h6" fontWeight={800}>
