@@ -74,6 +74,26 @@ function formatCurrency(value: number) {
   });
 }
 
+function resolveRealSpreadsheetId(
+  data: SpreadsheetDetailData | null,
+  routeId: string | undefined
+): string | null {
+  const candidates = [
+    data?.spreadsheet_id,
+    data?.spreadsheetId,
+    data?.id,
+    routeId,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+}
+
 export default function SpreadsheetDetail() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -102,13 +122,20 @@ export default function SpreadsheetDetail() {
       const response = await getSpreadsheetById(id);
       setData(response);
 
+      const realSpreadsheetId = resolveRealSpreadsheetId(response, id);
+
+      if (!realSpreadsheetId) {
+        setOpinionDocument(null);
+        return;
+      }
+
       const { data: opinionData, error: opinionError } = await supabase
         .schema("ai")
         .from("v_executability_opinion_documents")
         .select(
           "opinion_id, executability_analysis_id, spreadsheet_id, spreadsheet_version_id, procurement_id, organization_id, opinion_status, opinion_version, generated_at, document_payload"
         )
-        .eq("spreadsheet_id", id)
+        .eq("spreadsheet_id", realSpreadsheetId)
         .order("generated_at", { ascending: false })
         .limit(1)
         .maybeSingle<OpinionDocumentRow>();
@@ -164,6 +191,10 @@ export default function SpreadsheetDetail() {
     return new Set(data.rows.map((row) => row.categoria)).size;
   }, [data]);
 
+  const effectiveSpreadsheetId = useMemo(() => {
+    return resolveRealSpreadsheetId(data, id);
+  }, [data, id]);
+
   const fallbackOpinionDocument = useMemo<ExecutabilityOpinionDocument>(() => {
     if (!data || !id) return DEMO_DOCUMENT;
 
@@ -175,7 +206,7 @@ export default function SpreadsheetDetail() {
         subtitle: `Planilha #${id} — ${data.title}`,
         opinion_id: `demo-spreadsheet-${id}`,
         executability_analysis_id: `demo-analysis-spreadsheet-${id}`,
-        spreadsheet_id: id,
+        spreadsheet_id: effectiveSpreadsheetId || id,
         spreadsheet_version_id: 1,
         generated_at: new Date().toISOString(),
       },
@@ -199,7 +230,9 @@ export default function SpreadsheetDetail() {
           title: "Fundamentação Técnica",
           content: `Total geral exibido na planilha: ${formatCurrency(
             totalGeral
-          )}. Percentual de conferência: ${percentualConferencia}%. Categorias distintas: ${categoriasUnicas}.`,
+          )}. Percentual de conferência: ${percentualConferencia}%. Categorias distintas: ${categoriasUnicas}. Identificador efetivo consultado: ${
+            effectiveSpreadsheetId || "não localizado"
+          }.`,
           sort_order: 3,
         },
         {
@@ -211,7 +244,7 @@ export default function SpreadsheetDetail() {
         },
       ],
     };
-  }, [data, id, totalGeral, percentualConferencia, categoriasUnicas]);
+  }, [data, id, totalGeral, percentualConferencia, categoriasUnicas, effectiveSpreadsheetId]);
 
   const finalOpinionDocument = opinionDocument || fallbackOpinionDocument;
 
@@ -971,7 +1004,14 @@ export default function SpreadsheetDetail() {
                               <Stack direction="row" spacing={1} alignItems="center">
                                 <FolderOpenIcon sx={{ color: "#8c58a2", fontSize: 20 }} />
                                 <Typography color="text.secondary">
-                                  Identificador: <strong>#{data.id}</strong>
+                                  Identificador visual: <strong>#{data.id}</strong>
+                                </Typography>
+                              </Stack>
+
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <FolderOpenIcon sx={{ color: "#8c58a2", fontSize: 20 }} />
+                                <Typography color="text.secondary">
+                                  Identificador efetivo: <strong>{effectiveSpreadsheetId || "não localizado"}</strong>
                                 </Typography>
                               </Stack>
 
