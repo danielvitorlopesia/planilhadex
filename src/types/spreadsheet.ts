@@ -9,6 +9,8 @@ export type SpreadsheetStatus =
 
 export type SpreadsheetListItem = {
   id: string;
+  spreadsheet_id?: string | null;
+  spreadsheetId?: string | null;
   title: string;
   description: string;
   status: SpreadsheetStatus;
