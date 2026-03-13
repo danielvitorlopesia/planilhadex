@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   AppBar,
@@ -42,11 +42,30 @@ import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import BugReportOutlinedIcon from "@mui/icons-material/BugReportOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
+import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import { useNavigate, useParams } from "react-router-dom";
+import { supabase } from "../lib/supabase";
 import { getSpreadsheetById } from "../lib/api";
 import { getStatusStyles } from "./Home";
 import { SpreadsheetDetailData } from "../types/spreadsheet";
 import { useAuth } from "../auth/AuthContext";
+import ExecutabilityOpinionView, {
+  DEMO_DOCUMENT,
+  type ExecutabilityOpinionDocument,
+} from "../components/ExecutabilityOpinionView";
+
+type OpinionDocumentRow = {
+  opinion_id: string;
+  executability_analysis_id: string;
+  spreadsheet_id: string;
+  spreadsheet_version_id: number;
+  procurement_id?: string | null;
+  organization_id?: string | null;
+  opinion_status: string;
+  opinion_version: number;
+  generated_at?: string | null;
+  document_payload: ExecutabilityOpinionDocument;
+};
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", {
@@ -61,6 +80,8 @@ export default function SpreadsheetDetail() {
   const { logout, user } = useAuth();
 
   const [data, setData] = useState<SpreadsheetDetailData | null>(null);
+  const [opinionDocument, setOpinionDocument] =
+    useState<ExecutabilityOpinionDocument | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [technicalError, setTechnicalError] = useState("");
@@ -80,6 +101,23 @@ export default function SpreadsheetDetail() {
 
       const response = await getSpreadsheetById(id);
       setData(response);
+
+      const { data: opinionData, error: opinionError } = await supabase
+        .schema("ai")
+        .from("v_executability_opinion_documents")
+        .select(
+          "opinion_id, executability_analysis_id, spreadsheet_id, spreadsheet_version_id, procurement_id, organization_id, opinion_status, opinion_version, generated_at, document_payload"
+        )
+        .eq("spreadsheet_id", id)
+        .order("generated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<OpinionDocumentRow>();
+
+      if (!opinionError && opinionData?.document_payload) {
+        setOpinionDocument(opinionData.document_payload);
+      } else {
+        setOpinionDocument(null);
+      }
     } catch (err) {
       const message =
         err instanceof Error
@@ -89,12 +127,13 @@ export default function SpreadsheetDetail() {
       setError("Não foi possível carregar o detalhe da planilha.");
       setTechnicalError(message);
       setData(null);
+      setOpinionDocument(null);
     } finally {
       setLoading(false);
     }
   }, [id]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     loadDetail();
   }, [loadDetail]);
 
@@ -124,6 +163,57 @@ export default function SpreadsheetDetail() {
     if (!data) return 0;
     return new Set(data.rows.map((row) => row.categoria)).size;
   }, [data]);
+
+  const fallbackOpinionDocument = useMemo<ExecutabilityOpinionDocument>(() => {
+    if (!data || !id) return DEMO_DOCUMENT;
+
+    return {
+      ...DEMO_DOCUMENT,
+      header: {
+        ...DEMO_DOCUMENT.header,
+        title: "Parecer Consolidado de Exequibilidade",
+        subtitle: `Planilha #${id} — ${data.title}`,
+        opinion_id: `demo-spreadsheet-${id}`,
+        executability_analysis_id: `demo-analysis-spreadsheet-${id}`,
+        spreadsheet_id: id,
+        spreadsheet_version_id: 1,
+        generated_at: new Date().toISOString(),
+      },
+      sections: [
+        {
+          key: "ementa",
+          title: "Ementa",
+          content:
+            "Parecer demonstrativo exibido como fallback visual enquanto o vínculo definitivo com o documento real da planilha não é localizado no banco.",
+          sort_order: 1,
+        },
+        {
+          key: "conclusao",
+          title: "Conclusão",
+          content:
+            "A tela do parecer consolidado foi integrada com sucesso à página de detalhe da planilha. O próximo ajuste é alinhar o identificador do frontend ao identificador real persistido no schema ai do Supabase.",
+          sort_order: 2,
+        },
+        {
+          key: "fundamentacao_tecnica",
+          title: "Fundamentação Técnica",
+          content: `Total geral exibido na planilha: ${formatCurrency(
+            totalGeral
+          )}. Percentual de conferência: ${percentualConferencia}%. Categorias distintas: ${categoriasUnicas}.`,
+          sort_order: 3,
+        },
+        {
+          key: "versao_gestor_leigo",
+          title: "Versão para Gestor Leigo",
+          content:
+            "Esta versão mostra o bloco final do parecer dentro da interface do sistema. Quando o documento real estiver vinculado, este conteúdo será automaticamente substituído pelo texto consolidado emitido no banco.",
+          sort_order: 4,
+        },
+      ],
+    };
+  }, [data, id, totalGeral, percentualConferencia, categoriasUnicas]);
+
+  const finalOpinionDocument = opinionDocument || fallbackOpinionDocument;
 
   if (loading) {
     return (
@@ -301,7 +391,8 @@ export default function SpreadsheetDetail() {
                           wordBreak: "break-word",
                         }}
                       >
-                        {technicalError || "Nenhum detalhe técnico adicional foi retornado."}
+                        {technicalError ||
+                          "Nenhum detalhe técnico adicional foi retornado."}
                       </Typography>
                     </Stack>
                   </Box>
@@ -545,7 +636,11 @@ export default function SpreadsheetDetail() {
                             </Typography>
                           </Stack>
                           <Typography
-                            sx={{ fontSize: "1.35rem", fontWeight: 800, color: "text.primary" }}
+                            sx={{
+                              fontSize: "1.35rem",
+                              fontWeight: 800,
+                              color: "text.primary",
+                            }}
                           >
                             {formatCurrency(totalGeral)}
                           </Typography>
@@ -573,7 +668,11 @@ export default function SpreadsheetDetail() {
                             </Typography>
                           </Stack>
                           <Typography
-                            sx={{ fontSize: "1.35rem", fontWeight: 800, color: "text.primary" }}
+                            sx={{
+                              fontSize: "1.35rem",
+                              fontWeight: 800,
+                              color: "text.primary",
+                            }}
                           >
                             {percentualConferencia}%
                           </Typography>
@@ -601,7 +700,11 @@ export default function SpreadsheetDetail() {
                             </Typography>
                           </Stack>
                           <Typography
-                            sx={{ fontSize: "1.35rem", fontWeight: 800, color: "text.primary" }}
+                            sx={{
+                              fontSize: "1.35rem",
+                              fontWeight: 800,
+                              color: "text.primary",
+                            }}
                           >
                             {categoriasUnicas}
                           </Typography>
@@ -629,7 +732,11 @@ export default function SpreadsheetDetail() {
                             </Typography>
                           </Stack>
                           <Typography
-                            sx={{ fontSize: "1.35rem", fontWeight: 800, color: "text.primary" }}
+                            sx={{
+                              fontSize: "1.35rem",
+                              fontWeight: 800,
+                              color: "text.primary",
+                            }}
                           >
                             {data.updatedAt}
                           </Typography>
@@ -640,6 +747,53 @@ export default function SpreadsheetDetail() {
                       </CardContent>
                     </Card>
                   </Box>
+
+                  <Card
+                    variant="outlined"
+                    sx={{
+                      borderRadius: "24px",
+                      borderColor: "#eadff0",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        px: 3,
+                        py: 2.2,
+                        borderBottom: "1px solid #eadff0",
+                        backgroundColor: "#fcfafe",
+                      }}
+                    >
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        spacing={2}
+                      >
+                        <Stack direction="row" spacing={1.2} alignItems="center">
+                          <GavelOutlinedIcon sx={{ color: "#8c58a2" }} />
+                          <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                            Parecer consolidado
+                          </Typography>
+                        </Stack>
+
+                        <Chip
+                          label={opinionDocument ? "Documento real" : "Fallback visual"}
+                          sx={{
+                            backgroundColor: opinionDocument
+                              ? "rgba(46, 125, 50, 0.10)"
+                              : "rgba(140, 88, 162, 0.10)",
+                            color: opinionDocument ? "#2e7d32" : "#6f3f84",
+                            fontWeight: 700,
+                          }}
+                        />
+                      </Stack>
+                    </Box>
+
+                    <Box sx={{ p: { xs: 2, md: 3 } }}>
+                      <ExecutabilityOpinionView document={finalOpinionDocument} />
+                    </Box>
+                  </Card>
 
                   <Box
                     sx={{
@@ -720,9 +874,7 @@ export default function SpreadsheetDetail() {
                                   key={`${row.item}-${index}`}
                                   sx={{
                                     "&:last-child td": { borderBottom: 0 },
-                                    "& td": {
-                                      borderBottom: "1px solid #f0e8f4",
-                                    },
+                                    "& td": { borderBottom: "1px solid #f0e8f4" },
                                   }}
                                 >
                                   <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>
@@ -791,13 +943,7 @@ export default function SpreadsheetDetail() {
                     </Card>
 
                     <Stack spacing={3}>
-                      <Card
-                        variant="outlined"
-                        sx={{
-                          borderRadius: "24px",
-                          borderColor: "#eadff0",
-                        }}
-                      >
+                      <Card variant="outlined" sx={{ borderRadius: "24px", borderColor: "#eadff0" }}>
                         <CardContent sx={{ p: 3 }}>
                           <Stack spacing={2.2}>
                             <Stack direction="row" spacing={1.1} alignItems="center">
@@ -848,13 +994,7 @@ export default function SpreadsheetDetail() {
                         </CardContent>
                       </Card>
 
-                      <Card
-                        variant="outlined"
-                        sx={{
-                          borderRadius: "24px",
-                          borderColor: "#eadff0",
-                        }}
-                      >
+                      <Card variant="outlined" sx={{ borderRadius: "24px", borderColor: "#eadff0" }}>
                         <CardContent sx={{ p: 3 }}>
                           <Stack spacing={2.2}>
                             <Stack direction="row" spacing={1.1} alignItems="center">
@@ -908,14 +1048,7 @@ export default function SpreadsheetDetail() {
                       gap: 3,
                     }}
                   >
-                    <Card
-                      variant="outlined"
-                      sx={{
-                        borderRadius: "24px",
-                        borderColor: "#eadff0",
-                        overflow: "hidden",
-                      }}
-                    >
+                    <Card variant="outlined" sx={{ borderRadius: "24px", borderColor: "#eadff0", overflow: "hidden" }}>
                       <Box
                         sx={{
                           px: 3,
@@ -958,9 +1091,7 @@ export default function SpreadsheetDetail() {
                                   key={`${version.versao}-${index}`}
                                   sx={{
                                     "&:last-child td": { borderBottom: 0 },
-                                    "& td": {
-                                      borderBottom: "1px solid #f0e8f4",
-                                    },
+                                    "& td": { borderBottom: "1px solid #f0e8f4" },
                                   }}
                                 >
                                   <TableCell sx={{ fontWeight: 700 }}>
@@ -977,14 +1108,7 @@ export default function SpreadsheetDetail() {
                       </CardContent>
                     </Card>
 
-                    <Card
-                      variant="outlined"
-                      sx={{
-                        borderRadius: "24px",
-                        borderColor: "#eadff0",
-                        overflow: "hidden",
-                      }}
-                    >
+                    <Card variant="outlined" sx={{ borderRadius: "24px", borderColor: "#eadff0", overflow: "hidden" }}>
                       <Box
                         sx={{
                           px: 3,
