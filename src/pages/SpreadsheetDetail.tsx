@@ -46,6 +46,7 @@ import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import KeyboardDoubleArrowUpRoundedIcon from "@mui/icons-material/KeyboardDoubleArrowUpRounded";
 import SwapHorizRoundedIcon from "@mui/icons-material/SwapHorizRounded";
+import DifferenceRoundedIcon from "@mui/icons-material/DifferenceRounded";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import {
   AnalysisDetail,
@@ -105,6 +106,14 @@ function formatLabel(value?: string | null): string {
     .replaceAll("-", " ")
     .trim()
     .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function normalizeWhitespace(text?: string | null): string {
+  return (text || "").replace(/\s+/g, " ").trim();
+}
+
+function hasMeaningfulChange(current?: string | null, previous?: string | null): boolean {
+  return normalizeWhitespace(current) !== normalizeWhitespace(previous);
 }
 
 function getRiskChipColor(
@@ -478,6 +487,73 @@ function OpinionSection({
   );
 }
 
+function TextDiffSection({
+  title,
+  current,
+  previous,
+}: {
+  title: string;
+  current?: string | null;
+  previous?: string | null;
+}) {
+  const changed = hasMeaningfulChange(current, previous);
+
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          spacing={1}
+          mb={2}
+        >
+          <Typography variant="subtitle1" fontWeight={700}>
+            {title}
+          </Typography>
+          <Chip
+            size="small"
+            label={changed ? "Alterado" : "Sem alteração"}
+            color={changed ? "warning" : "success"}
+            variant="outlined"
+          />
+        </Stack>
+
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+            gap: 2,
+          }}
+        >
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Typography variant="caption" color="text.secondary">
+              Texto atual
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{ mt: 1, whiteSpace: "pre-wrap", lineHeight: 1.75 }}
+            >
+              {current || "—"}
+            </Typography>
+          </Paper>
+
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Typography variant="caption" color="text.secondary">
+              Texto anterior
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{ mt: 1, whiteSpace: "pre-wrap", lineHeight: 1.75 }}
+            >
+              {previous || "—"}
+            </Typography>
+          </Paper>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+
 function normalizeRiskOrder(risk?: string | null): number {
   const value = (risk || "").toLowerCase();
 
@@ -626,22 +702,22 @@ function buildOpinionText(detail: AnalysisDetail | null): string {
   return [
     "PARECER CONSOLIDADO",
     "",
-    `EMENTA`,
+    "EMENTA",
     opinion.ementa || "—",
     "",
-    `CONCLUSÃO`,
+    "CONCLUSÃO",
     opinion.conclusao || "—",
     "",
-    `FUNDAMENTAÇÃO TÉCNICA`,
+    "FUNDAMENTAÇÃO TÉCNICA",
     opinion.fundamentacaoTecnica || "—",
     "",
-    `FUNDAMENTAÇÃO TÉCNICO-JURÍDICA`,
+    "FUNDAMENTAÇÃO TÉCNICO-JURÍDICA",
     opinion.fundamentacaoTecnicoJuridica || "—",
     "",
-    `VERSÃO PARA GESTOR LEIGO`,
+    "VERSÃO PARA GESTOR LEIGO",
     opinion.versaoGestorLeigo || "—",
     "",
-    `RECOMENDAÇÃO FINAL`,
+    "RECOMENDAÇÃO FINAL",
     opinion.recomendacaoFinal || "—",
   ].join("\n");
 }
@@ -988,6 +1064,9 @@ export default function SpreadsheetDetail() {
     setDetailViewTab("comparison");
     setActionMessage("Comparação com a análise mais recente aberta.");
   };
+
+  const currentOpinion = analysisDetail?.consolidatedOpinion || null;
+  const previousOpinion = previousDetail?.consolidatedOpinion || null;
 
   if (pageLoading) {
     return (
@@ -1527,79 +1606,117 @@ export default function SpreadsheetDetail() {
 
                   {detailViewTab === "comparison" ? (
                     previousHistoryItem ? (
-                      <Card variant="outlined">
-                        <CardContent>
-                          <Stack spacing={2}>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <CompareArrowsRoundedIcon />
-                              <Typography variant="h6" fontWeight={800}>
-                                Comparação com a análise anterior
+                      <>
+                        <Card variant="outlined">
+                          <CardContent>
+                            <Stack spacing={2}>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <CompareArrowsRoundedIcon />
+                                <Typography variant="h6" fontWeight={800}>
+                                  Comparação com a análise anterior
+                                </Typography>
+                              </Stack>
+
+                              <Typography variant="body2" color="text.secondary">
+                                Comparativo entre a análise selecionada e a versão
+                                imediatamente anterior do histórico.
+                              </Typography>
+
+                              <Divider />
+
+                              <ComparisonRow
+                                label="Score global"
+                                current={
+                                  analysisDetail.scoreGlobal !== null &&
+                                  analysisDetail.scoreGlobal !== undefined
+                                    ? String(analysisDetail.scoreGlobal)
+                                    : "—"
+                                }
+                                previous={
+                                  previousHistoryItem.scoreGlobal !== null &&
+                                  previousHistoryItem.scoreGlobal !== undefined
+                                    ? String(previousHistoryItem.scoreGlobal)
+                                    : "—"
+                                }
+                                direction={comparisonSummary?.scoreDirection || "same"}
+                              />
+
+                              <Divider />
+
+                              <ComparisonRow
+                                label="Saldo de exequibilidade"
+                                current={formatCurrency(
+                                  analysisDetail.executabilityBalance
+                                )}
+                                previous={formatCurrency(
+                                  previousDetail?.executabilityBalance
+                                )}
+                                direction={comparisonSummary?.balanceDirection || "same"}
+                              />
+
+                              <Divider />
+
+                              <ComparisonRow
+                                label="Risco"
+                                current={formatLabel(analysisDetail.riskLevel)}
+                                previous={formatLabel(previousHistoryItem.riskLevel)}
+                                direction={comparisonSummary?.riskDirection || "same"}
+                              />
+
+                              <Divider />
+
+                              <ComparisonRow
+                                label="Status final"
+                                current={formatLabel(
+                                  analysisDetail.executabilityStatus ||
+                                    analysisDetail.finalStatus
+                                )}
+                                previous={formatLabel(
+                                  previousHistoryItem.executabilityStatus ||
+                                    previousHistoryItem.finalStatus
+                                )}
+                                direction={comparisonSummary?.statusDirection || "same"}
+                              />
+                            </Stack>
+                          </CardContent>
+                        </Card>
+
+                        <Card variant="outlined">
+                          <CardContent>
+                            <Stack spacing={2}>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <DifferenceRoundedIcon />
+                                <Typography variant="h6" fontWeight={800}>
+                                  Diferenças textuais do parecer
+                                </Typography>
+                              </Stack>
+
+                              <Typography variant="body2" color="text.secondary">
+                                Comparação textual simples entre os principais trechos
+                                do parecer consolidado atual e do parecer anterior.
                               </Typography>
                             </Stack>
+                          </CardContent>
+                        </Card>
 
-                            <Typography variant="body2" color="text.secondary">
-                              Comparativo entre a análise selecionada e a versão
-                              imediatamente anterior do histórico.
-                            </Typography>
+                        <TextDiffSection
+                          title="Ementa"
+                          current={currentOpinion?.ementa}
+                          previous={previousOpinion?.ementa}
+                        />
 
-                            <Divider />
+                        <TextDiffSection
+                          title="Conclusão"
+                          current={currentOpinion?.conclusao}
+                          previous={previousOpinion?.conclusao}
+                        />
 
-                            <ComparisonRow
-                              label="Score global"
-                              current={
-                                analysisDetail.scoreGlobal !== null &&
-                                analysisDetail.scoreGlobal !== undefined
-                                  ? String(analysisDetail.scoreGlobal)
-                                  : "—"
-                              }
-                              previous={
-                                previousHistoryItem.scoreGlobal !== null &&
-                                previousHistoryItem.scoreGlobal !== undefined
-                                  ? String(previousHistoryItem.scoreGlobal)
-                                  : "—"
-                              }
-                              direction={comparisonSummary?.scoreDirection || "same"}
-                            />
-
-                            <Divider />
-
-                            <ComparisonRow
-                              label="Saldo de exequibilidade"
-                              current={formatCurrency(
-                                analysisDetail.executabilityBalance
-                              )}
-                              previous={formatCurrency(
-                                previousDetail?.executabilityBalance
-                              )}
-                              direction={comparisonSummary?.balanceDirection || "same"}
-                            />
-
-                            <Divider />
-
-                            <ComparisonRow
-                              label="Risco"
-                              current={formatLabel(analysisDetail.riskLevel)}
-                              previous={formatLabel(previousHistoryItem.riskLevel)}
-                              direction={comparisonSummary?.riskDirection || "same"}
-                            />
-
-                            <Divider />
-
-                            <ComparisonRow
-                              label="Status final"
-                              current={formatLabel(
-                                analysisDetail.executabilityStatus ||
-                                  analysisDetail.finalStatus
-                              )}
-                              previous={formatLabel(
-                                previousHistoryItem.executabilityStatus ||
-                                  previousHistoryItem.finalStatus
-                              )}
-                              direction={comparisonSummary?.statusDirection || "same"}
-                            />
-                          </Stack>
-                        </CardContent>
-                      </Card>
+                        <TextDiffSection
+                          title="Recomendação final"
+                          current={currentOpinion?.recomendacaoFinal}
+                          previous={previousOpinion?.recomendacaoFinal}
+                        />
+                      </>
                     ) : (
                       <Alert severity="info">
                         Não existe análise anterior suficiente para comparação.
