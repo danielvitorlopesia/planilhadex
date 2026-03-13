@@ -42,6 +42,10 @@ import CompareArrowsRoundedIcon from "@mui/icons-material/CompareArrowsRounded";
 import ArticleRoundedIcon from "@mui/icons-material/ArticleRounded";
 import NotesRoundedIcon from "@mui/icons-material/NotesRounded";
 import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
+import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
+import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
+import KeyboardDoubleArrowUpRoundedIcon from "@mui/icons-material/KeyboardDoubleArrowUpRounded";
+import SwapHorizRoundedIcon from "@mui/icons-material/SwapHorizRounded";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import {
   AnalysisDetail,
@@ -614,6 +618,61 @@ function RightPanelHeader({
   );
 }
 
+function buildOpinionText(detail: AnalysisDetail | null): string {
+  if (!detail?.consolidatedOpinion) return "Parecer consolidado não disponível.";
+
+  const opinion = detail.consolidatedOpinion;
+
+  return [
+    "PARECER CONSOLIDADO",
+    "",
+    `EMENTA`,
+    opinion.ementa || "—",
+    "",
+    `CONCLUSÃO`,
+    opinion.conclusao || "—",
+    "",
+    `FUNDAMENTAÇÃO TÉCNICA`,
+    opinion.fundamentacaoTecnica || "—",
+    "",
+    `FUNDAMENTAÇÃO TÉCNICO-JURÍDICA`,
+    opinion.fundamentacaoTecnicoJuridica || "—",
+    "",
+    `VERSÃO PARA GESTOR LEIGO`,
+    opinion.versaoGestorLeigo || "—",
+    "",
+    `RECOMENDAÇÃO FINAL`,
+    opinion.recomendacaoFinal || "—",
+  ].join("\n");
+}
+
+function buildExplanationsText(detail: AnalysisDetail | null): string {
+  if (!detail?.explanations?.length) return "Explicações não disponíveis.";
+
+  const parts: string[] = ["EXPLICAÇÕES VINCULADAS", ""];
+
+  detail.explanations.forEach((item, index) => {
+    parts.push(`${index + 1}. ${item.title}`);
+    parts.push(`Tipo: ${item.explanationType}`);
+    parts.push(item.payload || "—");
+    parts.push("");
+  });
+
+  return parts.join("\n");
+}
+
+function downloadTextFile(filename: string, content: string) {
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
 export default function SpreadsheetDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -629,6 +688,7 @@ export default function SpreadsheetDetail() {
   const [historyWarning, setHistoryWarning] = useState<string | null>(null);
   const [usingMockData, setUsingMockData] = useState(false);
   const [detailViewTab, setDetailViewTab] = useState<DetailViewTab>("summary");
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const selectedHistoryItem = useMemo(() => {
     return history.find((item) => item.analysisId === selectedAnalysisId) || null;
@@ -642,6 +702,15 @@ export default function SpreadsheetDetail() {
     if (selectedHistoryIndex < 0) return null;
     return history[selectedHistoryIndex + 1] || null;
   }, [history, selectedHistoryIndex]);
+
+  const mostRecentHistoryItem = useMemo(() => {
+    return history[0] || null;
+  }, [history]);
+
+  const isViewingMostRecent = useMemo(() => {
+    if (!mostRecentHistoryItem || !selectedHistoryItem) return false;
+    return mostRecentHistoryItem.analysisId === selectedHistoryItem.analysisId;
+  }, [mostRecentHistoryItem, selectedHistoryItem]);
 
   const loadAnalysisDetail = useCallback(
     async (analysisId: string, spreadsheetIdForMock?: string, forceMock = false) => {
@@ -769,6 +838,7 @@ export default function SpreadsheetDetail() {
 
     setSelectedAnalysisId(analysisId);
     setPageError(null);
+    setActionMessage(null);
     await loadAnalysisDetail(analysisId, id);
   };
 
@@ -846,7 +916,78 @@ export default function SpreadsheetDetail() {
 
   useEffect(() => {
     setDetailViewTab("summary");
+    setActionMessage(null);
   }, [selectedAnalysisId]);
+
+  const handleCopyOpinion = async () => {
+    try {
+      const content = buildOpinionText(analysisDetail);
+      await navigator.clipboard.writeText(content);
+      setActionMessage("Parecer consolidado copiado para a área de transferência.");
+    } catch {
+      setActionMessage("Não foi possível copiar o parecer.");
+    }
+  };
+
+  const handleCopyExplanations = async () => {
+    try {
+      const content = buildExplanationsText(analysisDetail);
+      await navigator.clipboard.writeText(content);
+      setActionMessage("Explicações copiadas para a área de transferência.");
+    } catch {
+      setActionMessage("Não foi possível copiar as explicações.");
+    }
+  };
+
+  const handleExportText = () => {
+    const titleBase =
+      spreadsheet?.title?.trim().replace(/[^\p{L}\p{N}\-_ ]/gu, "").replace(/\s+/g, "_") ||
+      "analise";
+
+    const content = [
+      `PLANILHA: ${spreadsheet?.title || "—"}`,
+      `ANALYSIS ID: ${analysisDetail?.analysisId || "—"}`,
+      `VERSÃO: ${analysisDetail?.spreadsheetVersionId ?? "—"}`,
+      `STATUS: ${formatLabel(
+        analysisDetail?.executabilityStatus || analysisDetail?.finalStatus
+      )}`,
+      `RISCO: ${formatLabel(analysisDetail?.riskLevel)}`,
+      `SCORE: ${
+        analysisDetail?.scoreGlobal !== null &&
+        analysisDetail?.scoreGlobal !== undefined
+          ? analysisDetail?.scoreGlobal
+          : "—"
+      }`,
+      "",
+      buildOpinionText(analysisDetail),
+      "",
+      buildExplanationsText(analysisDetail),
+    ].join("\n");
+
+    downloadTextFile(`${titleBase}_analise.txt`, content);
+    setActionMessage("Arquivo de texto exportado com sucesso.");
+  };
+
+  const handleGoToMostRecent = async () => {
+    if (!mostRecentHistoryItem || !id) return;
+
+    setSelectedAnalysisId(mostRecentHistoryItem.analysisId);
+    setDetailViewTab("summary");
+    await loadAnalysisDetail(mostRecentHistoryItem.analysisId, id);
+    setActionMessage("Análise mais recente carregada.");
+  };
+
+  const handleCompareWithMostRecent = async () => {
+    if (!mostRecentHistoryItem || !id) return;
+
+    if (selectedAnalysisId !== mostRecentHistoryItem.analysisId) {
+      setSelectedAnalysisId(mostRecentHistoryItem.analysisId);
+      await loadAnalysisDetail(mostRecentHistoryItem.analysisId, id);
+    }
+
+    setDetailViewTab("comparison");
+    setActionMessage("Comparação com a análise mais recente aberta.");
+  };
 
   if (pageLoading) {
     return (
@@ -915,6 +1056,7 @@ export default function SpreadsheetDetail() {
 
           {pageError ? <Alert severity="error">{pageError}</Alert> : null}
           {historyWarning ? <Alert severity="info">{historyWarning}</Alert> : null}
+          {actionMessage ? <Alert severity="success">{actionMessage}</Alert> : null}
 
           <Card variant="outlined">
             <CardContent>
@@ -1122,6 +1264,65 @@ export default function SpreadsheetDetail() {
                 </Paper>
               ) : analysisDetail ? (
                 <>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Stack spacing={2}>
+                        <Typography variant="h6" fontWeight={800}>
+                          Ações rápidas
+                        </Typography>
+
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          flexWrap="wrap"
+                          useFlexGap
+                        >
+                          <Button
+                            variant="outlined"
+                            startIcon={<ContentCopyRoundedIcon />}
+                            onClick={handleCopyOpinion}
+                          >
+                            Copiar parecer
+                          </Button>
+
+                          <Button
+                            variant="outlined"
+                            startIcon={<NotesRoundedIcon />}
+                            onClick={handleCopyExplanations}
+                          >
+                            Copiar explicações
+                          </Button>
+
+                          <Button
+                            variant="outlined"
+                            startIcon={<DownloadRoundedIcon />}
+                            onClick={handleExportText}
+                          >
+                            Exportar texto
+                          </Button>
+
+                          <Button
+                            variant="outlined"
+                            startIcon={<KeyboardDoubleArrowUpRoundedIcon />}
+                            onClick={handleGoToMostRecent}
+                            disabled={isViewingMostRecent}
+                          >
+                            Ir para a mais recente
+                          </Button>
+
+                          <Button
+                            variant="outlined"
+                            startIcon={<SwapHorizRoundedIcon />}
+                            onClick={handleCompareWithMostRecent}
+                            disabled={!mostRecentHistoryItem}
+                          >
+                            Comparar com a mais recente
+                          </Button>
+                        </Stack>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+
                   <RightPanelHeader
                     currentTab={detailViewTab}
                     onChange={setDetailViewTab}
