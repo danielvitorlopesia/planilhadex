@@ -44,7 +44,6 @@ import BugReportOutlinedIcon from "@mui/icons-material/BugReportOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import { useNavigate, useParams } from "react-router-dom";
-import { supabase } from "../lib/supabase";
 import { getSpreadsheetById } from "../lib/api";
 import { getStatusStyles } from "./Home";
 import { SpreadsheetDetailData } from "../types/spreadsheet";
@@ -53,19 +52,10 @@ import ExecutabilityOpinionView, {
   DEMO_DOCUMENT,
   type ExecutabilityOpinionDocument,
 } from "../components/ExecutabilityOpinionView";
-
-type OpinionDocumentRow = {
-  opinion_id: string;
-  executability_analysis_id: string;
-  spreadsheet_id: string;
-  spreadsheet_version_id: number;
-  procurement_id?: string | null;
-  organization_id?: string | null;
-  opinion_status: string;
-  opinion_version: number;
-  generated_at?: string | null;
-  document_payload: ExecutabilityOpinionDocument;
-};
+import {
+  getAnalysisOpinionBundle,
+  type AnalysisOpinionBundle,
+} from "../services/analysisOpinions";
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", {
@@ -94,6 +84,87 @@ function resolveRealSpreadsheetId(
   return null;
 }
 
+function extractTextFromPayload(payload: Record<string, any> | undefined | null) {
+  if (!payload || typeof payload !== "object") return "";
+  return (
+    payload.texto ||
+    payload.text ||
+    payload.content ||
+    payload.summary ||
+    ""
+  );
+}
+
+function buildOpinionDocumentFromBundle(
+  bundle: AnalysisOpinionBundle
+): ExecutabilityOpinionDocument {
+  const generatedAt =
+    (bundle.parecer_consolidado?.payload?.generated_at as string | undefined) ||
+    (bundle.raw_analysis_json?.generated_at as string | undefined) ||
+    new Date().toISOString();
+
+  const analysisId = bundle.analysis_id;
+  const spreadsheetId = bundle.meta?.spreadsheet_id || "";
+  const spreadsheetVersionId = Number(bundle.meta?.spreadsheet_version_id || 1);
+
+  return {
+    header: {
+      title: "Parecer Consolidado de Exequibilidade",
+      subtitle:
+        bundle.meta?.summary_text ||
+        "Documento estruturado a partir do bundle consolidado de análise.",
+      opinion_id: bundle.parecer_consolidado?.id || `bundle-${analysisId}`,
+      executability_analysis_id: analysisId,
+      spreadsheet_id: spreadsheetId,
+      spreadsheet_version_id: spreadsheetVersionId,
+      generated_at: generatedAt,
+    },
+    sections: [
+      {
+        key: "ementa",
+        title: bundle.ementa?.title || "Ementa",
+        content: extractTextFromPayload(bundle.ementa?.payload),
+        sort_order: 1,
+      },
+      {
+        key: "conclusao",
+        title: bundle.conclusao?.title || "Conclusão",
+        content: extractTextFromPayload(bundle.conclusao?.payload),
+        sort_order: 2,
+      },
+      {
+        key: "fundamentacao_tecnica",
+        title:
+          bundle.fundamentacao_tecnica?.title || "Fundamentação Técnica",
+        content: extractTextFromPayload(bundle.fundamentacao_tecnica?.payload),
+        sort_order: 3,
+      },
+      {
+        key: "fundamentacao_tecnico_juridica",
+        title:
+          bundle.fundamentacao_tecnico_juridica?.title ||
+          "Fundamentação Técnico-Jurídica",
+        content: extractTextFromPayload(
+          bundle.fundamentacao_tecnico_juridica?.payload
+        ),
+        sort_order: 4,
+      },
+      {
+        key: "versao_gestor_leigo",
+        title: bundle.versao_gestor_leigo?.title || "Versão para Gestor Leigo",
+        content: extractTextFromPayload(bundle.versao_gestor_leigo?.payload),
+        sort_order: 5,
+      },
+      {
+        key: "recomendacao_final",
+        title: bundle.recomendacao_final?.title || "Recomendação Final",
+        content: extractTextFromPayload(bundle.recomendacao_final?.payload),
+        sort_order: 6,
+      },
+    ].filter((section) => section.content && section.content.trim()),
+  };
+}
+
 export default function SpreadsheetDetail() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -102,6 +173,7 @@ export default function SpreadsheetDetail() {
   const [data, setData] = useState<SpreadsheetDetailData | null>(null);
   const [opinionDocument, setOpinionDocument] =
     useState<ExecutabilityOpinionDocument | null>(null);
+  const [bundle, setBundle] = useState<AnalysisOpinionBundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [technicalError, setTechnicalError] = useState("");
@@ -118,41 +190,26 @@ export default function SpreadsheetDetail() {
       setLoading(true);
       setError("");
       setTechnicalError("");
+      setBundle(null);
 
       const response = await getSpreadsheetById(id);
       setData(response);
 
-      const realSpreadsheetId = resolveRealSpreadsheetId(response, id);
-
-      if (!realSpreadsheetId) {
-        setTechnicalError(
-          "Não foi possível resolver o identificador efetivo da planilha para consultar o parecer real."
+      try {
+        const opinionBundle = await getAnalysisOpinionBundle(
+          "9ad0fc6f-be95-4655-8c48-9b55c8e0a222"
         );
-        setOpinionDocument(null);
-        return;
-      }
 
-      const { data: opinionData, error: opinionError } = await supabase
-        .schema("ai")
-        .from("v_executability_opinion_documents")
-        .select(
-          "opinion_id, executability_analysis_id, spreadsheet_id, spreadsheet_version_id, procurement_id, organization_id, opinion_status, opinion_version, generated_at, document_payload"
-        )
-        .eq("spreadsheet_id", realSpreadsheetId)
-        .order("generated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle<OpinionDocumentRow>();
+        setBundle(opinionBundle);
+        setOpinionDocument(buildOpinionDocumentFromBundle(opinionBundle));
+      } catch (bundleError) {
+        const message =
+          bundleError instanceof Error
+            ? bundleError.message
+            : "Falha ao buscar o bundle do parecer consolidado.";
 
-      if (opinionError) {
         setTechnicalError(
-          `Falha ao buscar parecer real no Supabase: ${opinionError.message}`
-        );
-        setOpinionDocument(null);
-      } else if (opinionData?.document_payload) {
-        setOpinionDocument(opinionData.document_payload);
-      } else {
-        setTechnicalError(
-          "Nenhum documento real foi retornado pela view ai.v_executability_opinion_documents."
+          `Falha ao buscar o parecer consolidado via RPC: ${message}`
         );
         setOpinionDocument(null);
       }
@@ -166,6 +223,7 @@ export default function SpreadsheetDetail() {
       setTechnicalError(message);
       setData(null);
       setOpinionDocument(null);
+      setBundle(null);
     } finally {
       setLoading(false);
     }
@@ -233,7 +291,7 @@ export default function SpreadsheetDetail() {
           key: "conclusao",
           title: "Conclusão",
           content:
-            "A tela do parecer consolidado foi integrada com sucesso à página de detalhe da planilha. O próximo ajuste é alinhar o identificador do frontend ao identificador real persistido no schema ai do Supabase.",
+            "A tela do parecer consolidado foi integrada com sucesso à página de detalhe da planilha. O próximo ajuste é alinhar o identificador consumido no frontend com a análise correspondente da planilha selecionada.",
           sort_order: 2,
         },
         {
@@ -250,12 +308,19 @@ export default function SpreadsheetDetail() {
           key: "versao_gestor_leigo",
           title: "Versão para Gestor Leigo",
           content:
-            "Esta versão mostra o bloco final do parecer dentro da interface do sistema. Quando o documento real estiver vinculado, este conteúdo será automaticamente substituído pelo texto consolidado emitido no banco.",
+            "Esta versão mostra o bloco final do parecer dentro da interface do sistema. Quando o vínculo dinâmico entre planilha e analysis_id for concluído, este conteúdo será substituído automaticamente pelo parecer real retornado pela RPC.",
           sort_order: 4,
         },
       ],
     };
-  }, [data, id, totalGeral, percentualConferencia, categoriasUnicas, effectiveSpreadsheetId]);
+  }, [
+    data,
+    id,
+    totalGeral,
+    percentualConferencia,
+    categoriasUnicas,
+    effectiveSpreadsheetId,
+  ]);
 
   const finalOpinionDocument = opinionDocument || fallbackOpinionDocument;
 
@@ -798,6 +863,133 @@ export default function SpreadsheetDetail() {
                     </Card>
                   </Box>
 
+                  {bundle && (
+                    <Card
+                      variant="outlined"
+                      sx={{
+                        borderRadius: "24px",
+                        borderColor: "#eadff0",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          px: 3,
+                          py: 2.2,
+                          borderBottom: "1px solid #eadff0",
+                          backgroundColor: "#fcfafe",
+                        }}
+                      >
+                        <Stack
+                          direction="row"
+                          justifyContent="space-between"
+                          alignItems="center"
+                          spacing={2}
+                        >
+                          <Stack direction="row" spacing={1.2} alignItems="center">
+                            <InsightsOutlinedIcon sx={{ color: "#8c58a2" }} />
+                            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                              Resumo numérico do parecer
+                            </Typography>
+                          </Stack>
+
+                          <Chip
+                            label={`${bundle.meta.analysis_type} • ${bundle.meta.analysis_processing_status}`}
+                            sx={{
+                              backgroundColor: "rgba(140, 88, 162, 0.10)",
+                              color: "#6f3f84",
+                              fontWeight: 700,
+                            }}
+                          />
+                        </Stack>
+                      </Box>
+
+                      <CardContent sx={{ p: 3 }}>
+                        <Box
+                          sx={{
+                            display: "grid",
+                            gridTemplateColumns: {
+                              xs: "1fr",
+                              md: "repeat(2, minmax(0, 1fr))",
+                              xl: "repeat(5, minmax(0, 1fr))",
+                            },
+                            gap: 2,
+                          }}
+                        >
+                          <Paper
+                            variant="outlined"
+                            sx={{ p: 2, borderRadius: "16px", borderColor: "#eadff0" }}
+                          >
+                            <Typography variant="body2" color="text.secondary">
+                              Valor proposto
+                            </Typography>
+                            <Typography sx={{ mt: 1, fontWeight: 800 }}>
+                              {formatCurrency(
+                                Number(bundle.numeric_summary.proposed_total_value || 0)
+                              )}
+                            </Typography>
+                          </Paper>
+
+                          <Paper
+                            variant="outlined"
+                            sx={{ p: 2, borderRadius: "16px", borderColor: "#eadff0" }}
+                          >
+                            <Typography variant="body2" color="text.secondary">
+                              Custos obrigatórios
+                            </Typography>
+                            <Typography sx={{ mt: 1, fontWeight: 800 }}>
+                              {formatCurrency(
+                                Number(bundle.numeric_summary.mandatory_cost_total || 0)
+                              )}
+                            </Typography>
+                          </Paper>
+
+                          <Paper
+                            variant="outlined"
+                            sx={{ p: 2, borderRadius: "16px", borderColor: "#eadff0" }}
+                          >
+                            <Typography variant="body2" color="text.secondary">
+                              Custos probatórios
+                            </Typography>
+                            <Typography sx={{ mt: 1, fontWeight: 800 }}>
+                              {formatCurrency(
+                                Number(bundle.numeric_summary.evidentiary_cost_total || 0)
+                              )}
+                            </Typography>
+                          </Paper>
+
+                          <Paper
+                            variant="outlined"
+                            sx={{ p: 2, borderRadius: "16px", borderColor: "#eadff0" }}
+                          >
+                            <Typography variant="body2" color="text.secondary">
+                              Retenções
+                            </Typography>
+                            <Typography sx={{ mt: 1, fontWeight: 800 }}>
+                              {formatCurrency(
+                                Number(bundle.numeric_summary.retention_total || 0)
+                              )}
+                            </Typography>
+                          </Paper>
+
+                          <Paper
+                            variant="outlined"
+                            sx={{ p: 2, borderRadius: "16px", borderColor: "#eadff0" }}
+                          >
+                            <Typography variant="body2" color="text.secondary">
+                              Saldo de exequibilidade
+                            </Typography>
+                            <Typography sx={{ mt: 1, fontWeight: 800 }}>
+                              {formatCurrency(
+                                Number(bundle.numeric_summary.executability_balance || 0)
+                              )}
+                            </Typography>
+                          </Paper>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  )}
+
                   <Card
                     variant="outlined"
                     sx={{
@@ -1035,6 +1227,39 @@ export default function SpreadsheetDetail() {
                                   <strong>{effectiveSpreadsheetId || "não localizado"}</strong>
                                 </Typography>
                               </Stack>
+
+                              {bundle && (
+                                <>
+                                  <Stack direction="row" spacing={1} alignItems="center">
+                                    <GavelOutlinedIcon
+                                      sx={{ color: "#8c58a2", fontSize: 20 }}
+                                    />
+                                    <Typography color="text.secondary">
+                                      Analysis ID: <strong>{bundle.analysis_id}</strong>
+                                    </Typography>
+                                  </Stack>
+
+                                  <Stack direction="row" spacing={1} alignItems="center">
+                                    <InsightsOutlinedIcon
+                                      sx={{ color: "#8c58a2", fontSize: 20 }}
+                                    />
+                                    <Typography color="text.secondary">
+                                      Score global:{" "}
+                                      <strong>{bundle.meta.score_global ?? "-"}</strong>
+                                    </Typography>
+                                  </Stack>
+
+                                  <Stack direction="row" spacing={1} alignItems="center">
+                                    <InsightsOutlinedIcon
+                                      sx={{ color: "#8c58a2", fontSize: 20 }}
+                                    />
+                                    <Typography color="text.secondary">
+                                      Risco:{" "}
+                                      <strong>{bundle.meta.risk_level || "-"}</strong>
+                                    </Typography>
+                                  </Stack>
+                                </>
+                              )}
 
                               <Stack direction="row" spacing={1} alignItems="center">
                                 <CalendarMonthIcon sx={{ color: "#8c58a2", fontSize: 20 }} />
