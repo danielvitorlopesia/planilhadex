@@ -125,6 +125,9 @@ export default function SpreadsheetDetail() {
       const realSpreadsheetId = resolveRealSpreadsheetId(response, id);
 
       if (!realSpreadsheetId) {
+        setTechnicalError(
+          "Não foi possível resolver o identificador efetivo da planilha para consultar o parecer real."
+        );
         setOpinionDocument(null);
         return;
       }
@@ -140,9 +143,17 @@ export default function SpreadsheetDetail() {
         .limit(1)
         .maybeSingle<OpinionDocumentRow>();
 
-      if (!opinionError && opinionData?.document_payload) {
+      if (opinionError) {
+        setTechnicalError(
+          `Falha ao buscar parecer real no Supabase: ${opinionError.message}`
+        );
+        setOpinionDocument(null);
+      } else if (opinionData?.document_payload) {
         setOpinionDocument(opinionData.document_payload);
       } else {
+        setTechnicalError(
+          "Nenhum documento real foi retornado pela view ai.v_executability_opinion_documents."
+        );
         setOpinionDocument(null);
       }
     } catch (err) {
@@ -641,6 +652,12 @@ export default function SpreadsheetDetail() {
 
               <CardContent sx={{ p: { xs: 3, md: 5 } }}>
                 <Stack spacing={4}>
+                  {!!technicalError && (
+                    <Alert severity={opinionDocument ? "info" : "warning"}>
+                      {technicalError}
+                    </Alert>
+                  )}
+
                   <Box
                     sx={{
                       display: "grid",
@@ -976,7 +993,10 @@ export default function SpreadsheetDetail() {
                     </Card>
 
                     <Stack spacing={3}>
-                      <Card variant="outlined" sx={{ borderRadius: "24px", borderColor: "#eadff0" }}>
+                      <Card
+                        variant="outlined"
+                        sx={{ borderRadius: "24px", borderColor: "#eadff0" }}
+                      >
                         <CardContent sx={{ p: 3 }}>
                           <Stack spacing={2.2}>
                             <Stack direction="row" spacing={1.1} alignItems="center">
@@ -1011,7 +1031,8 @@ export default function SpreadsheetDetail() {
                               <Stack direction="row" spacing={1} alignItems="center">
                                 <FolderOpenIcon sx={{ color: "#8c58a2", fontSize: 20 }} />
                                 <Typography color="text.secondary">
-                                  Identificador efetivo: <strong>{effectiveSpreadsheetId || "não localizado"}</strong>
+                                  Identificador efetivo:{" "}
+                                  <strong>{effectiveSpreadsheetId || "não localizado"}</strong>
                                 </Typography>
                               </Stack>
 
@@ -1034,7 +1055,10 @@ export default function SpreadsheetDetail() {
                         </CardContent>
                       </Card>
 
-                      <Card variant="outlined" sx={{ borderRadius: "24px", borderColor: "#eadff0" }}>
+                      <Card
+                        variant="outlined"
+                        sx={{ borderRadius: "24px", borderColor: "#eadff0" }}
+                      >
                         <CardContent sx={{ p: 3 }}>
                           <Stack spacing={2.2}>
                             <Stack direction="row" spacing={1.1} alignItems="center">
@@ -1088,7 +1112,14 @@ export default function SpreadsheetDetail() {
                       gap: 3,
                     }}
                   >
-                    <Card variant="outlined" sx={{ borderRadius: "24px", borderColor: "#eadff0", overflow: "hidden" }}>
+                    <Card
+                      variant="outlined"
+                      sx={{
+                        borderRadius: "24px",
+                        borderColor: "#eadff0",
+                        overflow: "hidden",
+                      }}
+                    >
                       <Box
                         sx={{
                           px: 3,
@@ -1148,7 +1179,14 @@ export default function SpreadsheetDetail() {
                       </CardContent>
                     </Card>
 
-                    <Card variant="outlined" sx={{ borderRadius: "24px", borderColor: "#eadff0", overflow: "hidden" }}>
+                    <Card
+                      variant="outlined"
+                      sx={{
+                        borderRadius: "24px",
+                        borderColor: "#eadff0",
+                        overflow: "hidden",
+                      }}
+                    >
                       <Box
                         sx={{
                           px: 3,
