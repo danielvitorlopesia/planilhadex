@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useRoute } from "wouter";
 import { supabase } from "../lib/supabase";
 import { theme, commonStyles, getStatusBadgeStyle } from "../theme";
+import ExecutabilityOpinionView, {
+  DEMO_DOCUMENT,
+} from "../components/ExecutabilityOpinionView";
 
 type SpreadsheetVersion = {
   id: number;
@@ -94,6 +97,23 @@ export default function VersionDetail() {
       );
     });
   }, [resumo]);
+
+  const opinionDocument = useMemo(() => {
+    if (!version) return DEMO_DOCUMENT;
+
+    return {
+      ...DEMO_DOCUMENT,
+      header: {
+        ...DEMO_DOCUMENT.header,
+        title: "Parecer Consolidado de Exequibilidade",
+        subtitle: `Versão ${version.numero_versao} da planilha #${version.spreadsheet_id}`,
+        spreadsheet_version_id: version.id,
+        opinion_id: `demo-version-${version.id}`,
+        executability_analysis_id: `demo-analysis-version-${version.id}`,
+        generated_at: version.criada_em || new Date().toISOString(),
+      },
+    };
+  }, [version]);
 
   return (
     <main style={styles.page}>
@@ -228,6 +248,13 @@ export default function VersionDetail() {
                 </div>
               </section>
             )}
+
+            <section style={styles.section}>
+              <h2 style={styles.sectionTitle}>Parecer consolidado</h2>
+              <div style={styles.opinionWrapper}>
+                <ExecutabilityOpinionView document={opinionDocument} />
+              </div>
+            </section>
           </>
         )}
 
@@ -425,6 +452,11 @@ const styles: Record<string, CSSProperties> = {
   },
   primaryButton: commonStyles.buttonPrimary,
   emptyState: commonStyles.emptyState,
+  opinionWrapper: {
+    marginTop: "12px",
+    borderRadius: theme.radius.md,
+    overflow: "hidden",
+  },
   tableWrapper: {
     overflowX: "auto",
     background: theme.colors.white,
