@@ -12,1560 +12,984 @@ import {
   Container,
   Divider,
   Link,
+  List,
+  ListItemButton,
+  ListItemText,
+  Paper,
   Stack,
   Toolbar,
   Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  Paper,
 } from "@mui/material";
-import TableChartIcon from "@mui/icons-material/TableChart";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import CategoryIcon from "@mui/icons-material/Category";
-import EditNoteIcon from "@mui/icons-material/EditNote";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
-import AttachFileIcon from "@mui/icons-material/AttachFile";
 import HistoryIcon from "@mui/icons-material/History";
-import DownloadIcon from "@mui/icons-material/Download";
-import EditIcon from "@mui/icons-material/Edit";
-import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
-import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
-import MonetizationOnOutlinedIcon from "@mui/icons-material/MonetizationOnOutlined";
-import PercentOutlinedIcon from "@mui/icons-material/PercentOutlined";
-import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import BugReportOutlinedIcon from "@mui/icons-material/BugReportOutlined";
-import LogoutIcon from "@mui/icons-material/Logout";
-import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
-import { useNavigate, useParams } from "react-router-dom";
-import { getSpreadsheetById } from "../lib/api";
-import { getStatusStyles } from "./Home";
-import { SpreadsheetDetailData } from "../types/spreadsheet";
-import { useAuth } from "../auth/AuthContext";
-import ExecutabilityOpinionView, {
-  DEMO_DOCUMENT,
-  type ExecutabilityOpinionDocument,
-} from "../components/ExecutabilityOpinionView";
-import {
-  getLatestAnalysisOpinionBundleBySpreadsheetId,
-  listExecutabilityAnalysesBySpreadsheetId,
-  type AnalysisOpinionBundle,
-  type ExecutabilityAnalysisListItem,
-} from "../services/analysisOpinions";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
+import GavelRoundedIcon from "@mui/icons-material/GavelRounded";
+import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
+import SummarizeRoundedIcon from "@mui/icons-material/SummarizeRounded";
+import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 
-function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
-}
+type Nullable<T> = T | null | undefined;
 
-function formatDateTime(value?: string | null) {
-  if (!value) return "-";
+type SpreadsheetDetailData = {
+  id: string;
+  title: string;
+  description?: string | null;
+  status?: string | null;
+  category?: string | null;
+  updatedAt?: string | null;
+};
+
+type AnalysisHistoryItem = {
+  analysisId: string;
+  spreadsheetId?: string | null;
+  spreadsheetVersionId?: number | string | null;
+  analysisType?: string | null;
+  processingStatus?: string | null;
+  finalStatus?: string | null;
+  executabilityStatus?: string | null;
+  riskLevel?: string | null;
+  scoreGlobal?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  isLatest?: boolean;
+};
+
+type AnalysisExplanation = {
+  explanationType: string;
+  title: string;
+  payload: string;
+};
+
+type AnalysisDetail = {
+  analysisId: string;
+  spreadsheetId?: string | null;
+  spreadsheetVersionId?: number | string | null;
+  analysisType?: string | null;
+  processingStatus?: string | null;
+  finalStatus?: string | null;
+  executabilityStatus?: string | null;
+  riskLevel?: string | null;
+  scoreGlobal?: number | null;
+  proposedTotalValue?: number | null;
+  mandatoryCostTotal?: number | null;
+  evidentiaryCostTotal?: number | null;
+  retentionTotal?: number | null;
+  executabilityBalance?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  explanations?: AnalysisExplanation[];
+};
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+
+const ENDPOINTS = {
+  spreadsheetDetail: (spreadsheetId: string) =>
+    `${API_BASE_URL}/api/spreadsheets/${spreadsheetId}`,
+  spreadsheetAnalyses: (spreadsheetId: string) =>
+    `${API_BASE_URL}/api/spreadsheets/${spreadsheetId}/analyses`,
+  analysisDetail: (analysisId: string) =>
+    `${API_BASE_URL}/api/analyses/${analysisId}`,
+};
+
+function formatDateTime(value?: string | null): string {
+  if (!value) return "—";
 
   const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return value;
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function formatCurrency(value?: number | null): string {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "—";
   }
 
-  return date.toLocaleString("pt-BR");
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(Number(value));
 }
 
-function resolveRealSpreadsheetId(
-  data: SpreadsheetDetailData | null,
-  routeId: string | undefined
-): string | null {
-  const candidates = [
-    data?.spreadsheet_id,
-    data?.spreadsheetId,
-    data?.id,
-    routeId,
-  ];
+function formatLabel(value?: string | null): string {
+  if (!value) return "—";
 
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) {
-      return candidate.trim();
-    }
+  return value
+    .replaceAll("_", " ")
+    .replaceAll("-", " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getRiskChipColor(
+  riskLevel?: string | null
+):
+  | "default"
+  | "success"
+  | "warning"
+  | "error"
+  | "info"
+  | "primary"
+  | "secondary" {
+  const value = (riskLevel || "").toLowerCase();
+
+  if (value.includes("low") || value.includes("baixo")) return "success";
+  if (value.includes("medium") || value.includes("médio") || value.includes("medio")) {
+    return "warning";
+  }
+  if (value.includes("high") || value.includes("alto")) return "error";
+
+  return "default";
+}
+
+function getStatusChipColor(
+  status?: string | null
+):
+  | "default"
+  | "success"
+  | "warning"
+  | "error"
+  | "info"
+  | "primary"
+  | "secondary" {
+  const value = (status || "").toLowerCase();
+
+  if (
+    value.includes("completed") ||
+    value.includes("concluído") ||
+    value.includes("concluido") ||
+    value.includes("exequivel")
+  ) {
+    return "success";
   }
 
-  return null;
+  if (
+    value.includes("diligencia") ||
+    value.includes("pendente") ||
+    value.includes("warning")
+  ) {
+    return "warning";
+  }
+
+  if (
+    value.includes("erro") ||
+    value.includes("error") ||
+    value.includes("inexequivel")
+  ) {
+    return "error";
+  }
+
+  if (value.includes("processing") || value.includes("processando")) {
+    return "info";
+  }
+
+  return "default";
 }
 
-function extractTextFromPayload(payload: Record<string, any> | undefined | null) {
-  if (!payload || typeof payload !== "object") return "";
-  return payload.texto || payload.text || payload.content || payload.summary || "";
-}
-
-function buildOpinionDocumentFromBundle(
-  bundle: AnalysisOpinionBundle
-): ExecutabilityOpinionDocument {
-  const generatedAt =
-    (bundle.parecer_consolidado?.payload?.generated_at as string | undefined) ||
-    (bundle.raw_analysis_json?.generated_at as string | undefined) ||
-    new Date().toISOString();
-
-  const analysisId = bundle.analysis_id;
-  const spreadsheetId = bundle.meta?.spreadsheet_id || "";
-  const spreadsheetVersionId = Number(bundle.meta?.spreadsheet_version_id || 1);
+function normalizeSpreadsheet(payload: any): SpreadsheetDetailData {
+  const source = payload?.data || payload?.spreadsheet || payload || {};
 
   return {
-    header: {
-      title: "Parecer Consolidado de Exequibilidade",
-      subtitle:
-        bundle.meta?.summary_text ||
-        "Documento estruturado a partir do bundle consolidado de análise.",
-      opinion_id: bundle.parecer_consolidado?.id || `bundle-${analysisId}`,
-      executability_analysis_id: analysisId,
-      spreadsheet_id: spreadsheetId,
-      spreadsheet_version_id: spreadsheetVersionId,
-      generated_at: generatedAt,
-    },
-    sections: [
-      {
-        key: "ementa",
-        title: bundle.ementa?.title || "Ementa",
-        content: extractTextFromPayload(bundle.ementa?.payload),
-        sort_order: 1,
-      },
-      {
-        key: "conclusao",
-        title: bundle.conclusao?.title || "Conclusão",
-        content: extractTextFromPayload(bundle.conclusao?.payload),
-        sort_order: 2,
-      },
-      {
-        key: "fundamentacao_tecnica",
-        title: bundle.fundamentacao_tecnica?.title || "Fundamentação Técnica",
-        content: extractTextFromPayload(bundle.fundamentacao_tecnica?.payload),
-        sort_order: 3,
-      },
-      {
-        key: "fundamentacao_tecnico_juridica",
-        title:
-          bundle.fundamentacao_tecnico_juridica?.title ||
-          "Fundamentação Técnico-Jurídica",
-        content: extractTextFromPayload(
-          bundle.fundamentacao_tecnico_juridica?.payload
-        ),
-        sort_order: 4,
-      },
-      {
-        key: "versao_gestor_leigo",
-        title: bundle.versao_gestor_leigo?.title || "Versão para Gestor Leigo",
-        content: extractTextFromPayload(bundle.versao_gestor_leigo?.payload),
-        sort_order: 5,
-      },
-      {
-        key: "recomendacao_final",
-        title: bundle.recomendacao_final?.title || "Recomendação Final",
-        content: extractTextFromPayload(bundle.recomendacao_final?.payload),
-        sort_order: 6,
-      },
-    ].filter((section) => section.content && section.content.trim()),
+    id: String(source.id ?? ""),
+    title: source.title ?? source.name ?? "Planilha sem título",
+    description: source.description ?? null,
+    status: source.status ?? null,
+    category: source.category ?? null,
+    updatedAt: source.updatedAt ?? source.updated_at ?? null,
   };
 }
 
+function normalizeAnalysisHistory(payload: any): AnalysisHistoryItem[] {
+  const rawList =
+    payload?.data ||
+    payload?.items ||
+    payload?.analyses ||
+    payload?.history ||
+    payload ||
+    [];
+
+  if (!Array.isArray(rawList)) return [];
+
+  return rawList.map((item: any, index: number) => ({
+    analysisId: String(
+      item.analysisId ??
+        item.analysis_id ??
+        item.id ??
+        `analysis-${index + 1}`
+    ),
+    spreadsheetId: item.spreadsheetId ?? item.spreadsheet_id ?? null,
+    spreadsheetVersionId:
+      item.spreadsheetVersionId ?? item.spreadsheet_version_id ?? null,
+    analysisType: item.analysisType ?? item.analysis_type ?? null,
+    processingStatus: item.processingStatus ?? item.processing_status ?? null,
+    finalStatus: item.finalStatus ?? item.final_status ?? null,
+    executabilityStatus:
+      item.executabilityStatus ?? item.executability_status ?? null,
+    riskLevel: item.riskLevel ?? item.risk_level ?? null,
+    scoreGlobal:
+      item.scoreGlobal !== undefined && item.scoreGlobal !== null
+        ? Number(item.scoreGlobal)
+        : item.score_global !== undefined && item.score_global !== null
+        ? Number(item.score_global)
+        : null,
+    createdAt: item.createdAt ?? item.created_at ?? null,
+    updatedAt: item.updatedAt ?? item.updated_at ?? null,
+    isLatest: Boolean(item.isLatest ?? item.is_latest ?? index === 0),
+  }));
+}
+
+function normalizeAnalysisDetail(payload: any): AnalysisDetail {
+  const source = payload?.data || payload?.analysis || payload || {};
+
+  const explanationsRaw =
+    source.explanations ||
+    source.analysis_explanations ||
+    source.explanation_bundle ||
+    [];
+
+  const explanations: AnalysisExplanation[] = Array.isArray(explanationsRaw)
+    ? explanationsRaw.map((item: any) => ({
+        explanationType:
+          item.explanationType ?? item.explanation_type ?? "general",
+        title: item.title ?? "Sem título",
+        payload:
+          typeof item.payload === "string"
+            ? item.payload
+            : JSON.stringify(item.payload ?? "", null, 2),
+      }))
+    : [];
+
+  return {
+    analysisId: String(source.analysisId ?? source.analysis_id ?? source.id ?? ""),
+    spreadsheetId: source.spreadsheetId ?? source.spreadsheet_id ?? null,
+    spreadsheetVersionId:
+      source.spreadsheetVersionId ?? source.spreadsheet_version_id ?? null,
+    analysisType: source.analysisType ?? source.analysis_type ?? null,
+    processingStatus: source.processingStatus ?? source.processing_status ?? null,
+    finalStatus: source.finalStatus ?? source.final_status ?? null,
+    executabilityStatus:
+      source.executabilityStatus ?? source.executability_status ?? null,
+    riskLevel: source.riskLevel ?? source.risk_level ?? null,
+    scoreGlobal:
+      source.scoreGlobal !== undefined && source.scoreGlobal !== null
+        ? Number(source.scoreGlobal)
+        : source.score_global !== undefined && source.score_global !== null
+        ? Number(source.score_global)
+        : null,
+    proposedTotalValue:
+      source.proposedTotalValue !== undefined && source.proposedTotalValue !== null
+        ? Number(source.proposedTotalValue)
+        : source.proposed_total_value !== undefined &&
+          source.proposed_total_value !== null
+        ? Number(source.proposed_total_value)
+        : null,
+    mandatoryCostTotal:
+      source.mandatoryCostTotal !== undefined && source.mandatoryCostTotal !== null
+        ? Number(source.mandatoryCostTotal)
+        : source.mandatory_cost_total !== undefined &&
+          source.mandatory_cost_total !== null
+        ? Number(source.mandatory_cost_total)
+        : null,
+    evidentiaryCostTotal:
+      source.evidentiaryCostTotal !== undefined &&
+      source.evidentiaryCostTotal !== null
+        ? Number(source.evidentiaryCostTotal)
+        : source.evidentiary_cost_total !== undefined &&
+          source.evidentiary_cost_total !== null
+        ? Number(source.evidentiary_cost_total)
+        : null,
+    retentionTotal:
+      source.retentionTotal !== undefined && source.retentionTotal !== null
+        ? Number(source.retentionTotal)
+        : source.retention_total !== undefined && source.retention_total !== null
+        ? Number(source.retention_total)
+        : null,
+    executabilityBalance:
+      source.executabilityBalance !== undefined &&
+      source.executabilityBalance !== null
+        ? Number(source.executabilityBalance)
+        : source.executability_balance !== undefined &&
+          source.executability_balance !== null
+        ? Number(source.executability_balance)
+        : null,
+    createdAt: source.createdAt ?? source.created_at ?? null,
+    updatedAt: source.updatedAt ?? source.updated_at ?? null,
+    explanations,
+  };
+}
+
+async function fetchJson<T = any>(url: string): Promise<T> {
+  const response = await fetch(url, {
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(
+      `Falha ao carregar ${url}. Status ${response.status}. ${text || ""}`.trim()
+    );
+  }
+
+  return response.json();
+}
+
+function MetricCard({
+  title,
+  value,
+  icon,
+}: {
+  title: string;
+  value: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <Card variant="outlined" sx={{ height: "100%" }}>
+      <CardContent>
+        <Stack direction="row" spacing={1.5} alignItems="center" mb={1}>
+          {icon}
+          <Typography variant="body2" color="text.secondary">
+            {title}
+          </Typography>
+        </Stack>
+
+        <Typography variant="h6" fontWeight={700}>
+          {value}
+        </Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ExplanationBlock({
+  explanation,
+}: {
+  explanation: AnalysisExplanation;
+}) {
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+          <DescriptionRoundedIcon fontSize="small" />
+          <Typography variant="subtitle1" fontWeight={700}>
+            {explanation.title}
+          </Typography>
+          <Chip
+            size="small"
+            label={formatLabel(explanation.explanationType)}
+            variant="outlined"
+          />
+        </Stack>
+
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}
+        >
+          {explanation.payload || "Sem conteúdo disponível."}
+        </Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SpreadsheetDetail() {
-  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { logout, user } = useAuth();
+  const navigate = useNavigate();
 
-  const [data, setData] = useState<SpreadsheetDetailData | null>(null);
-  const [opinionDocument, setOpinionDocument] =
-    useState<ExecutabilityOpinionDocument | null>(null);
-  const [bundle, setBundle] = useState<AnalysisOpinionBundle | null>(null);
-  const [analyses, setAnalyses] = useState<ExecutabilityAnalysisListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [technicalError, setTechnicalError] = useState("");
+  const [spreadsheet, setSpreadsheet] = useState<SpreadsheetDetailData | null>(null);
+  const [history, setHistory] = useState<AnalysisHistoryItem[]>([]);
+  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
+  const [analysisDetail, setAnalysisDetail] = useState<AnalysisDetail | null>(null);
 
-  const loadDetail = useCallback(async () => {
+  const [pageLoading, setPageLoading] = useState(true);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedHistoryItem = useMemo(() => {
+    return history.find((item) => item.analysisId === selectedAnalysisId) || null;
+  }, [history, selectedAnalysisId]);
+
+  const loadAnalysisDetail = useCallback(async (analysisId: string) => {
+    setAnalysisLoading(true);
+
+    try {
+      const payload = await fetchJson(ENDPOINTS.analysisDetail(analysisId));
+      const normalized = normalizeAnalysisDetail(payload);
+      setAnalysisDetail(normalized);
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          "Não foi possível carregar os detalhes da análise selecionada."
+      );
+    } finally {
+      setAnalysisLoading(false);
+    }
+  }, []);
+
+  const loadPage = useCallback(async () => {
     if (!id) {
-      setError("Identificador inválido.");
-      setTechnicalError("A rota foi aberta sem um parâmetro de ID válido.");
-      setLoading(false);
+      setError("ID da planilha não informado.");
+      setPageLoading(false);
       return;
     }
 
+    setPageLoading(true);
+    setError(null);
+
     try {
-      setLoading(true);
-      setError("");
-      setTechnicalError("");
-      setBundle(null);
-      setAnalyses([]);
-
-      const response = await getSpreadsheetById(id);
-      setData(response);
-
-      const realSpreadsheetId = resolveRealSpreadsheetId(response, id);
-
-      if (!realSpreadsheetId) {
-        setTechnicalError(
-          "Não foi possível resolver o identificador efetivo da planilha para consultar o parecer consolidado."
-        );
-        setOpinionDocument(null);
-        setBundle(null);
-        setAnalyses([]);
-        return;
-      }
-
-      const [opinionBundle, analysisHistory] = await Promise.all([
-        getLatestAnalysisOpinionBundleBySpreadsheetId(realSpreadsheetId),
-        listExecutabilityAnalysesBySpreadsheetId(realSpreadsheetId),
+      const [spreadsheetPayload, historyPayload] = await Promise.all([
+        fetchJson(ENDPOINTS.spreadsheetDetail(id)),
+        fetchJson(ENDPOINTS.spreadsheetAnalyses(id)),
       ]);
 
-      setAnalyses(analysisHistory);
+      const normalizedSpreadsheet = normalizeSpreadsheet(spreadsheetPayload);
+      const normalizedHistory = normalizeAnalysisHistory(historyPayload).sort((a, b) => {
+        const dateA = new Date(a.createdAt || a.updatedAt || 0).getTime();
+        const dateB = new Date(b.createdAt || b.updatedAt || 0).getTime();
+        return dateB - dateA;
+      });
 
-      if (!opinionBundle) {
-        setTechnicalError(
-          "Nenhuma análise de exequibilidade foi localizada para a planilha selecionada."
-        );
-        setOpinionDocument(null);
-        setBundle(null);
-        return;
+      setSpreadsheet(normalizedSpreadsheet);
+      setHistory(normalizedHistory);
+
+      const initialAnalysisId =
+        normalizedHistory.find((item) => item.isLatest)?.analysisId ||
+        normalizedHistory[0]?.analysisId ||
+        null;
+
+      setSelectedAnalysisId(initialAnalysisId);
+
+      if (initialAnalysisId) {
+        await loadAnalysisDetail(initialAnalysisId);
+      } else {
+        setAnalysisDetail(null);
       }
-
-      setBundle(opinionBundle);
-      setOpinionDocument(buildOpinionDocumentFromBundle(opinionBundle));
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Não foi possível carregar o detalhe da planilha.";
-
-      setError("Não foi possível carregar o detalhe da planilha.");
-      setTechnicalError(message);
-      setData(null);
-      setOpinionDocument(null);
-      setBundle(null);
-      setAnalyses([]);
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          "Não foi possível carregar os dados da planilha e do histórico de análises."
+      );
     } finally {
-      setLoading(false);
+      setPageLoading(false);
     }
-  }, [id]);
+  }, [id, loadAnalysisDetail]);
 
   useEffect(() => {
-    loadDetail();
-  }, [loadDetail]);
+    loadPage();
+  }, [loadPage]);
 
-  const totalGeral = useMemo(() => {
-    if (!data) return 0;
-    return data.rows.reduce((acc, row) => acc + row.subtotal, 0);
-  }, [data]);
+  const handleSelectAnalysis = async (analysisId: string) => {
+    if (!analysisId || analysisId === selectedAnalysisId) return;
 
-  const itensConferidos = useMemo(() => {
-    if (!data) return 0;
-    return data.rows.filter((row) => {
-      const status = row.status.toLowerCase();
-      return (
-        status === "conferido" ||
-        status === "concluído" ||
-        status === "concluido"
-      );
-    }).length;
-  }, [data]);
+    setSelectedAnalysisId(analysisId);
+    setError(null);
+    await loadAnalysisDetail(analysisId);
+  };
 
-  const percentualConferencia = useMemo(() => {
-    if (!data || data.rows.length === 0) return 0;
-    return Math.round((itensConferidos / data.rows.length) * 100);
-  }, [data, itensConferidos]);
-
-  const categoriasUnicas = useMemo(() => {
-    if (!data) return 0;
-    return new Set(data.rows.map((row) => row.categoria)).size;
-  }, [data]);
-
-  const effectiveSpreadsheetId = useMemo(() => {
-    return resolveRealSpreadsheetId(data, id);
-  }, [data, id]);
-
-  const fallbackOpinionDocument = useMemo<ExecutabilityOpinionDocument>(() => {
-    if (!data || !id) return DEMO_DOCUMENT;
-
-    return {
-      ...DEMO_DOCUMENT,
-      header: {
-        ...DEMO_DOCUMENT.header,
-        title: "Parecer Consolidado de Exequibilidade",
-        subtitle: `Planilha #${id} — ${data.title}`,
-        opinion_id: `demo-spreadsheet-${id}`,
-        executability_analysis_id: `demo-analysis-spreadsheet-${id}`,
-        spreadsheet_id: effectiveSpreadsheetId || id,
-        spreadsheet_version_id: 1,
-        generated_at: new Date().toISOString(),
-      },
-      sections: [
-        {
-          key: "ementa",
-          title: "Ementa",
-          content:
-            "Parecer demonstrativo exibido como fallback visual enquanto o vínculo definitivo com o documento real da planilha não é localizado no banco.",
-          sort_order: 1,
-        },
-        {
-          key: "conclusao",
-          title: "Conclusão",
-          content:
-            "A tela do parecer consolidado foi integrada com sucesso à página de detalhe da planilha. O próximo ajuste é alinhar o identificador consumido no frontend com a análise correspondente da planilha selecionada.",
-          sort_order: 2,
-        },
-        {
-          key: "fundamentacao_tecnica",
-          title: "Fundamentação Técnica",
-          content: `Total geral exibido na planilha: ${formatCurrency(
-            totalGeral
-          )}. Percentual de conferência: ${percentualConferencia}%. Categorias distintas: ${categoriasUnicas}. Identificador efetivo consultado: ${
-            effectiveSpreadsheetId || "não localizado"
-          }.`,
-          sort_order: 3,
-        },
-        {
-          key: "versao_gestor_leigo",
-          title: "Versão para Gestor Leigo",
-          content:
-            "Esta versão mostra o bloco final do parecer dentro da interface do sistema. Quando o vínculo dinâmico entre planilha e analysis_id for concluído, este conteúdo será substituído automaticamente pelo parecer real retornado pela RPC.",
-          sort_order: 4,
-        },
-      ],
-    };
-  }, [
-    data,
-    id,
-    totalGeral,
-    percentualConferencia,
-    categoriasUnicas,
-    effectiveSpreadsheetId,
-  ]);
-
-  const finalOpinionDocument = opinionDocument || fallbackOpinionDocument;
-
-  if (loading) {
+  if (pageLoading) {
     return (
       <Box
         sx={{
           minHeight: "100vh",
-          background:
-            "linear-gradient(180deg, #f7f4f9 0%, #f4eef7 45%, #ffffff 100%)",
+          display: "grid",
+          placeItems: "center",
+          bgcolor: "background.default",
+          px: 2,
         }}
       >
-        <AppBar position="static" elevation={0}>
-          <Toolbar
-            sx={{
-              minHeight: 68,
-              px: { xs: 2, md: 4 },
-              justifyContent: "space-between",
-            }}
-          >
-            <Stack direction="row" spacing={1.5} alignItems="center">
-              <TableChartIcon />
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                PlanilhaDEX
-              </Typography>
-            </Stack>
-
-            <Stack direction="row" spacing={1.5} alignItems="center">
-              <Typography
-                variant="body2"
-                sx={{
-                  color: "rgba(255,255,255,0.92)",
-                  fontWeight: 600,
-                  display: { xs: "none", md: "block" },
-                }}
-              >
-                Usuário: {user?.username || "admin"}
-              </Typography>
-
-              <Button
-                variant="outlined"
-                startIcon={<LogoutIcon />}
-                onClick={logout}
-                sx={{
-                  color: "#fff",
-                  borderColor: "rgba(255,255,255,0.45)",
-                  "&:hover": {
-                    borderColor: "#fff",
-                    backgroundColor: "rgba(255,255,255,0.08)",
-                  },
-                  borderRadius: "12px",
-                  fontWeight: 700,
-                }}
-              >
-                Sair
-              </Button>
-            </Stack>
-          </Toolbar>
-        </AppBar>
-
-        <Container maxWidth="md" sx={{ py: 8 }}>
-          <Card
-            sx={{
-              borderRadius: "24px",
-              boxShadow: "0 20px 40px rgba(81, 52, 96, 0.10)",
-            }}
-          >
-            <CardContent sx={{ p: 5 }}>
-              <Stack spacing={3} alignItems="center" textAlign="center">
-                <CircularProgress />
-                <Typography variant="h5" sx={{ fontWeight: 800 }}>
-                  Carregando detalhe da planilha
-                </Typography>
-                <Typography color="text.secondary" sx={{ maxWidth: 560 }}>
-                  Estamos buscando as informações do módulo selecionado para montar
-                  a visualização detalhada.
-                </Typography>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Container>
+        <Stack spacing={2} alignItems="center">
+          <CircularProgress />
+          <Typography variant="body1" color="text.secondary">
+            Carregando detalhes da planilha e histórico de análises...
+          </Typography>
+        </Stack>
       </Box>
     );
   }
-
-  if (error || !data) {
-    return (
-      <Box
-        sx={{
-          minHeight: "100vh",
-          background:
-            "linear-gradient(180deg, #f7f4f9 0%, #f4eef7 45%, #ffffff 100%)",
-        }}
-      >
-        <AppBar position="static" elevation={0}>
-          <Toolbar
-            sx={{
-              minHeight: 68,
-              px: { xs: 2, md: 4 },
-              justifyContent: "space-between",
-            }}
-          >
-            <Stack direction="row" spacing={1.5} alignItems="center">
-              <TableChartIcon />
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                PlanilhaDEX
-              </Typography>
-            </Stack>
-
-            <Stack direction="row" spacing={1.5} alignItems="center">
-              <Typography
-                variant="body2"
-                sx={{
-                  color: "rgba(255,255,255,0.92)",
-                  fontWeight: 600,
-                  display: { xs: "none", md: "block" },
-                }}
-              >
-                Usuário: {user?.username || "admin"}
-              </Typography>
-
-              <Button
-                variant="outlined"
-                startIcon={<LogoutIcon />}
-                onClick={logout}
-                sx={{
-                  color: "#fff",
-                  borderColor: "rgba(255,255,255,0.45)",
-                  "&:hover": {
-                    borderColor: "#fff",
-                    backgroundColor: "rgba(255,255,255,0.08)",
-                  },
-                  borderRadius: "12px",
-                  fontWeight: 700,
-                }}
-              >
-                Sair
-              </Button>
-            </Stack>
-          </Toolbar>
-        </AppBar>
-
-        <Container maxWidth="md" sx={{ py: 8 }}>
-          <Stack spacing={3}>
-            <Card
-              sx={{
-                borderRadius: "24px",
-                boxShadow: "0 20px 40px rgba(81, 52, 96, 0.10)",
-              }}
-            >
-              <CardContent sx={{ p: 4 }}>
-                <Stack spacing={3}>
-                  <Alert severity="error">{error}</Alert>
-
-                  <Box
-                    sx={{
-                      p: 3,
-                      borderRadius: "18px",
-                      backgroundColor: "#fcf7fa",
-                      border: "1px solid #f1d9df",
-                    }}
-                  >
-                    <Stack spacing={1.2}>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <BugReportOutlinedIcon sx={{ color: "#b3261e" }} />
-                        <Typography sx={{ fontWeight: 800 }}>
-                          Detalhe técnico
-                        </Typography>
-                      </Stack>
-
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: "text.secondary",
-                          lineHeight: 1.8,
-                          whiteSpace: "pre-wrap",
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {technicalError ||
-                          "Nenhum detalhe técnico adicional foi retornado."}
-                      </Typography>
-                    </Stack>
-                  </Box>
-
-                  <Stack
-                    direction={{ xs: "column", sm: "row" }}
-                    spacing={2}
-                    justifyContent="flex-start"
-                  >
-                    <Button
-                      variant="contained"
-                      startIcon={<RefreshIcon />}
-                      onClick={loadDetail}
-                      sx={{
-                        borderRadius: "14px",
-                        fontWeight: 700,
-                        minWidth: 180,
-                      }}
-                    >
-                      Tentar novamente
-                    </Button>
-
-                    <Button
-                      variant="outlined"
-                      startIcon={<ArrowBackIcon />}
-                      onClick={() => navigate("/")}
-                      sx={{
-                        borderRadius: "14px",
-                        fontWeight: 700,
-                        minWidth: 180,
-                      }}
-                    >
-                      Voltar para o painel
-                    </Button>
-                  </Stack>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Stack>
-        </Container>
-      </Box>
-    );
-  }
-
-  const statusConfig = getStatusStyles(data.status);
 
   return (
-    <Box
-      sx={{
-        minHeight: "100vh",
-        background:
-          "linear-gradient(180deg, #f7f4f9 0%, #f4eef7 45%, #ffffff 100%)",
-      }}
-    >
-      <AppBar position="static" elevation={0}>
-        <Toolbar
-          sx={{
-            minHeight: 68,
-            px: { xs: 2, md: 4 },
-            justifyContent: "space-between",
-          }}
-        >
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <TableChartIcon />
-            <Typography variant="h6" sx={{ fontWeight: 800 }}>
-              PlanilhaDEX
-            </Typography>
-          </Stack>
+    <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+      <AppBar
+        position="static"
+        color="inherit"
+        elevation={0}
+        sx={{
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          bgcolor: "background.paper",
+        }}
+      >
+        <Toolbar sx={{ gap: 2 }}>
+          <Button
+            variant="text"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/")}
+          >
+            Voltar
+          </Button>
 
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Typography
-              variant="body2"
-              sx={{
-                color: "rgba(255,255,255,0.92)",
-                fontWeight: 600,
-                display: { xs: "none", md: "block" },
-              }}
-            >
-              Usuário: {user?.username || "admin"}
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Typography variant="h6" fontWeight={700} noWrap>
+              {spreadsheet?.title || "Detalhes da planilha"}
             </Typography>
 
-            <Button
-              variant="outlined"
-              startIcon={<LogoutIcon />}
-              onClick={logout}
-              sx={{
-                color: "#fff",
-                borderColor: "rgba(255,255,255,0.45)",
-                "&:hover": {
-                  borderColor: "#fff",
-                  backgroundColor: "rgba(255,255,255,0.08)",
-                },
-                borderRadius: "12px",
-                fontWeight: 700,
-              }}
-            >
-              Sair
-            </Button>
-          </Stack>
+            <Typography variant="body2" color="text.secondary" noWrap>
+              Histórico de análises, seleção de versões e leitura consolidada
+            </Typography>
+          </Box>
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="xl" sx={{ py: { xs: 4, md: 6 } }}>
-        <Box sx={{ maxWidth: 1340, mx: "auto" }}>
-          <Stack spacing={3}>
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              justifyContent="space-between"
-              alignItems={{ xs: "flex-start", sm: "center" }}
-              spacing={2}
-            >
-              <Stack spacing={1.2}>
-                <Breadcrumbs separator={<ChevronRightIcon fontSize="small" />}>
-                  <Link
-                    underline="hover"
-                    color="inherit"
-                    sx={{ cursor: "pointer", fontWeight: 600 }}
-                    onClick={() => navigate("/")}
-                  >
-                    Painel
-                  </Link>
-                  <Typography color="text.secondary" sx={{ fontWeight: 600 }}>
-                    Detalhe da planilha
-                  </Typography>
-                </Breadcrumbs>
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Stack spacing={3}>
+          <Breadcrumbs separator={<ChevronRightIcon fontSize="small" />}>
+            <Link component={RouterLink} underline="hover" color="inherit" to="/">
+              Início
+            </Link>
+            <Typography color="text.primary">
+              {spreadsheet?.title || "Planilha"}
+            </Typography>
+          </Breadcrumbs>
 
-                <Typography
-                  variant="h4"
-                  sx={{
-                    fontWeight: 800,
-                    fontSize: { xs: "1.8rem", md: "2.3rem" },
-                    lineHeight: 1.15,
-                  }}
-                >
-                  {data.title}
-                </Typography>
-              </Stack>
+          {error ? <Alert severity="error">{error}</Alert> : null}
 
-              <Button
-                variant="outlined"
-                startIcon={<ArrowBackIcon />}
-                onClick={() => navigate("/")}
-                sx={{
-                  borderRadius: "14px",
-                  fontWeight: 700,
-                  minWidth: 190,
-                }}
-              >
-                Voltar para o painel
-              </Button>
-            </Stack>
-
-            <Card
-              sx={{
-                borderRadius: "28px",
-                boxShadow: "0 20px 40px rgba(81, 52, 96, 0.10)",
-                overflow: "hidden",
-              }}
-            >
-              <Box
-                sx={{
-                  px: { xs: 3, md: 5 },
-                  py: { xs: 3, md: 4 },
-                  background:
-                    "linear-gradient(135deg, rgba(140,88,162,0.10) 0%, rgba(111,63,132,0.16) 100%)",
-                  borderBottom: "1px solid rgba(140,88,162,0.12)",
-                }}
-              >
+          <Card variant="outlined">
+            <CardContent>
+              <Stack spacing={2}>
                 <Stack
-                  direction={{ xs: "column", lg: "row" }}
+                  direction={{ xs: "column", md: "row" }}
                   justifyContent="space-between"
-                  alignItems={{ xs: "flex-start", lg: "center" }}
-                  spacing={2.5}
+                  spacing={2}
                 >
-                  <Box sx={{ maxWidth: 900 }}>
-                    <Typography
-                      variant="h3"
-                      sx={{
-                        fontSize: { xs: "2rem", md: "2.7rem" },
-                        fontWeight: 800,
-                        lineHeight: 1.08,
-                        mb: 1.5,
-                        color: "text.primary",
-                      }}
-                    >
-                      {data.title}
+                  <Box>
+                    <Typography variant="h5" fontWeight={800} gutterBottom>
+                      {spreadsheet?.title || "Planilha sem título"}
                     </Typography>
 
-                    <Typography
-                      variant="body1"
-                      sx={{
-                        color: "text.secondary",
-                        fontSize: { xs: "1rem", md: "1.05rem" },
-                        lineHeight: 1.9,
-                      }}
-                    >
-                      {data.description}
+                    <Typography variant="body1" color="text.secondary">
+                      {spreadsheet?.description || "Sem descrição cadastrada."}
                     </Typography>
                   </Box>
 
-                  <Chip
-                    label={statusConfig.label}
-                    sx={{
-                      ...statusConfig.sx,
-                      borderRadius: "14px",
-                      fontSize: "1rem",
-                      height: 46,
-                      px: 1.5,
-                    }}
-                  />
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    flexWrap="wrap"
+                    useFlexGap
+                    alignItems="flex-start"
+                  >
+                    <Chip
+                      icon={<CategoryIcon />}
+                      label={spreadsheet?.category || "Sem categoria"}
+                      variant="outlined"
+                    />
+                    <Chip
+                      icon={<FolderOpenIcon />}
+                      label={spreadsheet?.status || "Sem status"}
+                      color={getStatusChipColor(spreadsheet?.status)}
+                    />
+                    <Chip
+                      icon={<CalendarMonthIcon />}
+                      label={`Atualizada em ${formatDateTime(spreadsheet?.updatedAt)}`}
+                      variant="outlined"
+                    />
+                  </Stack>
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", lg: "360px minmax(0, 1fr)" },
+              gap: 3,
+              alignItems: "start",
+            }}
+          >
+            <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+              <Box
+                sx={{
+                  px: 2,
+                  py: 1.5,
+                  borderBottom: "1px solid",
+                  borderColor: "divider",
+                  bgcolor: "background.paper",
+                }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <HistoryIcon fontSize="small" />
+                  <Typography variant="subtitle1" fontWeight={700}>
+                    Histórico de análises
+                  </Typography>
+                  <Chip size="small" label={history.length} />
                 </Stack>
               </Box>
 
-              <CardContent sx={{ p: { xs: 3, md: 5 } }}>
-                <Stack spacing={4}>
-                  {!!technicalError && (
-                    <Alert severity={opinionDocument ? "info" : "warning"}>
-                      {technicalError}
-                    </Alert>
-                  )}
+              {history.length === 0 ? (
+                <Box sx={{ p: 2 }}>
+                  <Alert severity="info">
+                    Ainda não há análises registradas para esta planilha.
+                  </Alert>
+                </Box>
+              ) : (
+                <List disablePadding>
+                  {history.map((item, index) => {
+                    const selected = item.analysisId === selectedAnalysisId;
 
-                  <Box
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: {
-                        xs: "1fr",
-                        sm: "repeat(2, minmax(0, 1fr))",
-                        xl: "repeat(4, minmax(0, 1fr))",
-                      },
-                      gap: 2.5,
-                    }}
-                  >
-                    <Card
-                      variant="outlined"
-                      sx={{
-                        borderRadius: "18px",
-                        backgroundColor: "#fcfafe",
-                        borderColor: "#eadff0",
-                      }}
-                    >
-                      <CardContent>
-                        <Stack spacing={1.3}>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <MonetizationOnOutlinedIcon sx={{ color: "#8c58a2" }} />
-                            <Typography sx={{ fontWeight: 800 }}>
-                              Total geral
-                            </Typography>
-                          </Stack>
-                          <Typography
-                            sx={{
-                              fontSize: "1.35rem",
-                              fontWeight: 800,
-                              color: "text.primary",
-                            }}
-                          >
-                            {formatCurrency(totalGeral)}
-                          </Typography>
-                          <Typography color="text.secondary">
-                            Soma consolidada dos itens exibidos.
-                          </Typography>
-                        </Stack>
-                      </CardContent>
-                    </Card>
+                    return (
+                      <React.Fragment key={item.analysisId}>
+                        <ListItemButton
+                          selected={selected}
+                          onClick={() => handleSelectAnalysis(item.analysisId)}
+                          sx={{
+                            alignItems: "flex-start",
+                            py: 1.75,
+                            px: 2,
+                          }}
+                        >
+                          <ListItemText
+                            primary={
+                              <Stack spacing={1}>
+                                <Stack
+                                  direction="row"
+                                  spacing={1}
+                                  alignItems="center"
+                                  flexWrap="wrap"
+                                  useFlexGap
+                                >
+                                  <Typography variant="body1" fontWeight={700}>
+                                    {formatLabel(item.analysisType || "Análise")}
+                                  </Typography>
 
-                    <Card
-                      variant="outlined"
-                      sx={{
-                        borderRadius: "18px",
-                        backgroundColor: "#fcfafe",
-                        borderColor: "#eadff0",
-                      }}
-                    >
-                      <CardContent>
-                        <Stack spacing={1.3}>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <PercentOutlinedIcon sx={{ color: "#8c58a2" }} />
-                            <Typography sx={{ fontWeight: 800 }}>
-                              Conferência
-                            </Typography>
-                          </Stack>
-                          <Typography
-                            sx={{
-                              fontSize: "1.35rem",
-                              fontWeight: 800,
-                              color: "text.primary",
-                            }}
-                          >
-                            {percentualConferencia}%
-                          </Typography>
-                          <Typography color="text.secondary">
-                            Percentual de itens conferidos.
-                          </Typography>
-                        </Stack>
-                      </CardContent>
-                    </Card>
+                                  {item.isLatest ? (
+                                    <Chip
+                                      size="small"
+                                      label="Mais recente"
+                                      color="primary"
+                                      variant={selected ? "filled" : "outlined"}
+                                    />
+                                  ) : null}
 
-                    <Card
-                      variant="outlined"
-                      sx={{
-                        borderRadius: "18px",
-                        backgroundColor: "#fcfafe",
-                        borderColor: "#eadff0",
-                      }}
-                    >
-                      <CardContent>
-                        <Stack spacing={1.3}>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <AccountTreeOutlinedIcon sx={{ color: "#8c58a2" }} />
-                            <Typography sx={{ fontWeight: 800 }}>
-                              Categorias
-                            </Typography>
-                          </Stack>
-                          <Typography
-                            sx={{
-                              fontSize: "1.35rem",
-                              fontWeight: 800,
-                              color: "text.primary",
-                            }}
-                          >
-                            {categoriasUnicas}
-                          </Typography>
-                          <Typography color="text.secondary">
-                            Categorias distintas nesta planilha.
-                          </Typography>
-                        </Stack>
-                      </CardContent>
-                    </Card>
+                                  <Chip
+                                    size="small"
+                                    label={formatLabel(
+                                      item.executabilityStatus || item.finalStatus
+                                    )}
+                                    color={getStatusChipColor(
+                                      item.executabilityStatus || item.finalStatus
+                                    )}
+                                    variant={selected ? "filled" : "outlined"}
+                                  />
+                                </Stack>
 
-                    <Card
-                      variant="outlined"
-                      sx={{
-                        borderRadius: "18px",
-                        backgroundColor: "#fcfafe",
-                        borderColor: "#eadff0",
-                      }}
-                    >
-                      <CardContent>
-                        <Stack spacing={1.3}>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <CalendarMonthIcon sx={{ color: "#8c58a2" }} />
-                            <Typography sx={{ fontWeight: 800 }}>
-                              Atualização
-                            </Typography>
-                          </Stack>
-                          <Typography
-                            sx={{
-                              fontSize: "1.35rem",
-                              fontWeight: 800,
-                              color: "text.primary",
-                            }}
-                          >
-                            {data.updatedAt}
-                          </Typography>
-                          <Typography color="text.secondary">
-                            Última referência do módulo.
-                          </Typography>
-                        </Stack>
-                      </CardContent>
-                    </Card>
-                  </Box>
+                                <Stack
+                                  direction="row"
+                                  spacing={1}
+                                  flexWrap="wrap"
+                                  useFlexGap
+                                >
+                                  <Chip
+                                    size="small"
+                                    label={`Risco: ${formatLabel(item.riskLevel)}`}
+                                    color={getRiskChipColor(item.riskLevel)}
+                                    variant="outlined"
+                                  />
 
-                  {bundle && (
-                    <Card
-                      variant="outlined"
-                      sx={{
-                        borderRadius: "24px",
-                        borderColor: "#eadff0",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          px: 3,
-                          py: 2.2,
-                          borderBottom: "1px solid #eadff0",
-                          backgroundColor: "#fcfafe",
-                        }}
-                      >
+                                  <Chip
+                                    size="small"
+                                    label={`Score: ${
+                                      item.scoreGlobal !== null &&
+                                      item.scoreGlobal !== undefined
+                                        ? item.scoreGlobal
+                                        : "—"
+                                    }`}
+                                    variant="outlined"
+                                  />
+                                </Stack>
+                              </Stack>
+                            }
+                            secondary={
+                              <Box sx={{ mt: 1 }}>
+                                <Typography variant="caption" color="text.secondary">
+                                  Analysis ID: {item.analysisId}
+                                </Typography>
+                                <br />
+                                <Typography variant="caption" color="text.secondary">
+                                  Versão da planilha:{" "}
+                                  {item.spreadsheetVersionId ?? "—"}
+                                </Typography>
+                                <br />
+                                <Typography variant="caption" color="text.secondary">
+                                  Criada em: {formatDateTime(item.createdAt)}
+                                </Typography>
+                              </Box>
+                            }
+                          />
+                        </ListItemButton>
+
+                        {index < history.length - 1 ? <Divider /> : null}
+                      </React.Fragment>
+                    );
+                  })}
+                </List>
+              )}
+            </Paper>
+
+            <Stack spacing={3}>
+              {analysisLoading ? (
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    minHeight: 240,
+                    display: "grid",
+                    placeItems: "center",
+                    p: 3,
+                  }}
+                >
+                  <Stack spacing={2} alignItems="center">
+                    <CircularProgress />
+                    <Typography variant="body2" color="text.secondary">
+                      Carregando análise selecionada...
+                    </Typography>
+                  </Stack>
+                </Paper>
+              ) : analysisDetail ? (
+                <>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Stack spacing={2.5}>
                         <Stack
-                          direction="row"
+                          direction={{ xs: "column", md: "row" }}
                           justifyContent="space-between"
-                          alignItems="center"
                           spacing={2}
                         >
-                          <Stack direction="row" spacing={1.2} alignItems="center">
-                            <InsightsOutlinedIcon sx={{ color: "#8c58a2" }} />
-                            <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                              Resumo numérico do parecer
+                          <Box>
+                            <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+                              <InsightsOutlinedIcon />
+                              <Typography variant="h6" fontWeight={800}>
+                                Análise selecionada
+                              </Typography>
+                            </Stack>
+
+                            <Typography variant="body2" color="text.secondary">
+                              Utilize este painel para revisar análises anteriores da
+                              mesma planilha e comparar o racional já emitido ao longo
+                              do histórico.
                             </Typography>
+                          </Box>
+
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            flexWrap="wrap"
+                            useFlexGap
+                            alignItems="flex-start"
+                          >
+                            <Chip
+                              label={formatLabel(analysisDetail.analysisType)}
+                              variant="outlined"
+                            />
+                            <Chip
+                              label={formatLabel(
+                                analysisDetail.executabilityStatus ||
+                                  analysisDetail.finalStatus
+                              )}
+                              color={getStatusChipColor(
+                                analysisDetail.executabilityStatus ||
+                                  analysisDetail.finalStatus
+                              )}
+                            />
+                            <Chip
+                              label={`Risco: ${formatLabel(analysisDetail.riskLevel)}`}
+                              color={getRiskChipColor(analysisDetail.riskLevel)}
+                              variant="outlined"
+                            />
                           </Stack>
-
-                          <Chip
-                            label={`${bundle.meta.analysis_type} • ${bundle.meta.analysis_processing_status}`}
-                            sx={{
-                              backgroundColor: "rgba(140, 88, 162, 0.10)",
-                              color: "#6f3f84",
-                              fontWeight: 700,
-                            }}
-                          />
                         </Stack>
-                      </Box>
 
-                      <CardContent sx={{ p: 3 }}>
+                        <Divider />
+
+                        <Box
+                          sx={{
+                            display: "grid",
+                            gridTemplateColumns: {
+                              xs: "1fr",
+                              sm: "repeat(2, minmax(0, 1fr))",
+                              xl: "repeat(4, minmax(0, 1fr))",
+                            },
+                            gap: 2,
+                          }}
+                        >
+                          <MetricCard
+                            title="Score global"
+                            value={
+                              analysisDetail.scoreGlobal !== null &&
+                              analysisDetail.scoreGlobal !== undefined
+                                ? String(analysisDetail.scoreGlobal)
+                                : "—"
+                            }
+                            icon={<CheckCircleOutlineIcon fontSize="small" />}
+                          />
+
+                          <MetricCard
+                            title="Valor proposto"
+                            value={formatCurrency(analysisDetail.proposedTotalValue)}
+                            icon={<SummarizeRoundedIcon fontSize="small" />}
+                          />
+
+                          <MetricCard
+                            title="Custo obrigatório"
+                            value={formatCurrency(analysisDetail.mandatoryCostTotal)}
+                            icon={<GavelRoundedIcon fontSize="small" />}
+                          />
+
+                          <MetricCard
+                            title="Saldo de exequibilidade"
+                            value={formatCurrency(analysisDetail.executabilityBalance)}
+                            icon={<WarningAmberRoundedIcon fontSize="small" />}
+                          />
+                        </Box>
+
                         <Box
                           sx={{
                             display: "grid",
                             gridTemplateColumns: {
                               xs: "1fr",
                               md: "repeat(2, minmax(0, 1fr))",
-                              xl: "repeat(5, minmax(0, 1fr))",
                             },
                             gap: 2,
                           }}
                         >
-                          <Paper
-                            variant="outlined"
-                            sx={{ p: 2, borderRadius: "16px", borderColor: "#eadff0" }}
-                          >
-                            <Typography variant="body2" color="text.secondary">
-                              Valor proposto
-                            </Typography>
-                            <Typography sx={{ mt: 1, fontWeight: 800 }}>
-                              {formatCurrency(
-                                Number(bundle.numeric_summary.proposed_total_value || 0)
-                              )}
-                            </Typography>
-                          </Paper>
+                          <Card variant="outlined">
+                            <CardContent>
+                              <Typography variant="subtitle2" color="text.secondary" mb={1}>
+                                Metadados da análise
+                              </Typography>
 
-                          <Paper
-                            variant="outlined"
-                            sx={{ p: 2, borderRadius: "16px", borderColor: "#eadff0" }}
-                          >
-                            <Typography variant="body2" color="text.secondary">
-                              Custos obrigatórios
-                            </Typography>
-                            <Typography sx={{ mt: 1, fontWeight: 800 }}>
-                              {formatCurrency(
-                                Number(bundle.numeric_summary.mandatory_cost_total || 0)
-                              )}
-                            </Typography>
-                          </Paper>
+                              <Stack spacing={0.75}>
+                                <Typography variant="body2">
+                                  <strong>Analysis ID:</strong> {analysisDetail.analysisId}
+                                </Typography>
+                                <Typography variant="body2">
+                                  <strong>Versão da planilha:</strong>{" "}
+                                  {analysisDetail.spreadsheetVersionId ?? "—"}
+                                </Typography>
+                                <Typography variant="body2">
+                                  <strong>Tipo:</strong>{" "}
+                                  {formatLabel(analysisDetail.analysisType)}
+                                </Typography>
+                                <Typography variant="body2">
+                                  <strong>Processamento:</strong>{" "}
+                                  {formatLabel(analysisDetail.processingStatus)}
+                                </Typography>
+                                <Typography variant="body2">
+                                  <strong>Criada em:</strong>{" "}
+                                  {formatDateTime(analysisDetail.createdAt)}
+                                </Typography>
+                                <Typography variant="body2">
+                                  <strong>Atualizada em:</strong>{" "}
+                                  {formatDateTime(analysisDetail.updatedAt)}
+                                </Typography>
+                              </Stack>
+                            </CardContent>
+                          </Card>
 
-                          <Paper
-                            variant="outlined"
-                            sx={{ p: 2, borderRadius: "16px", borderColor: "#eadff0" }}
-                          >
-                            <Typography variant="body2" color="text.secondary">
-                              Custos probatórios
-                            </Typography>
-                            <Typography sx={{ mt: 1, fontWeight: 800 }}>
-                              {formatCurrency(
-                                Number(bundle.numeric_summary.evidentiary_cost_total || 0)
-                              )}
-                            </Typography>
-                          </Paper>
+                          <Card variant="outlined">
+                            <CardContent>
+                              <Typography variant="subtitle2" color="text.secondary" mb={1}>
+                                Totais auxiliares
+                              </Typography>
 
-                          <Paper
-                            variant="outlined"
-                            sx={{ p: 2, borderRadius: "16px", borderColor: "#eadff0" }}
-                          >
-                            <Typography variant="body2" color="text.secondary">
-                              Retenções
-                            </Typography>
-                            <Typography sx={{ mt: 1, fontWeight: 800 }}>
-                              {formatCurrency(
-                                Number(bundle.numeric_summary.retention_total || 0)
-                              )}
-                            </Typography>
-                          </Paper>
-
-                          <Paper
-                            variant="outlined"
-                            sx={{ p: 2, borderRadius: "16px", borderColor: "#eadff0" }}
-                          >
-                            <Typography variant="body2" color="text.secondary">
-                              Saldo de exequibilidade
-                            </Typography>
-                            <Typography sx={{ mt: 1, fontWeight: 800 }}>
-                              {formatCurrency(
-                                Number(bundle.numeric_summary.executability_balance || 0)
-                              )}
-                            </Typography>
-                          </Paper>
+                              <Stack spacing={0.75}>
+                                <Typography variant="body2">
+                                  <strong>Custo evidenciário:</strong>{" "}
+                                  {formatCurrency(analysisDetail.evidentiaryCostTotal)}
+                                </Typography>
+                                <Typography variant="body2">
+                                  <strong>Retenções:</strong>{" "}
+                                  {formatCurrency(analysisDetail.retentionTotal)}
+                                </Typography>
+                                <Typography variant="body2">
+                                  <strong>Status final:</strong>{" "}
+                                  {formatLabel(
+                                    analysisDetail.executabilityStatus ||
+                                      analysisDetail.finalStatus
+                                  )}
+                                </Typography>
+                                <Typography variant="body2">
+                                  <strong>Risco:</strong>{" "}
+                                  {formatLabel(analysisDetail.riskLevel)}
+                                </Typography>
+                              </Stack>
+                            </CardContent>
+                          </Card>
                         </Box>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  <Card
-                    variant="outlined"
-                    sx={{
-                      borderRadius: "24px",
-                      borderColor: "#eadff0",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        px: 3,
-                        py: 2.2,
-                        borderBottom: "1px solid #eadff0",
-                        backgroundColor: "#fcfafe",
-                      }}
-                    >
-                      <Stack
-                        direction="row"
-                        justifyContent="space-between"
-                        alignItems="center"
-                        spacing={2}
-                      >
-                        <Stack direction="row" spacing={1.2} alignItems="center">
-                          <GavelOutlinedIcon sx={{ color: "#8c58a2" }} />
-                          <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                            Parecer consolidado
-                          </Typography>
-                        </Stack>
-
-                        <Chip
-                          label={opinionDocument ? "Documento real" : "Fallback visual"}
-                          sx={{
-                            backgroundColor: opinionDocument
-                              ? "rgba(46, 125, 50, 0.10)"
-                              : "rgba(140, 88, 162, 0.10)",
-                            color: opinionDocument ? "#2e7d32" : "#6f3f84",
-                            fontWeight: 700,
-                          }}
-                        />
                       </Stack>
-                    </Box>
-
-                    <Box sx={{ p: { xs: 2, md: 3 } }}>
-                      <ExecutabilityOpinionView document={finalOpinionDocument} />
-                    </Box>
-                  </Card>
-
-                  <Box
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: {
-                        xs: "1fr",
-                        xl: "1.7fr 0.9fr",
-                      },
-                      gap: 3,
-                    }}
-                  >
-                    <Card
-                      variant="outlined"
-                      sx={{
-                        borderRadius: "24px",
-                        borderColor: "#eadff0",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          px: 3,
-                          py: 2.2,
-                          borderBottom: "1px solid #eadff0",
-                          backgroundColor: "#fcfafe",
-                        }}
-                      >
-                        <Stack
-                          direction="row"
-                          justifyContent="space-between"
-                          alignItems="center"
-                          spacing={2}
-                        >
-                          <Stack direction="row" spacing={1.2} alignItems="center">
-                            <DescriptionOutlinedIcon sx={{ color: "#8c58a2" }} />
-                            <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                              Itens da planilha
-                            </Typography>
-                          </Stack>
-
-                          <Chip
-                            label={`${data.rows.length} registro(s)`}
-                            sx={{
-                              backgroundColor: "rgba(140, 88, 162, 0.10)",
-                              color: "#6f3f84",
-                              fontWeight: 700,
-                            }}
-                          />
-                        </Stack>
-                      </Box>
-
-                      <Box sx={{ p: 0 }}>
-                        <Paper elevation={0} sx={{ width: "100%", overflowX: "auto" }}>
-                          <Table sx={{ minWidth: 820 }}>
-                            <TableHead>
-                              <TableRow
-                                sx={{
-                                  "& th": {
-                                    fontWeight: 800,
-                                    color: "#4e3c59",
-                                    backgroundColor: "#faf7fc",
-                                    borderBottom: "1px solid #eadff0",
-                                  },
-                                }}
-                              >
-                                <TableCell>Item</TableCell>
-                                <TableCell>Categoria</TableCell>
-                                <TableCell align="center">Qtd.</TableCell>
-                                <TableCell align="right">Valor unitário</TableCell>
-                                <TableCell align="right">Subtotal</TableCell>
-                                <TableCell>Status</TableCell>
-                              </TableRow>
-                            </TableHead>
-
-                            <TableBody>
-                              {data.rows.map((row, index) => (
-                                <TableRow
-                                  key={`${row.item}-${index}`}
-                                  sx={{
-                                    "&:last-child td": { borderBottom: 0 },
-                                    "& td": { borderBottom: "1px solid #f0e8f4" },
-                                  }}
-                                >
-                                  <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>
-                                    {row.item}
-                                  </TableCell>
-                                  <TableCell>{row.categoria}</TableCell>
-                                  <TableCell align="center">{row.quantidade}</TableCell>
-                                  <TableCell align="right">
-                                    {formatCurrency(row.valorUnitario)}
-                                  </TableCell>
-                                  <TableCell align="right" sx={{ fontWeight: 700 }}>
-                                    {formatCurrency(row.subtotal)}
-                                  </TableCell>
-                                  <TableCell>
-                                    <Chip
-                                      label={row.status}
-                                      size="small"
-                                      sx={{
-                                        backgroundColor:
-                                          row.status.toLowerCase() === "conferido" ||
-                                          row.status.toLowerCase() === "concluído" ||
-                                          row.status.toLowerCase() === "concluido"
-                                            ? "#e8f5e9"
-                                            : row.status.toLowerCase() === "pendente"
-                                            ? "#fff3e0"
-                                            : row.status.toLowerCase().includes("revis")
-                                            ? "#fff8e1"
-                                            : "rgba(140, 88, 162, 0.10)",
-                                        color:
-                                          row.status.toLowerCase() === "conferido" ||
-                                          row.status.toLowerCase() === "concluído" ||
-                                          row.status.toLowerCase() === "concluido"
-                                            ? "#2e7d32"
-                                            : row.status.toLowerCase() === "pendente"
-                                            ? "#b26a00"
-                                            : row.status.toLowerCase().includes("revis")
-                                            ? "#8d6e00"
-                                            : "#6f3f84",
-                                        fontWeight: 700,
-                                      }}
-                                    />
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-
-                              <TableRow
-                                sx={{
-                                  "& td": {
-                                    backgroundColor: "#faf7fc",
-                                    borderTop: "2px solid #eadff0",
-                                  },
-                                }}
-                              >
-                                <TableCell colSpan={4} sx={{ fontWeight: 800 }}>
-                                  Total consolidado
-                                </TableCell>
-                                <TableCell align="right" sx={{ fontWeight: 800 }}>
-                                  {formatCurrency(totalGeral)}
-                                </TableCell>
-                                <TableCell />
-                              </TableRow>
-                            </TableBody>
-                          </Table>
-                        </Paper>
-                      </Box>
-                    </Card>
-
-                    <Stack spacing={3}>
-                      <Card
-                        variant="outlined"
-                        sx={{ borderRadius: "24px", borderColor: "#eadff0" }}
-                      >
-                        <CardContent sx={{ p: 3 }}>
-                          <Stack spacing={2.2}>
-                            <Stack direction="row" spacing={1.1} alignItems="center">
-                              <InsightsOutlinedIcon sx={{ color: "#8c58a2" }} />
-                              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                                Resumo do módulo
-                              </Typography>
-                            </Stack>
-
-                            <Stack spacing={1.6}>
-                              <Stack direction="row" spacing={1} alignItems="center">
-                                <CategoryIcon sx={{ color: "#8c58a2", fontSize: 20 }} />
-                                <Typography color="text.secondary">
-                                  Categoria: <strong>{data.category}</strong>
-                                </Typography>
-                              </Stack>
-
-                              <Stack direction="row" spacing={1} alignItems="center">
-                                <EditNoteIcon sx={{ color: "#8c58a2", fontSize: 20 }} />
-                                <Typography color="text.secondary">
-                                  Situação: <strong>{data.status}</strong>
-                                </Typography>
-                              </Stack>
-
-                              <Stack direction="row" spacing={1} alignItems="center">
-                                <FolderOpenIcon sx={{ color: "#8c58a2", fontSize: 20 }} />
-                                <Typography color="text.secondary">
-                                  Identificador visual: <strong>#{data.id}</strong>
-                                </Typography>
-                              </Stack>
-
-                              <Stack direction="row" spacing={1} alignItems="center">
-                                <FolderOpenIcon sx={{ color: "#8c58a2", fontSize: 20 }} />
-                                <Typography color="text.secondary">
-                                  Identificador efetivo:{" "}
-                                  <strong>{effectiveSpreadsheetId || "não localizado"}</strong>
-                                </Typography>
-                              </Stack>
-
-                              {bundle && (
-                                <>
-                                  <Stack direction="row" spacing={1} alignItems="center">
-                                    <GavelOutlinedIcon
-                                      sx={{ color: "#8c58a2", fontSize: 20 }}
-                                    />
-                                    <Typography color="text.secondary">
-                                      Analysis ID: <strong>{bundle.analysis_id}</strong>
-                                    </Typography>
-                                  </Stack>
-
-                                  <Stack direction="row" spacing={1} alignItems="center">
-                                    <InsightsOutlinedIcon
-                                      sx={{ color: "#8c58a2", fontSize: 20 }}
-                                    />
-                                    <Typography color="text.secondary">
-                                      Score global:{" "}
-                                      <strong>{bundle.meta.score_global ?? "-"}</strong>
-                                    </Typography>
-                                  </Stack>
-
-                                  <Stack direction="row" spacing={1} alignItems="center">
-                                    <InsightsOutlinedIcon
-                                      sx={{ color: "#8c58a2", fontSize: 20 }}
-                                    />
-                                    <Typography color="text.secondary">
-                                      Risco:{" "}
-                                      <strong>{bundle.meta.risk_level || "-"}</strong>
-                                    </Typography>
-                                  </Stack>
-                                </>
-                              )}
-
-                              <Stack direction="row" spacing={1} alignItems="center">
-                                <CalendarMonthIcon sx={{ color: "#8c58a2", fontSize: 20 }} />
-                                <Typography color="text.secondary">
-                                  Última atualização: <strong>{data.updatedAt}</strong>
-                                </Typography>
-                              </Stack>
-                            </Stack>
-
-                            <Divider />
-
-                            <Typography color="text.secondary" sx={{ lineHeight: 1.8 }}>
-                              Este painel já está conectado à API e pronto para evoluir
-                              para edição, exportação, versionamento e integração com
-                              documentos reais.
-                            </Typography>
-                          </Stack>
-                        </CardContent>
-                      </Card>
-
-                      <Card
-                        variant="outlined"
-                        sx={{ borderRadius: "24px", borderColor: "#eadff0" }}
-                      >
-                        <CardContent sx={{ p: 3 }}>
-                          <Stack spacing={2.2}>
-                            <Stack direction="row" spacing={1.1} alignItems="center">
-                              <AssignmentTurnedInIcon sx={{ color: "#8c58a2" }} />
-                              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                                Ações
-                              </Typography>
-                            </Stack>
-
-                            <Stack spacing={1.5}>
-                              <Button
-                                fullWidth
-                                variant="contained"
-                                startIcon={<EditIcon />}
-                                sx={{ borderRadius: "14px", justifyContent: "flex-start" }}
-                              >
-                                Editar planilha
-                              </Button>
-
-                              <Button
-                                fullWidth
-                                variant="outlined"
-                                startIcon={<DownloadIcon />}
-                                sx={{ borderRadius: "14px", justifyContent: "flex-start" }}
-                              >
-                                Exportar dados
-                              </Button>
-
-                              <Button
-                                fullWidth
-                                variant="outlined"
-                                startIcon={<HistoryIcon />}
-                                sx={{ borderRadius: "14px", justifyContent: "flex-start" }}
-                              >
-                                Ver histórico completo
-                              </Button>
-                            </Stack>
-                          </Stack>
-                        </CardContent>
-                      </Card>
-                    </Stack>
-                  </Box>
-
-                  <Card
-                    variant="outlined"
-                    sx={{
-                      borderRadius: "24px",
-                      borderColor: "#eadff0",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        px: 3,
-                        py: 2.2,
-                        borderBottom: "1px solid #eadff0",
-                        backgroundColor: "#fcfafe",
-                      }}
-                    >
-                      <Stack direction="row" spacing={1.2} alignItems="center">
-                        <HistoryIcon sx={{ color: "#8c58a2" }} />
-                        <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                          Histórico de análises de exequibilidade
-                        </Typography>
-                      </Stack>
-                    </Box>
-
-                    <CardContent sx={{ p: 0 }}>
-                      <Paper elevation={0} sx={{ width: "100%", overflowX: "auto" }}>
-                        <Table sx={{ minWidth: 900 }}>
-                          <TableHead>
-                            <TableRow
-                              sx={{
-                                "& th": {
-                                  fontWeight: 800,
-                                  color: "#4e3c59",
-                                  backgroundColor: "#faf7fc",
-                                  borderBottom: "1px solid #eadff0",
-                                },
-                              }}
-                            >
-                              <TableCell>Analysis ID</TableCell>
-                              <TableCell>Versão</TableCell>
-                              <TableCell>Status</TableCell>
-                              <TableCell>Score</TableCell>
-                              <TableCell>Risco</TableCell>
-                              <TableCell>Criado em</TableCell>
-                              <TableCell>Atualizado em</TableCell>
-                            </TableRow>
-                          </TableHead>
-
-                          <TableBody>
-                            {analyses.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={7}>
-                                  <Typography color="text.secondary">
-                                    Nenhuma análise de exequibilidade encontrada para esta planilha.
-                                  </Typography>
-                                </TableCell>
-                              </TableRow>
-                            ) : (
-                              analyses.map((analysis) => (
-                                <TableRow
-                                  key={analysis.analysis_id}
-                                  sx={{
-                                    "&:last-child td": { borderBottom: 0 },
-                                    "& td": { borderBottom: "1px solid #f0e8f4" },
-                                  }}
-                                >
-                                  <TableCell sx={{ fontWeight: 700 }}>
-                                    {analysis.analysis_id}
-                                  </TableCell>
-                                  <TableCell>{analysis.spreadsheet_version_id}</TableCell>
-                                  <TableCell>{analysis.status}</TableCell>
-                                  <TableCell>{analysis.score_global ?? "-"}</TableCell>
-                                  <TableCell>{analysis.risk_level ?? "-"}</TableCell>
-                                  <TableCell>{formatDateTime(analysis.created_at)}</TableCell>
-                                  <TableCell>{formatDateTime(analysis.updated_at)}</TableCell>
-                                </TableRow>
-                              ))
-                            )}
-                          </TableBody>
-                        </Table>
-                      </Paper>
                     </CardContent>
                   </Card>
 
-                  <Box
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: {
-                        xs: "1fr",
-                        xl: "1.1fr 0.9fr",
-                      },
-                      gap: 3,
-                    }}
-                  >
-                    <Card
-                      variant="outlined"
-                      sx={{
-                        borderRadius: "24px",
-                        borderColor: "#eadff0",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          px: 3,
-                          py: 2.2,
-                          borderBottom: "1px solid #eadff0",
-                          backgroundColor: "#fcfafe",
-                        }}
-                      >
-                        <Stack direction="row" spacing={1.2} alignItems="center">
-                          <HistoryIcon sx={{ color: "#8c58a2" }} />
-                          <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                            Histórico de versões
-                          </Typography>
-                        </Stack>
-                      </Box>
+                  <Stack spacing={2}>
+                    <Typography variant="h6" fontWeight={800}>
+                      Explicações vinculadas à análise
+                    </Typography>
 
-                      <CardContent sx={{ p: 0 }}>
-                        <Paper elevation={0} sx={{ width: "100%", overflowX: "auto" }}>
-                          <Table sx={{ minWidth: 620 }}>
-                            <TableHead>
-                              <TableRow
-                                sx={{
-                                  "& th": {
-                                    fontWeight: 800,
-                                    color: "#4e3c59",
-                                    backgroundColor: "#faf7fc",
-                                    borderBottom: "1px solid #eadff0",
-                                  },
-                                }}
-                              >
-                                <TableCell>Versão</TableCell>
-                                <TableCell>Data</TableCell>
-                                <TableCell>Responsável</TableCell>
-                                <TableCell>Observação</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {data.versions.map((version, index) => (
-                                <TableRow
-                                  key={`${version.versao}-${index}`}
-                                  sx={{
-                                    "&:last-child td": { borderBottom: 0 },
-                                    "& td": { borderBottom: "1px solid #f0e8f4" },
-                                  }}
-                                >
-                                  <TableCell sx={{ fontWeight: 700 }}>
-                                    {version.versao}
-                                  </TableCell>
-                                  <TableCell>{version.data}</TableCell>
-                                  <TableCell>{version.responsavel}</TableCell>
-                                  <TableCell>{version.observacao}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </Paper>
-                      </CardContent>
-                    </Card>
+                    {analysisDetail.explanations &&
+                    analysisDetail.explanations.length > 0 ? (
+                      analysisDetail.explanations.map((explanation, index) => (
+                        <ExplanationBlock
+                          key={`${explanation.explanationType}-${index}`}
+                          explanation={explanation}
+                        />
+                      ))
+                    ) : (
+                      <Alert severity="info">
+                        Esta análise não possui explicações detalhadas disponíveis.
+                      </Alert>
+                    )}
+                  </Stack>
+                </>
+              ) : (
+                <Alert severity="info">
+                  Nenhuma análise foi selecionada ou encontrada para esta planilha.
+                </Alert>
+              )}
 
-                    <Card
-                      variant="outlined"
-                      sx={{
-                        borderRadius: "24px",
-                        borderColor: "#eadff0",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          px: 3,
-                          py: 2.2,
-                          borderBottom: "1px solid #eadff0",
-                          backgroundColor: "#fcfafe",
-                        }}
-                      >
-                        <Stack direction="row" spacing={1.2} alignItems="center">
-                          <AttachFileIcon sx={{ color: "#8c58a2" }} />
-                          <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                            Documentos vinculados
-                          </Typography>
-                        </Stack>
-                      </Box>
+              {selectedHistoryItem ? (
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                      Resumo da seleção atual
+                    </Typography>
 
-                      <CardContent sx={{ p: 3 }}>
-                        <Stack spacing={2}>
-                          {data.documents.map((doc, index) => (
-                            <Box
-                              key={`${doc.nome}-${index}`}
-                              sx={{
-                                p: 2,
-                                borderRadius: "16px",
-                                backgroundColor: "#faf7fc",
-                                border: "1px solid #eee4f3",
-                              }}
-                            >
-                              <Stack spacing={0.8}>
-                                <Typography sx={{ fontWeight: 700 }}>{doc.nome}</Typography>
-                                <Typography color="text.secondary">
-                                  Tipo: {doc.tipo}
-                                </Typography>
-                                <Typography color="text.secondary">
-                                  Atualização: {doc.atualizacao}
-                                </Typography>
-                              </Stack>
-                            </Box>
-                          ))}
-                        </Stack>
-                      </CardContent>
-                    </Card>
-                  </Box>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Stack>
-        </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Você está visualizando a análise{" "}
+                      <strong>{selectedHistoryItem.analysisId}</strong>, vinculada à
+                      versão{" "}
+                      <strong>
+                        {selectedHistoryItem.spreadsheetVersionId ?? "—"}
+                      </strong>{" "}
+                      da planilha, criada em{" "}
+                      <strong>{formatDateTime(selectedHistoryItem.createdAt)}</strong>.
+                    </Typography>
+                  </CardContent>
+                </Card>
+              ) : null}
+            </Stack>
+          </Box>
+        </Stack>
       </Container>
     </Box>
   );
