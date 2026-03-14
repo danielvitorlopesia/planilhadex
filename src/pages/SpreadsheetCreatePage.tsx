@@ -31,6 +31,7 @@ import {
   SpreadsheetModelTemplate,
   SpreadsheetModelType,
 } from "../types/spreadsheetModels";
+import { createSpreadsheetFromModel } from "../services/spreadsheetService";
 
 const EMPTY_DRAFT: SpreadsheetCreateDraft = {
   title: "",
@@ -161,13 +162,9 @@ export default function SpreadsheetCreatePage() {
 
   const handleSaveDraft = () => {
     setTouched(true);
+    if (!selectedModel || requiredErrors.length > 0) return;
 
-    if (!selectedModel) return;
-    if (requiredErrors.length > 0) return;
-
-    alert(
-      `Rascunho criado com sucesso.\n\nModelo: ${selectedModel.title}\nTítulo: ${draft.title || "Sem título"}`
-    );
+    alert(`Rascunho validado para o modelo: ${selectedModel.title}`);
   };
 
   const handleContinue = () => {
@@ -176,9 +173,13 @@ export default function SpreadsheetCreatePage() {
     if (!selectedModel) return;
     if (requiredErrors.length > 0) return;
 
-    alert(
-      `Próxima etapa preparada.\n\nModelo: ${selectedModel.title}\nTítulo: ${draft.title || "Sem título"}\n\nNo próximo passo, essa ação deverá criar a planilha real e abrir o editor estruturado.`
-    );
+    const spreadsheet = createSpreadsheetFromModel({
+      modelType: selectedModel.type,
+      title: draft.title || selectedModel.shortTitle,
+      description: draft.objectDescription || selectedModel.description,
+    });
+
+    navigate(`/spreadsheet/${spreadsheet.id}`);
   };
 
   if (!selectedModel) {
@@ -190,12 +191,7 @@ export default function SpreadsheetCreatePage() {
               <Link component={RouterLink} underline="hover" color="inherit" to="/">
                 Início
               </Link>
-              <Link
-                component={RouterLink}
-                underline="hover"
-                color="inherit"
-                to="/models/new"
-              >
+              <Link component={RouterLink} underline="hover" color="inherit" to="/models/new">
                 Nova planilha
               </Link>
               <Typography color="text.primary">Criação</Typography>
@@ -207,20 +203,11 @@ export default function SpreadsheetCreatePage() {
                   <Typography variant="h4" fontWeight={700}>
                     Modelo não identificado
                   </Typography>
-                  <Typography variant="body1" color="text.secondary">
-                    A rota de criação precisa receber um parâmetro válido em
-                    <strong> ?model=</strong>.
-                  </Typography>
                   <Alert severity="warning">
-                    Volte à seleção de modelos e escolha uma opção válida para iniciar
-                    a criação da planilha.
+                    Volte à seleção de modelos e escolha uma opção válida.
                   </Alert>
                   <Stack direction="row" spacing={2}>
-                    <Button
-                      component={RouterLink}
-                      to="/models/new"
-                      variant="contained"
-                    >
+                    <Button component={RouterLink} to="/models/new" variant="contained">
                       Ir para seleção de modelos
                     </Button>
                     <Button
@@ -249,12 +236,7 @@ export default function SpreadsheetCreatePage() {
             <Link component={RouterLink} underline="hover" color="inherit" to="/">
               Início
             </Link>
-            <Link
-              component={RouterLink}
-              underline="hover"
-              color="inherit"
-              to="/models/new"
-            >
+            <Link component={RouterLink} underline="hover" color="inherit" to="/models/new">
               Nova planilha
             </Link>
             <Typography color="text.primary">Criação inicial</Typography>
@@ -333,8 +315,7 @@ export default function SpreadsheetCreatePage() {
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                       Preencha os campos iniciais para criar a estrutura base do modelo
-                      selecionado. Os campos exibidos abaixo já respeitam o tipo de
-                      planilha escolhido.
+                      selecionado.
                     </Typography>
                   </Box>
 
@@ -460,20 +441,6 @@ export default function SpreadsheetCreatePage() {
                         </Typography>
                       ))}
                     </Stack>
-                  </Stack>
-                </CardContent>
-              </Card>
-
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                <CardContent sx={{ p: 3 }}>
-                  <Stack spacing={1.5}>
-                    <Typography variant="subtitle1" fontWeight={700}>
-                      Próxima etapa
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Após esta fase, o sistema deverá abrir o editor principal da
-                      planilha já configurado com a estrutura do modelo selecionado.
-                    </Typography>
                   </Stack>
                 </CardContent>
               </Card>
