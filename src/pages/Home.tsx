@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
@@ -35,7 +35,7 @@ const spreadsheetCards: SpreadsheetCardItem[] = [
     id: "1",
     title: "Planilha Orçamentária",
     description:
-      "Controle e organização de custos, categorias financeiras e projeções orçamentárias do projeto.",
+      "Estrutura inicial de custos, categorias financeiras e consolidação dos valores da contratação.",
     status: "Em elaboração",
     category: "Financeiro",
     updatedAt: "11/03/2026",
@@ -44,7 +44,7 @@ const spreadsheetCards: SpreadsheetCardItem[] = [
     id: "2",
     title: "Cronograma de Execução",
     description:
-      "Planejamento temporal das etapas do projeto, com acompanhamento das ações previstas.",
+      "Planejamento temporal das etapas da contratação e acompanhamento dos marcos previstos.",
     status: "Em elaboração",
     category: "Gestão",
     updatedAt: "11/03/2026",
@@ -53,7 +53,7 @@ const spreadsheetCards: SpreadsheetCardItem[] = [
     id: "3",
     title: "Relatório de Prestação de Contas",
     description:
-      "Consolidação de dados e documentos para prestação de contas e monitoramento da execução.",
+      "Consolidação de dados, documentos e registros para controle, auditoria e prestação de contas.",
     status: "Em elaboração",
     category: "Compliance",
     updatedAt: "11/03/2026",
@@ -62,7 +62,7 @@ const spreadsheetCards: SpreadsheetCardItem[] = [
     id: "4",
     title: "Mapa de Entregáveis",
     description:
-      "Visão geral dos produtos, documentos e marcos de acompanhamento do projeto.",
+      "Visão geral dos produtos, documentos e marcos de acompanhamento vinculados ao processo.",
     status: "Em elaboração",
     category: "Planejamento",
     updatedAt: "11/03/2026",
@@ -96,6 +96,10 @@ function getStatusChipStyles(status: SpreadsheetStatus) {
 
 export default function Home() {
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    document.title = "CustoPúblico — Gestão de Planilhas de Custos Públicas";
+  }, []);
 
   const filteredCards = useMemo(() => {
     const normalized = search.trim().toLowerCase();
@@ -151,7 +155,7 @@ export default function Home() {
                           textTransform: "uppercase",
                         }}
                       >
-                        Painel principal
+                        CustoPúblico
                       </Typography>
                     </Stack>
 
@@ -162,11 +166,10 @@ export default function Home() {
                         color: "#2B2340",
                         fontSize: { xs: "2rem", md: "2.35rem" },
                         lineHeight: 1.1,
-                        maxWidth: 760,
+                        maxWidth: 820,
                       }}
                     >
-                      Organize, acompanhe e visualize suas planilhas com mais
-                      clareza
+                      Gestão de Planilhas de Custos Públicas
                     </Typography>
 
                     <Typography
@@ -174,14 +177,13 @@ export default function Home() {
                       sx={{
                         color: "#6D6186",
                         mt: 2,
-                        maxWidth: 760,
+                        maxWidth: 820,
                         lineHeight: 1.8,
                       }}
                     >
-                      Ambiente central para acompanhamento de planilhas,
-                      documentos, cronogramas e materiais em desenvolvimento.
-                      Utilize a busca para localizar rapidamente os itens e
-                      acompanhar o andamento de cada estrutura.
+                      Plataforma para elaboração, organização, análise, comparação
+                      e acompanhamento de planilhas de custos públicas, com foco em
+                      clareza técnica, rastreabilidade e apoio à gestão contratual.
                     </Typography>
                   </Box>
 
