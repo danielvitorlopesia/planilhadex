@@ -4,6 +4,7 @@ import { SpreadsheetRecord } from "../../../services/spreadsheetService";
 
 type Props = {
   spreadsheet: SpreadsheetRecord;
+  onSpreadsheetUpdated?: (spreadsheet: SpreadsheetRecord) => void;
 };
 
 export default function ServiceCompositionEditor({ spreadsheet }: Props) {
@@ -17,8 +18,7 @@ export default function ServiceCompositionEditor({ spreadsheet }: Props) {
 
           <Typography variant="body2" color="text.secondary">
             Este editor será a base para serviços estruturados por equipes,
-            materiais, equipamentos, logística e produtividade operacional,
-            especialmente útil para limpeza, conservação e composições híbridas.
+            materiais, equipamentos e produtividade operacional.
           </Typography>
 
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -26,7 +26,6 @@ export default function ServiceCompositionEditor({ spreadsheet }: Props) {
             <Chip label="Materiais e insumos" />
             <Chip label="Equipamentos" />
             <Chip label="Produtividade" />
-            <Chip label="Composição técnica" />
           </Stack>
 
           <Typography variant="body2" color="text.secondary">
