@@ -12,6 +12,7 @@ import {
   Divider,
   Link,
   MenuItem,
+  Snackbar,
   Stack,
   TextField,
   Typography,
@@ -24,6 +25,7 @@ import TableRow from "@mui/material/TableRow";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import Groups2OutlinedIcon from "@mui/icons-material/Groups2Outlined";
 import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
@@ -38,9 +40,11 @@ import { Link as RouterLink, useParams } from "react-router-dom";
 import {
   getSpreadsheetById,
   SpreadsheetRecord,
+  updateSpreadsheetEditorDraft,
 } from "../services/spreadsheetService";
 
 type LoadState = "loading" | "success" | "error";
+type SaveState = "idle" | "saving" | "success" | "error";
 
 type SpreadsheetDetailRow = {
   item: string;
@@ -255,10 +259,6 @@ function sumRowsByCategory(rows: SpreadsheetDetailRow[], terms: string[]) {
   }, 0);
 }
 
-function findFirstRowByCategory(rows: SpreadsheetDetailRow[], terms: string[]) {
-  return rows.find((row) => categoryMatches(row.categoria, terms));
-}
-
 function findFirstRowByItem(rows: SpreadsheetDetailRow[], terms: string[]) {
   return rows.find((row) => itemMatches(row.item, terms));
 }
@@ -276,7 +276,19 @@ function getDomainScenarioLabel(record?: SpreadsheetDetailRecord | null) {
   return "Não classificado";
 }
 
+function extractStoredEditorDraft(record: SpreadsheetDetailRecord) {
+  const raw = record.metadata?.editorDraft;
+
+  if (typeof raw === "object" && raw !== null) {
+    return raw as Partial<EditorState>;
+  }
+
+  return {};
+}
+
 function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
+  const storedDraft = extractStoredEditorDraft(record);
+
   const laborRows = record.rows.filter((row) =>
     categoryMatches(row.categoria, ["mão de obra", "equipe operacional"])
   );
@@ -302,32 +314,39 @@ function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
     record.rows.reduce((sum, row) => sum + (row.subtotal || 0), 0);
 
   return {
-    contractingAgency: safeString(record.contractingAgency),
-    contractReference: safeString(record.contractReference),
-    unitName: safeString(record.unitName),
-    lotName: safeString(record.lotName),
-    referenceDate: safeString(record.referenceDate),
-    municipality: "",
-    state: "",
-    cboCode: "",
-    professionalCategory: firstLaborRow?.item ?? "",
-    cctReference: "",
-    taxRegime: "lucro_presumido",
-    objectDescription: record.description ?? "",
-    domainScenario: safeString(record.domainScenario),
-    headcount: stringifyNumber(inferredHeadcount),
-    monthlyBaseValue: stringifyNumber(inferredMonthlyBaseValue),
-    mainShift: laborRows.length > 0 ? "Postos contínuos" : "",
-    workScale: "",
-    weeklyHours: "",
-    monthlyHours: "",
-    salaryBase: stringifyNumber(firstLaborRow?.valorUnitario ?? 0),
-    nightAdditional: "",
-    hazardAdditional: "",
-    mealAllowance: stringifyNumber(mealAllowanceRow?.valorUnitario ?? 0),
-    transportAllowance: stringifyNumber(transportAllowanceRow?.valorUnitario ?? 0),
-    mandatoryBenefitsNotes: "",
-    notes: safeString(record.notes),
+    contractingAgency:
+      storedDraft.contractingAgency ?? safeString(record.contractingAgency),
+    contractReference:
+      storedDraft.contractReference ?? safeString(record.contractReference),
+    unitName: storedDraft.unitName ?? safeString(record.unitName),
+    lotName: storedDraft.lotName ?? safeString(record.lotName),
+    referenceDate: storedDraft.referenceDate ?? safeString(record.referenceDate),
+    municipality: storedDraft.municipality ?? "",
+    state: storedDraft.state ?? "",
+    cboCode: storedDraft.cboCode ?? "",
+    professionalCategory:
+      storedDraft.professionalCategory ?? firstLaborRow?.item ?? "",
+    cctReference: storedDraft.cctReference ?? "",
+    taxRegime: storedDraft.taxRegime ?? "lucro_presumido",
+    objectDescription: storedDraft.objectDescription ?? record.description ?? "",
+    domainScenario: storedDraft.domainScenario ?? safeString(record.domainScenario),
+    headcount: storedDraft.headcount ?? stringifyNumber(inferredHeadcount),
+    monthlyBaseValue:
+      storedDraft.monthlyBaseValue ?? stringifyNumber(inferredMonthlyBaseValue),
+    mainShift: storedDraft.mainShift ?? (laborRows.length > 0 ? "Postos contínuos" : ""),
+    workScale: storedDraft.workScale ?? "",
+    weeklyHours: storedDraft.weeklyHours ?? "",
+    monthlyHours: storedDraft.monthlyHours ?? "",
+    salaryBase: storedDraft.salaryBase ?? stringifyNumber(firstLaborRow?.valorUnitario ?? 0),
+    nightAdditional: storedDraft.nightAdditional ?? "",
+    hazardAdditional: storedDraft.hazardAdditional ?? "",
+    mealAllowance:
+      storedDraft.mealAllowance ?? stringifyNumber(mealAllowanceRow?.valorUnitario ?? 0),
+    transportAllowance:
+      storedDraft.transportAllowance ??
+      stringifyNumber(transportAllowanceRow?.valorUnitario ?? 0),
+    mandatoryBenefitsNotes: storedDraft.mandatoryBenefitsNotes ?? "",
+    notes: storedDraft.notes ?? safeString(record.notes),
   };
 }
 
@@ -377,6 +396,8 @@ export default function SpreadsheetDetail() {
   const [spreadsheet, setSpreadsheet] = useState<SpreadsheetDetailRecord | null>(null);
   const [dataSource, setDataSource] = useState<"api" | "local" | null>(null);
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [saveMessage, setSaveMessage] = useState("");
 
   useEffect(() => {
     document.title = "CustoPúblico — Detalhe da Planilha";
@@ -398,23 +419,31 @@ export default function SpreadsheetDetail() {
       setSpreadsheet(null);
       setEditor(null);
 
+      const localSpreadsheet = getSpreadsheetById(id) as SpreadsheetDetailRecord | undefined;
+
       try {
         const response = await fetch(`/api/spreadsheets/${id}`);
 
         if (response.ok) {
           const data = await response.json();
-          const payload = (data?.spreadsheet ?? data) as SpreadsheetDetailRecord;
+          const apiPayload = (data?.spreadsheet ?? data) as SpreadsheetDetailRecord;
+
+          const localDraftOverride =
+            localSpreadsheet &&
+            localSpreadsheet.metadata &&
+            typeof localSpreadsheet.metadata === "object" &&
+            localSpreadsheet.metadata.localDraftOverride === true;
+
+          const payload = localDraftOverride ? localSpreadsheet : apiPayload;
 
           if (isMounted) {
             setSpreadsheet(payload);
             setEditor(buildInitialEditorState(payload));
-            setDataSource("api");
+            setDataSource(localDraftOverride ? "local" : "api");
             setState("success");
           }
           return;
         }
-
-        const localSpreadsheet = getSpreadsheetById(id) as SpreadsheetDetailRecord | undefined;
 
         if (localSpreadsheet) {
           if (isMounted) {
@@ -436,8 +465,6 @@ export default function SpreadsheetDetail() {
           setErrorMessage(message);
         }
       } catch (error) {
-        const localSpreadsheet = getSpreadsheetById(id) as SpreadsheetDetailRecord | undefined;
-
         if (localSpreadsheet) {
           if (isMounted) {
             setSpreadsheet(localSpreadsheet);
@@ -525,6 +552,63 @@ export default function SpreadsheetDetail() {
         [field]: value,
       };
     });
+  }
+
+  function handleSaveLocalDraft() {
+    if (!spreadsheet || !editor) {
+      return;
+    }
+
+    setSaveState("saving");
+    setSaveMessage("");
+
+    try {
+      const updated = updateSpreadsheetEditorDraft(spreadsheet.id, {
+        contractingAgency: editor.contractingAgency,
+        contractReference: editor.contractReference,
+        unitName: editor.unitName,
+        lotName: editor.lotName,
+        referenceDate: editor.referenceDate,
+        municipality: editor.municipality,
+        state: editor.state,
+        cboCode: editor.cboCode,
+        professionalCategory: editor.professionalCategory,
+        cctReference: editor.cctReference,
+        taxRegime: editor.taxRegime,
+        objectDescription: editor.objectDescription,
+        domainScenario: editor.domainScenario,
+        headcount: editor.headcount,
+        monthlyBaseValue: editor.monthlyBaseValue,
+        mainShift: editor.mainShift,
+        workScale: editor.workScale,
+        weeklyHours: editor.weeklyHours,
+        monthlyHours: editor.monthlyHours,
+        salaryBase: editor.salaryBase,
+        nightAdditional: editor.nightAdditional,
+        hazardAdditional: editor.hazardAdditional,
+        mealAllowance: editor.mealAllowance,
+        transportAllowance: editor.transportAllowance,
+        mandatoryBenefitsNotes: editor.mandatoryBenefitsNotes,
+        notes: editor.notes,
+      }) as SpreadsheetDetailRecord | null;
+
+      if (!updated) {
+        throw new Error("Não foi possível salvar a edição local.");
+      }
+
+      setSpreadsheet(updated);
+      setEditor(buildInitialEditorState(updated));
+      setDataSource("local");
+      setSaveState("success");
+      setSaveMessage("Edição local salva com sucesso.");
+    } catch (error) {
+      setSaveState("error");
+      setSaveMessage(
+        error instanceof Error
+          ? error.message
+          : "Erro inesperado ao salvar a edição local."
+      );
+    }
   }
 
   if (state === "loading") {
@@ -661,6 +745,15 @@ export default function SpreadsheetDetail() {
                       startIcon={<ArrowBackIcon />}
                     >
                       Voltar
+                    </Button>
+
+                    <Button
+                      variant="contained"
+                      startIcon={<SaveOutlinedIcon />}
+                      onClick={handleSaveLocalDraft}
+                      disabled={saveState === "saving"}
+                    >
+                      {saveState === "saving" ? "Salvando..." : "Salvar edição local"}
                     </Button>
                   </Stack>
                 </Stack>
@@ -1455,6 +1548,21 @@ export default function SpreadsheetDetail() {
           </Box>
         </Stack>
       </Container>
+
+      <Snackbar
+        open={saveState === "success" || saveState === "error"}
+        autoHideDuration={3500}
+        onClose={() => setSaveState("idle")}
+      >
+        <Alert
+          onClose={() => setSaveState("idle")}
+          severity={saveState === "success" ? "success" : "error"}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {saveMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
