@@ -1,490 +1,419 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
-  Alert,
-  AppBar,
   Box,
   Button,
   Card,
   CardContent,
   Chip,
-  CircularProgress,
   Container,
   InputAdornment,
   Stack,
   TextField,
-  Toolbar,
   Typography,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
-import TableChartIcon from "@mui/icons-material/TableChart";
-import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
-import LogoutIcon from "@mui/icons-material/Logout";
-import { useNavigate } from "react-router-dom";
-import { getSpreadsheets } from "../lib/api";
-import { SpreadsheetListItem } from "../types/spreadsheet";
-import { useAuth } from "../auth/AuthContext";
+import AddIcon from "@mui/icons-material/Add";
+import DashboardCustomizeOutlinedIcon from "@mui/icons-material/DashboardCustomizeOutlined";
+import ArrowForwardIosRoundedIcon from "@mui/icons-material/ArrowForwardIosRounded";
+import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
+import { Link as RouterLink } from "react-router-dom";
 
-export function getStatusStyles(status: string) {
-  const normalized = status.toLowerCase();
+type SpreadsheetStatus = "Em elaboração" | "Concluída" | "Em revisão";
 
-  if (normalized.includes("concluído") || normalized.includes("concluido")) {
-    return {
-      label: status,
-      sx: {
-        backgroundColor: "#e8f5e9",
-        color: "#2e7d32",
-        fontWeight: 700,
-      },
-    };
+interface SpreadsheetCardItem {
+  id: string;
+  title: string;
+  description: string;
+  status: SpreadsheetStatus;
+  category: string;
+  updatedAt: string;
+}
+
+const spreadsheetCards: SpreadsheetCardItem[] = [
+  {
+    id: "1",
+    title: "Planilha Orçamentária",
+    description:
+      "Controle e organização de custos, categorias financeiras e projeções orçamentárias do projeto.",
+    status: "Em elaboração",
+    category: "Financeiro",
+    updatedAt: "11/03/2026",
+  },
+  {
+    id: "2",
+    title: "Cronograma de Execução",
+    description:
+      "Planejamento temporal das etapas do projeto, com acompanhamento das ações previstas.",
+    status: "Em elaboração",
+    category: "Gestão",
+    updatedAt: "11/03/2026",
+  },
+  {
+    id: "3",
+    title: "Relatório de Prestação de Contas",
+    description:
+      "Consolidação de dados e documentos para prestação de contas e monitoramento da execução.",
+    status: "Em elaboração",
+    category: "Compliance",
+    updatedAt: "11/03/2026",
+  },
+  {
+    id: "4",
+    title: "Mapa de Entregáveis",
+    description:
+      "Visão geral dos produtos, documentos e marcos de acompanhamento do projeto.",
+    status: "Em elaboração",
+    category: "Planejamento",
+    updatedAt: "11/03/2026",
+  },
+];
+
+function getStatusChipStyles(status: SpreadsheetStatus) {
+  switch (status) {
+    case "Em elaboração":
+      return {
+        backgroundColor: "#EFE7F6",
+        color: "#8E5AB5",
+      };
+    case "Concluída":
+      return {
+        backgroundColor: "#E7F6EC",
+        color: "#2E7D32",
+      };
+    case "Em revisão":
+      return {
+        backgroundColor: "#FFF3E0",
+        color: "#ED6C02",
+      };
+    default:
+      return {
+        backgroundColor: "#EFE7F6",
+        color: "#8E5AB5",
+      };
   }
-
-  if (normalized.includes("conferido")) {
-    return {
-      label: status,
-      sx: {
-        backgroundColor: "#e3f2fd",
-        color: "#1565c0",
-        fontWeight: 700,
-      },
-    };
-  }
-
-  if (normalized.includes("revis")) {
-    return {
-      label: status,
-      sx: {
-        backgroundColor: "#fff3e0",
-        color: "#b26a00",
-        fontWeight: 700,
-      },
-    };
-  }
-
-  if (normalized.includes("pendente")) {
-    return {
-      label: status,
-      sx: {
-        backgroundColor: "#fff8e1",
-        color: "#8d6e00",
-        fontWeight: 700,
-      },
-    };
-  }
-
-  if (normalized.includes("andamento")) {
-    return {
-      label: status,
-      sx: {
-        backgroundColor: "#ede7f6",
-        color: "#5e35b1",
-        fontWeight: 700,
-      },
-    };
-  }
-
-  return {
-    label: status,
-    sx: {
-      backgroundColor: "rgba(140, 88, 162, 0.12)",
-      color: "#6f3f84",
-      fontWeight: 700,
-    },
-  };
 }
 
 export default function Home() {
   const [search, setSearch] = useState("");
-  const [items, setItems] = useState<SpreadsheetListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const navigate = useNavigate();
-  const { logout, user } = useAuth();
 
-  useEffect(() => {
-    let isMounted = true;
+  const filteredCards = useMemo(() => {
+    const normalized = search.trim().toLowerCase();
 
-    async function loadData() {
-      try {
-        setLoading(true);
-        setError("");
+    if (!normalized) return spreadsheetCards;
 
-        const data = await getSpreadsheets();
-
-        if (isMounted) {
-          setItems(data);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Não foi possível carregar as planilhas."
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const filteredItems = useMemo(() => {
-    const term = search.trim().toLowerCase();
-
-    if (!term) return items;
-
-    return items.filter((item) => {
-      return (
-        item.title.toLowerCase().includes(term) ||
-        item.description.toLowerCase().includes(term) ||
-        item.category.toLowerCase().includes(term) ||
-        item.status.toLowerCase().includes(term)
-      );
-    });
-  }, [search, items]);
+    return spreadsheetCards.filter((item) =>
+      [item.title, item.description, item.category, item.status]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalized)
+    );
+  }, [search]);
 
   return (
     <Box
       sx={{
         minHeight: "100vh",
-        background:
-          "linear-gradient(180deg, #f7f4f9 0%, #f4eef7 45%, #ffffff 100%)",
+        bgcolor: "#F7F3F8",
+        py: { xs: 3, md: 5 },
       }}
     >
-      <AppBar position="static" elevation={0}>
-        <Toolbar
-          sx={{
-            minHeight: 68,
-            px: { xs: 2, md: 4 },
-            justifyContent: "space-between",
-          }}
-        >
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <TableChartIcon />
-            <Typography variant="h6" sx={{ fontWeight: 800 }}>
-              PlanilhaDEX
-            </Typography>
-          </Stack>
-
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Typography
-              variant="body2"
-              sx={{
-                color: "rgba(255,255,255,0.92)",
-                fontWeight: 600,
-                display: { xs: "none", md: "block" },
-              }}
-            >
-              Usuário: {user?.username || "admin"}
-            </Typography>
-
-            <Button
-              variant="outlined"
-              startIcon={<LogoutIcon />}
-              onClick={logout}
-              sx={{
-                color: "#fff",
-                borderColor: "rgba(255,255,255,0.45)",
-                "&:hover": {
-                  borderColor: "#fff",
-                  backgroundColor: "rgba(255,255,255,0.08)",
-                },
-                borderRadius: "12px",
-                fontWeight: 700,
-              }}
-            >
-              Sair
-            </Button>
-          </Stack>
-        </Toolbar>
-      </AppBar>
-
-      <Container maxWidth="xl" sx={{ py: { xs: 4, md: 6 } }}>
-        <Box sx={{ maxWidth: 1280, mx: "auto" }}>
-          <Stack spacing={4}>
-            <Box
-              sx={{
-                p: { xs: 3, md: 5 },
-                borderRadius: "32px",
-                background:
-                  "linear-gradient(135deg, rgba(140,88,162,0.10) 0%, rgba(111,63,132,0.18) 100%)",
-                border: "1px solid rgba(140,88,162,0.16)",
-                boxShadow: "0 18px 40px rgba(111, 63, 132, 0.08)",
-              }}
-            >
-              <Stack spacing={2.2}>
-                <Stack direction="row" spacing={1.2} alignItems="center">
-                  <AutoAwesomeIcon sx={{ color: "#8c58a2", fontSize: 20 }} />
-                  <Typography
-                    variant="overline"
-                    sx={{
-                      color: "#8c58a2",
-                      fontWeight: 800,
-                      letterSpacing: 1.3,
-                    }}
-                  >
-                    Painel principal
-                  </Typography>
-                </Stack>
-
-                <Typography
-                  variant="h3"
-                  sx={{
-                    fontSize: { xs: "1.8rem", md: "2.35rem" },
-                    fontWeight: 800,
-                    color: "text.primary",
-                    lineHeight: 1.15,
-                    maxWidth: 900,
-                  }}
+      <Container maxWidth="lg">
+        <Stack spacing={3}>
+          <Card
+            elevation={0}
+            sx={{
+              borderRadius: 5,
+              background:
+                "linear-gradient(180deg, rgba(238,229,243,1) 0%, rgba(235,226,240,1) 100%)",
+              border: "1px solid rgba(142, 90, 181, 0.12)",
+            }}
+          >
+            <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+              <Stack spacing={3}>
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", md: "center" }}
+                  spacing={2}
                 >
-                  Organize, acompanhe e visualize suas planilhas com mais clareza
-                </Typography>
+                  <Box>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                      <AutoAwesomeOutlinedIcon
+                        sx={{ fontSize: 16, color: "#9C6BC0" }}
+                      />
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontWeight: 700,
+                          letterSpacing: "0.08em",
+                          color: "#9C6BC0",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        Painel principal
+                      </Typography>
+                    </Stack>
 
-                <Typography
-                  variant="body1"
-                  sx={{
-                    maxWidth: 820,
-                    color: "text.secondary",
-                    lineHeight: 1.8,
-                    fontSize: { xs: "0.98rem", md: "1.04rem" },
-                  }}
-                >
-                  Ambiente central para acompanhamento de planilhas, documentos,
-                  cronogramas e materiais em desenvolvimento. Utilize a busca para
-                  localizar rapidamente os itens e acompanhar o andamento de cada
-                  estrutura.
-                </Typography>
-              </Stack>
-            </Box>
-
-            <TextField
-              fullWidth
-              placeholder="Pesquisar por título, categoria, descrição ou status..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              variant="outlined"
-              sx={{
-                backgroundColor: "#ffffff",
-                borderRadius: 3,
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 3,
-                  minHeight: 58,
-                },
-              }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ color: "#8a7c93" }} />
-                  </InputAdornment>
-                ),
-              }}
-            />
-
-            {loading && (
-              <Box
-                sx={{
-                  py: 8,
-                  display: "flex",
-                  justifyContent: "center",
-                }}
-              >
-                <CircularProgress />
-              </Box>
-            )}
-
-            {!loading && error && <Alert severity="error">{error}</Alert>}
-
-            {!loading && !error && (
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: {
-                    xs: "1fr",
-                    md: "repeat(2, minmax(0, 1fr))",
-                  },
-                  gap: 3,
-                  alignItems: "stretch",
-                }}
-              >
-                {filteredItems.map((item) => {
-                  const statusConfig = getStatusStyles(item.status);
-
-                  return (
-                    <Card
-                      key={item.id}
+                    <Typography
+                      variant="h3"
                       sx={{
-                        height: "100%",
-                        minHeight: 280,
-                        borderRadius: "20px",
-                        transition:
-                          "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
+                        fontWeight: 800,
+                        color: "#2B2340",
+                        fontSize: { xs: "2rem", md: "2.35rem" },
+                        lineHeight: 1.1,
+                        maxWidth: 760,
+                      }}
+                    >
+                      Organize, acompanhe e visualize suas planilhas com mais
+                      clareza
+                    </Typography>
+
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        color: "#6D6186",
+                        mt: 2,
+                        maxWidth: 760,
+                        lineHeight: 1.8,
+                      }}
+                    >
+                      Ambiente central para acompanhamento de planilhas,
+                      documentos, cronogramas e materiais em desenvolvimento.
+                      Utilize a busca para localizar rapidamente os itens e
+                      acompanhar o andamento de cada estrutura.
+                    </Typography>
+                  </Box>
+
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={1.5}
+                    sx={{ minWidth: { md: 260 } }}
+                  >
+                    <Button
+                      component={RouterLink}
+                      to="/models/new"
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      sx={{
+                        borderRadius: 3,
+                        px: 2.5,
+                        py: 1.2,
+                        textTransform: "none",
+                        fontWeight: 700,
+                        backgroundColor: "#8E5AB5",
                         "&:hover": {
-                          transform: "translateY(-4px)",
-                          boxShadow: "0 20px 40px rgba(81, 52, 96, 0.14)",
-                          borderColor: "rgba(140, 88, 162, 0.25)",
+                          backgroundColor: "#7B4CA1",
                         },
                       }}
                     >
-                      <CardContent
+                      Nova planilha
+                    </Button>
+
+                    <Button
+                      component={RouterLink}
+                      to="/models/new"
+                      variant="outlined"
+                      startIcon={<DashboardCustomizeOutlinedIcon />}
+                      sx={{
+                        borderRadius: 3,
+                        px: 2.5,
+                        py: 1.2,
+                        textTransform: "none",
+                        fontWeight: 700,
+                        borderColor: "rgba(142, 90, 181, 0.35)",
+                        color: "#6B3E90",
+                        "&:hover": {
+                          borderColor: "#8E5AB5",
+                          backgroundColor: "rgba(142, 90, 181, 0.04)",
+                        },
+                      }}
+                    >
+                      Escolher modelo
+                    </Button>
+                  </Stack>
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          <TextField
+            fullWidth
+            placeholder="Pesquisar por título, categoria, descrição ou status..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            variant="outlined"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: "#7A708D" }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 999,
+                backgroundColor: "#FFFFFF",
+              },
+            }}
+          />
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+              gap: 3,
+            }}
+          >
+            {filteredCards.map((item) => {
+              const statusStyles = getStatusChipStyles(item.status);
+
+              return (
+                <Card
+                  key={item.id}
+                  elevation={0}
+                  sx={{
+                    borderRadius: 4,
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid rgba(43, 35, 64, 0.06)",
+                    minHeight: 246,
+                  }}
+                >
+                  <CardContent
+                    sx={{
+                      p: 3,
+                      height: "100%",
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                  >
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="flex-start"
+                      spacing={2}
+                    >
+                      <Typography
+                        variant="h5"
                         sx={{
-                          p: 3.2,
-                          height: "100%",
-                          display: "flex",
-                          flexDirection: "column",
+                          fontWeight: 800,
+                          color: "#241B3A",
+                          fontSize: "1.85rem",
+                          lineHeight: 1.15,
+                          maxWidth: 360,
                         }}
                       >
-                        <Stack
-                          spacing={2.4}
+                        {item.title}
+                      </Typography>
+
+                      <Chip
+                        label={item.status}
+                        size="small"
+                        sx={{
+                          ...statusStyles,
+                          fontWeight: 700,
+                          borderRadius: 2,
+                        }}
+                      />
+                    </Stack>
+
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        color: "#6D6186",
+                        lineHeight: 1.8,
+                        mt: 2.5,
+                        maxWidth: 500,
+                      }}
+                    >
+                      {item.description}
+                    </Typography>
+
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={1.5}
+                      justifyContent="space-between"
+                      alignItems={{ xs: "flex-start", sm: "center" }}
+                      sx={{ mt: "auto", pt: 4 }}
+                    >
+                      <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Chip
+                          label={item.category}
+                          variant="outlined"
+                          size="small"
                           sx={{
-                            flexGrow: 1,
-                            height: "100%",
+                            borderRadius: 2,
+                            fontWeight: 700,
+                            color: "#5B3A7A",
+                            borderColor: "rgba(91, 58, 122, 0.24)",
+                            backgroundColor: "#FFFFFF",
                           }}
-                        >
-                          <Stack
-                            direction="row"
-                            justifyContent="space-between"
-                            alignItems="flex-start"
-                            spacing={2}
-                          >
-                            <Typography
-                              variant="h5"
-                              sx={{
-                                fontWeight: 800,
-                                color: "text.primary",
-                                lineHeight: 1.2,
-                                fontSize: { xs: "1.45rem", md: "1.65rem" },
-                                pr: 1,
-                              }}
-                            >
-                              {item.title}
-                            </Typography>
+                        />
 
-                            <Chip
-                              label={statusConfig.label}
-                              sx={{
-                                ...statusConfig.sx,
-                                borderRadius: "12px",
-                                whiteSpace: "nowrap",
-                                flexShrink: 0,
-                                fontSize: "0.95rem",
-                                height: 42,
-                                px: 1,
-                              }}
-                            />
-                          </Stack>
-
+                        <Stack direction="row" spacing={0.75} alignItems="center">
+                          <AccessTimeIcon
+                            sx={{ fontSize: 16, color: "#7A708D" }}
+                          />
                           <Typography
-                            variant="body1"
-                            sx={{
-                              color: "text.secondary",
-                              lineHeight: 1.8,
-                              fontSize: "1rem",
-                              minHeight: 72,
-                            }}
+                            variant="body2"
+                            sx={{ color: "#7A708D", fontWeight: 500 }}
                           >
-                            {item.description}
+                            Atualizado em {item.updatedAt}
                           </Typography>
-
-                          <Stack
-                            direction="row"
-                            spacing={1.2}
-                            alignItems="center"
-                            flexWrap="wrap"
-                            useFlexGap
-                          >
-                            <Chip
-                              label={item.category}
-                              variant="outlined"
-                              sx={{
-                                borderColor: "#d8c9e0",
-                                color: "#5f4a6c",
-                                fontWeight: 700,
-                                backgroundColor: "#fff",
-                                height: 38,
-                                fontSize: "0.95rem",
-                              }}
-                            />
-
-                            <Stack
-                              direction="row"
-                              spacing={0.8}
-                              alignItems="center"
-                              sx={{ color: "text.secondary" }}
-                            >
-                              <AccessTimeIcon sx={{ fontSize: 18 }} />
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                sx={{ fontSize: "0.98rem" }}
-                              >
-                                Atualizado em {item.updatedAt}
-                              </Typography>
-                            </Stack>
-                          </Stack>
-
-                          <Box
-                            sx={{
-                              mt: "auto",
-                              pt: 2,
-                              display: "flex",
-                              justifyContent: "flex-end",
-                            }}
-                          >
-                            <Button
-                              variant="contained"
-                              endIcon={
-                                <ArrowForwardIosIcon sx={{ fontSize: 16 }} />
-                              }
-                              sx={{
-                                minWidth: 158,
-                                height: 54,
-                                fontWeight: 800,
-                                fontSize: "1rem",
-                                borderRadius: "16px",
-                              }}
-                              onClick={() => navigate(`/spreadsheet/${item.id}`)}
-                            >
-                              Abrir
-                            </Button>
-                          </Box>
                         </Stack>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </Box>
-            )}
+                      </Stack>
 
-            {!loading && !error && filteredItems.length === 0 && (
-              <Box
-                sx={{
-                  py: 9,
-                  px: 3,
-                  textAlign: "center",
-                  borderRadius: 4,
-                  backgroundColor: "#ffffff",
-                  border: "1px dashed #d7c8df",
-                }}
-              >
-                <Typography variant="h6" sx={{ mb: 1, fontWeight: 800 }}>
-                  Nenhum item encontrado
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Tente ajustar os termos da pesquisa para localizar a planilha desejada.
-                </Typography>
-              </Box>
-            )}
-          </Stack>
-        </Box>
+                      <Button
+                        component={RouterLink}
+                        to={`/spreadsheet/${item.id}`}
+                        variant="contained"
+                        endIcon={<ArrowForwardIosRoundedIcon sx={{ fontSize: 14 }} />}
+                        sx={{
+                          minWidth: 120,
+                          borderRadius: 2.5,
+                          px: 2.5,
+                          py: 1.1,
+                          textTransform: "none",
+                          fontWeight: 700,
+                          backgroundColor: "#8E5AB5",
+                          boxShadow: "0 6px 16px rgba(142, 90, 181, 0.24)",
+                          "&:hover": {
+                            backgroundColor: "#7B4CA1",
+                          },
+                        }}
+                      >
+                        Abrir
+                      </Button>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </Box>
+
+          {filteredCards.length === 0 ? (
+            <Card
+              elevation={0}
+              sx={{
+                borderRadius: 4,
+                backgroundColor: "#FFFFFF",
+                border: "1px solid rgba(43, 35, 64, 0.06)",
+              }}
+            >
+              <CardContent sx={{ p: 4 }}>
+                <Stack spacing={1}>
+                  <Typography variant="h6" fontWeight={700} color="#241B3A">
+                    Nenhum resultado encontrado
+                  </Typography>
+                  <Typography variant="body2" color="#6D6186">
+                    Ajuste a busca ou utilize o botão “Nova planilha” para iniciar
+                    uma nova estrutura.
+                  </Typography>
+                </Stack>
+              </CardContent>
+            </Card>
+          ) : null}
+        </Stack>
       </Container>
     </Box>
   );
