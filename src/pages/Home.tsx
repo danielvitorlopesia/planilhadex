@@ -17,9 +17,19 @@ import AddIcon from "@mui/icons-material/Add";
 import DashboardCustomizeOutlinedIcon from "@mui/icons-material/DashboardCustomizeOutlined";
 import ArrowForwardIosRoundedIcon from "@mui/icons-material/ArrowForwardIosRounded";
 import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
+import Groups2OutlinedIcon from "@mui/icons-material/Groups2Outlined";
+import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
+import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
+import CompareArrowsOutlinedIcon from "@mui/icons-material/CompareArrowsOutlined";
 import { Link as RouterLink } from "react-router-dom";
 
 type SpreadsheetStatus = "Em elaboração" | "Concluída" | "Em revisão";
+
+type SpreadsheetModelType =
+  | "dedicated_labor"
+  | "non_dedicated_labor"
+  | "service_composition"
+  | "economic_rebalance";
 
 interface SpreadsheetCardItem {
   id: string;
@@ -28,44 +38,54 @@ interface SpreadsheetCardItem {
   status: SpreadsheetStatus;
   category: string;
   updatedAt: string;
+  modelType: SpreadsheetModelType;
+  modelLabel: string;
 }
 
 const spreadsheetCards: SpreadsheetCardItem[] = [
   {
-    id: "1",
-    title: "Planilha Orçamentária",
+    id: "101",
+    title: "Exemplo — Dedicação Exclusiva",
     description:
-      "Estrutura inicial de custos, categorias financeiras e consolidação dos valores da contratação.",
+      "Planilha-modelo para contratos com postos fixos, jornada definida, encargos, benefícios, insumos e consolidação global de custos.",
     status: "Em elaboração",
-    category: "Financeiro",
-    updatedAt: "11/03/2026",
+    category: "Modelo 01",
+    updatedAt: "14/03/2026",
+    modelType: "dedicated_labor",
+    modelLabel: "Terceirização com dedicação exclusiva",
   },
   {
-    id: "2",
-    title: "Cronograma de Execução",
+    id: "102",
+    title: "Exemplo — Sem Dedicação Exclusiva",
     description:
-      "Planejamento temporal das etapas da contratação e acompanhamento dos marcos previstos.",
+      "Planilha-modelo para serviços executados por demanda, produtividade ou escopo, sem alocação contínua de postos fixos.",
     status: "Em elaboração",
-    category: "Gestão",
-    updatedAt: "11/03/2026",
+    category: "Modelo 02",
+    updatedAt: "14/03/2026",
+    modelType: "non_dedicated_labor",
+    modelLabel: "Terceirização sem dedicação exclusiva",
   },
   {
-    id: "3",
-    title: "Relatório de Prestação de Contas",
+    id: "103",
+    title: "Exemplo — Composição de Serviços",
     description:
-      "Consolidação de dados, documentos e registros para controle, auditoria e prestação de contas.",
+      "Planilha-modelo para orçamentos estruturados por itens, subitens, equipes, materiais, equipamentos, logística e consolidação por etapas.",
     status: "Em elaboração",
-    category: "Compliance",
-    updatedAt: "11/03/2026",
+    category: "Modelo 03",
+    updatedAt: "14/03/2026",
+    modelType: "service_composition",
+    modelLabel: "Serviços por composição",
   },
   {
-    id: "4",
-    title: "Mapa de Entregáveis",
+    id: "104",
+    title: "Exemplo — Repactuação e Revisão",
     description:
-      "Visão geral dos produtos, documentos e marcos de acompanhamento vinculados ao processo.",
+      "Planilha-modelo para repactuação, reajuste, revisão e reequilíbrio econômico-financeiro, com base em versão anterior vinculada.",
     status: "Em elaboração",
-    category: "Planejamento",
-    updatedAt: "11/03/2026",
+    category: "Modelo 04",
+    updatedAt: "14/03/2026",
+    modelType: "economic_rebalance",
+    modelLabel: "Repactuação / revisão",
   },
 ];
 
@@ -94,6 +114,51 @@ function getStatusChipStyles(status: SpreadsheetStatus) {
   }
 }
 
+function getModelChipStyles(modelType: SpreadsheetModelType) {
+  switch (modelType) {
+    case "dedicated_labor":
+      return {
+        backgroundColor: "#EDE7F6",
+        color: "#5E35B1",
+      };
+    case "non_dedicated_labor":
+      return {
+        backgroundColor: "#E3F2FD",
+        color: "#1565C0",
+      };
+    case "service_composition":
+      return {
+        backgroundColor: "#E8F5E9",
+        color: "#2E7D32",
+      };
+    case "economic_rebalance":
+      return {
+        backgroundColor: "#FFF3E0",
+        color: "#EF6C00",
+      };
+    default:
+      return {
+        backgroundColor: "#EDE7F6",
+        color: "#5E35B1",
+      };
+  }
+}
+
+function getModelIcon(modelType: SpreadsheetModelType) {
+  switch (modelType) {
+    case "dedicated_labor":
+      return <Groups2OutlinedIcon sx={{ fontSize: 18 }} />;
+    case "non_dedicated_labor":
+      return <TableChartOutlinedIcon sx={{ fontSize: 18 }} />;
+    case "service_composition":
+      return <AccountTreeOutlinedIcon sx={{ fontSize: 18 }} />;
+    case "economic_rebalance":
+      return <CompareArrowsOutlinedIcon sx={{ fontSize: 18 }} />;
+    default:
+      return <TableChartOutlinedIcon sx={{ fontSize: 18 }} />;
+  }
+}
+
 export default function Home() {
   const [search, setSearch] = useState("");
 
@@ -107,7 +172,13 @@ export default function Home() {
     if (!normalized) return spreadsheetCards;
 
     return spreadsheetCards.filter((item) =>
-      [item.title, item.description, item.category, item.status]
+      [
+        item.title,
+        item.description,
+        item.category,
+        item.status,
+        item.modelLabel,
+      ]
         .join(" ")
         .toLowerCase()
         .includes(normalized)
@@ -181,9 +252,9 @@ export default function Home() {
                         lineHeight: 1.8,
                       }}
                     >
-                      Plataforma para elaboração, organização, análise, comparação
-                      e acompanhamento de planilhas de custos públicas, com foco em
-                      clareza técnica, rastreabilidade e apoio à gestão contratual.
+                      Plataforma para elaboração, análise, comparação e
+                      acompanhamento de planilhas de custos públicas, com modelos
+                      específicos por tipo de contratação e ciclo contratual.
                     </Typography>
                   </Box>
 
@@ -241,7 +312,7 @@ export default function Home() {
 
           <TextField
             fullWidth
-            placeholder="Pesquisar por título, categoria, descrição ou status..."
+            placeholder="Pesquisar por título, modelo, categoria, descrição ou status..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             variant="outlined"
@@ -269,6 +340,7 @@ export default function Home() {
           >
             {filteredCards.map((item) => {
               const statusStyles = getStatusChipStyles(item.status);
+              const modelStyles = getModelChipStyles(item.modelType);
 
               return (
                 <Card
@@ -278,7 +350,7 @@ export default function Home() {
                     borderRadius: 4,
                     backgroundColor: "#FFFFFF",
                     border: "1px solid rgba(43, 35, 64, 0.06)",
-                    minHeight: 246,
+                    minHeight: 270,
                   }}
                 >
                   <CardContent
@@ -289,69 +361,99 @@ export default function Home() {
                       flexDirection: "column",
                     }}
                   >
-                    <Stack
-                      direction="row"
-                      justifyContent="space-between"
-                      alignItems="flex-start"
-                      spacing={2}
-                    >
-                      <Typography
-                        variant="h5"
-                        sx={{
-                          fontWeight: 800,
-                          color: "#241B3A",
-                          fontSize: "1.85rem",
-                          lineHeight: 1.15,
-                          maxWidth: 360,
-                        }}
+                    <Stack spacing={2}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="flex-start"
+                        spacing={2}
                       >
-                        {item.title}
-                      </Typography>
+                        <Box>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                            sx={{ mb: 1 }}
+                          >
+                            <Box
+                              sx={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: 2,
+                                display: "grid",
+                                placeItems: "center",
+                                backgroundColor: modelStyles.backgroundColor,
+                                color: modelStyles.color,
+                              }}
+                            >
+                              {getModelIcon(item.modelType)}
+                            </Box>
 
-                      <Chip
-                        label={item.status}
-                        size="small"
-                        sx={{
-                          ...statusStyles,
-                          fontWeight: 700,
-                          borderRadius: 2,
-                        }}
-                      />
-                    </Stack>
+                            <Chip
+                              label={item.category}
+                              size="small"
+                              sx={{
+                                backgroundColor: modelStyles.backgroundColor,
+                                color: modelStyles.color,
+                                fontWeight: 700,
+                                borderRadius: 2,
+                              }}
+                            />
+                          </Stack>
 
-                    <Typography
-                      variant="body1"
-                      sx={{
-                        color: "#6D6186",
-                        lineHeight: 1.8,
-                        mt: 2.5,
-                        maxWidth: 500,
-                      }}
-                    >
-                      {item.description}
-                    </Typography>
+                          <Typography
+                            variant="h5"
+                            sx={{
+                              fontWeight: 800,
+                              color: "#241B3A",
+                              fontSize: "1.65rem",
+                              lineHeight: 1.15,
+                              maxWidth: 390,
+                            }}
+                          >
+                            {item.title}
+                          </Typography>
+                        </Box>
 
-                    <Stack
-                      direction={{ xs: "column", sm: "row" }}
-                      spacing={1.5}
-                      justifyContent="space-between"
-                      alignItems={{ xs: "flex-start", sm: "center" }}
-                      sx={{ mt: "auto", pt: 4 }}
-                    >
-                      <Stack direction="row" spacing={1.5} alignItems="center">
                         <Chip
-                          label={item.category}
-                          variant="outlined"
+                          label={item.status}
                           size="small"
                           sx={{
-                            borderRadius: 2,
+                            ...statusStyles,
                             fontWeight: 700,
-                            color: "#5B3A7A",
-                            borderColor: "rgba(91, 58, 122, 0.24)",
-                            backgroundColor: "#FFFFFF",
+                            borderRadius: 2,
                           }}
                         />
+                      </Stack>
 
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: "#5B3A7A",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {item.modelLabel}
+                      </Typography>
+
+                      <Typography
+                        variant="body1"
+                        sx={{
+                          color: "#6D6186",
+                          lineHeight: 1.8,
+                          maxWidth: 520,
+                        }}
+                      >
+                        {item.description}
+                      </Typography>
+
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1.5}
+                        justifyContent="space-between"
+                        alignItems={{ xs: "flex-start", sm: "center" }}
+                        sx={{ mt: "auto", pt: 3 }}
+                      >
                         <Stack direction="row" spacing={0.75} alignItems="center">
                           <AccessTimeIcon
                             sx={{ fontSize: 16, color: "#7A708D" }}
@@ -363,29 +465,51 @@ export default function Home() {
                             Atualizado em {item.updatedAt}
                           </Typography>
                         </Stack>
-                      </Stack>
 
-                      <Button
-                        component={RouterLink}
-                        to={`/spreadsheet/${item.id}`}
-                        variant="contained"
-                        endIcon={<ArrowForwardIosRoundedIcon sx={{ fontSize: 14 }} />}
-                        sx={{
-                          minWidth: 120,
-                          borderRadius: 2.5,
-                          px: 2.5,
-                          py: 1.1,
-                          textTransform: "none",
-                          fontWeight: 700,
-                          backgroundColor: "#8E5AB5",
-                          boxShadow: "0 6px 16px rgba(142, 90, 181, 0.24)",
-                          "&:hover": {
-                            backgroundColor: "#7B4CA1",
-                          },
-                        }}
-                      >
-                        Abrir
-                      </Button>
+                        <Stack
+                          direction={{ xs: "column", sm: "row" }}
+                          spacing={1.25}
+                        >
+                          <Button
+                            component={RouterLink}
+                            to={`/models/new/create?model=${item.modelType}`}
+                            variant="outlined"
+                            sx={{
+                              borderRadius: 2.5,
+                              px: 2.25,
+                              py: 1.1,
+                              textTransform: "none",
+                              fontWeight: 700,
+                              borderColor: "rgba(142, 90, 181, 0.35)",
+                              color: "#6B3E90",
+                            }}
+                          >
+                            Usar modelo
+                          </Button>
+
+                          <Button
+                            component={RouterLink}
+                            to={`/spreadsheet/${item.id}`}
+                            variant="contained"
+                            endIcon={<ArrowForwardIosRoundedIcon sx={{ fontSize: 14 }} />}
+                            sx={{
+                              minWidth: 120,
+                              borderRadius: 2.5,
+                              px: 2.5,
+                              py: 1.1,
+                              textTransform: "none",
+                              fontWeight: 700,
+                              backgroundColor: "#8E5AB5",
+                              boxShadow: "0 6px 16px rgba(142, 90, 181, 0.24)",
+                              "&:hover": {
+                                backgroundColor: "#7B4CA1",
+                              },
+                            }}
+                          >
+                            Abrir
+                          </Button>
+                        </Stack>
+                      </Stack>
                     </Stack>
                   </CardContent>
                 </Card>
