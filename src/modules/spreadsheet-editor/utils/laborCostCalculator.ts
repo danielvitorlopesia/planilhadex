@@ -1,47 +1,146 @@
+export type LaborChargesConfig = {
+  employerInssRate: number;
+  fgtsRate: number;
+  ratRate: number;
+  thirdPartyRate: number;
+  vacationProvisionRate: number;
+  thirteenthProvisionRate: number;
+  valeTransportePerEmployee: number;
+  valeAlimentacaoPerEmployee: number;
+  otherBenefitsPerEmployee: number;
+};
+
 export type LaborInput = {
-  salarioBase: number
-  quantidade: number
-  valeTransporte?: number
-  valeAlimentacao?: number
-}
+  salaryBaseTotal: number;
+  quantity: number;
+  config?: Partial<LaborChargesConfig>;
+};
 
 export type LaborResult = {
-  salarioTotal: number
-  inss: number
-  fgts: number
-  ferias: number
-  decimoTerceiro: number
-  custoTotal: number
+  salaryBaseTotal: number;
+  quantity: number;
+  employerInss: number;
+  fgts: number;
+  rat: number;
+  thirdPartyCharges: number;
+  feriasProvision: number;
+  thirteenthProvision: number;
+  valeTransporte: number;
+  valeAlimentacao: number;
+  otherBenefits: number;
+  totalEncargos: number;
+  totalBenefits: number;
+  custoTotal: number;
+  config: LaborChargesConfig;
+};
+
+export const DEFAULT_LABOR_CHARGES_CONFIG: LaborChargesConfig = {
+  employerInssRate: 20,
+  fgtsRate: 8,
+  ratRate: 2,
+  thirdPartyRate: 5.8,
+  vacationProvisionRate: 11.11,
+  thirteenthProvisionRate: 8.33,
+  valeTransportePerEmployee: 0,
+  valeAlimentacaoPerEmployee: 0,
+  otherBenefitsPerEmployee: 0,
+};
+
+function safeNumber(value: unknown, fallback = 0) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.replace(/\./g, "").replace(",", ".");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  return fallback;
+}
+
+export function sanitizeLaborChargesConfig(
+  input?: Partial<LaborChargesConfig>
+): LaborChargesConfig {
+  return {
+    employerInssRate: safeNumber(
+      input?.employerInssRate,
+      DEFAULT_LABOR_CHARGES_CONFIG.employerInssRate
+    ),
+    fgtsRate: safeNumber(input?.fgtsRate, DEFAULT_LABOR_CHARGES_CONFIG.fgtsRate),
+    ratRate: safeNumber(input?.ratRate, DEFAULT_LABOR_CHARGES_CONFIG.ratRate),
+    thirdPartyRate: safeNumber(
+      input?.thirdPartyRate,
+      DEFAULT_LABOR_CHARGES_CONFIG.thirdPartyRate
+    ),
+    vacationProvisionRate: safeNumber(
+      input?.vacationProvisionRate,
+      DEFAULT_LABOR_CHARGES_CONFIG.vacationProvisionRate
+    ),
+    thirteenthProvisionRate: safeNumber(
+      input?.thirteenthProvisionRate,
+      DEFAULT_LABOR_CHARGES_CONFIG.thirteenthProvisionRate
+    ),
+    valeTransportePerEmployee: safeNumber(
+      input?.valeTransportePerEmployee,
+      DEFAULT_LABOR_CHARGES_CONFIG.valeTransportePerEmployee
+    ),
+    valeAlimentacaoPerEmployee: safeNumber(
+      input?.valeAlimentacaoPerEmployee,
+      DEFAULT_LABOR_CHARGES_CONFIG.valeAlimentacaoPerEmployee
+    ),
+    otherBenefitsPerEmployee: safeNumber(
+      input?.otherBenefitsPerEmployee,
+      DEFAULT_LABOR_CHARGES_CONFIG.otherBenefitsPerEmployee
+    ),
+  };
 }
 
 export function calculateLaborCost(input: LaborInput): LaborResult {
+  const config = sanitizeLaborChargesConfig(input.config);
+  const salaryBaseTotal = safeNumber(input.salaryBaseTotal, 0);
+  const quantity = safeNumber(input.quantity, 0);
 
-  const salarioTotal = input.salarioBase * input.quantidade
+  const employerInss = salaryBaseTotal * (config.employerInssRate / 100);
+  const fgts = salaryBaseTotal * (config.fgtsRate / 100);
+  const rat = salaryBaseTotal * (config.ratRate / 100);
+  const thirdPartyCharges = salaryBaseTotal * (config.thirdPartyRate / 100);
+  const feriasProvision = salaryBaseTotal * (config.vacationProvisionRate / 100);
+  const thirteenthProvision =
+    salaryBaseTotal * (config.thirteenthProvisionRate / 100);
 
-  const inss = salarioTotal * 0.20
-  const fgts = salarioTotal * 0.08
+  const valeTransporte = quantity * config.valeTransportePerEmployee;
+  const valeAlimentacao = quantity * config.valeAlimentacaoPerEmployee;
+  const otherBenefits = quantity * config.otherBenefitsPerEmployee;
 
-  const ferias = salarioTotal / 12
-  const decimoTerceiro = salarioTotal / 12
-
-  const beneficios =
-    (input.valeTransporte || 0) +
-    (input.valeAlimentacao || 0)
-
-  const custoTotal =
-    salarioTotal +
-    inss +
+  const totalEncargos =
+    employerInss +
     fgts +
-    ferias +
-    decimoTerceiro +
-    beneficios
+    rat +
+    thirdPartyCharges +
+    feriasProvision +
+    thirteenthProvision;
+
+  const totalBenefits = valeTransporte + valeAlimentacao + otherBenefits;
+
+  const custoTotal = salaryBaseTotal + totalEncargos + totalBenefits;
 
   return {
-    salarioTotal,
-    inss,
+    salaryBaseTotal,
+    quantity,
+    employerInss,
     fgts,
-    ferias,
-    decimoTerceiro,
-    custoTotal
-  }
+    rat,
+    thirdPartyCharges,
+    feriasProvision,
+    thirteenthProvision,
+    valeTransporte,
+    valeAlimentacao,
+    otherBenefits,
+    totalEncargos,
+    totalBenefits,
+    custoTotal,
+    config,
+  };
 }
