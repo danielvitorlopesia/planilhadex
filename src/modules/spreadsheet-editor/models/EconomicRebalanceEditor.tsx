@@ -4,6 +4,7 @@ import { SpreadsheetRecord } from "../../../services/spreadsheetService";
 
 type Props = {
   spreadsheet: SpreadsheetRecord;
+  onSpreadsheetUpdated?: (spreadsheet: SpreadsheetRecord) => void;
 };
 
 export default function EconomicRebalanceEditor({ spreadsheet }: Props) {
@@ -17,8 +18,7 @@ export default function EconomicRebalanceEditor({ spreadsheet }: Props) {
 
           <Typography variant="body2" color="text.secondary">
             Este editor será usado para análise comparativa entre base anterior e
-            nova composição, destacando eventos modificadores, itens impactados,
-            variações percentuais e saldo de reequilíbrio.
+            nova composição, com destaque para itens impactados e variação econômica.
           </Typography>
 
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -26,7 +26,6 @@ export default function EconomicRebalanceEditor({ spreadsheet }: Props) {
             <Chip label="Evento modificador" />
             <Chip label="Itens impactados" />
             <Chip label="Variação percentual" />
-            <Chip label="Síntese do reequilíbrio" />
           </Stack>
 
           <Typography variant="body2" color="text.secondary">
