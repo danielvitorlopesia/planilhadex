@@ -1,110 +1,53 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Box,
+  Breadcrumbs,
   Button,
   Card,
   CardContent,
   Chip,
   Container,
-  InputAdornment,
+  Divider,
+  Link,
   Stack,
-  TextField,
   Typography,
 } from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
-import AddIcon from "@mui/icons-material/Add";
-import DashboardCustomizeOutlinedIcon from "@mui/icons-material/DashboardCustomizeOutlined";
-import ArrowForwardIosRoundedIcon from "@mui/icons-material/ArrowForwardIosRounded";
+import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import ApartmentOutlinedIcon from "@mui/icons-material/ApartmentOutlined";
+import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
+import AttachMoneyOutlinedIcon from "@mui/icons-material/AttachMoneyOutlined";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import SourceOutlinedIcon from "@mui/icons-material/SourceOutlined";
 import Groups2OutlinedIcon from "@mui/icons-material/Groups2Outlined";
 import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
-import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import CompareArrowsOutlinedIcon from "@mui/icons-material/CompareArrowsOutlined";
-import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
+import TableChartIcon from "@mui/icons-material/TableChart";
 import { Link as RouterLink } from "react-router-dom";
 import {
-  getStoredSpreadsheets,
+  getAllSpreadsheets,
   SpreadsheetRecord,
 } from "../services/spreadsheetService";
 
-type SpreadsheetStatus = "Em elaboração" | "Concluída" | "Em revisão";
-
-type SpreadsheetModelType =
-  | "dedicated_labor"
-  | "non_dedicated_labor"
-  | "service_composition"
-  | "economic_rebalance";
-
-interface SpreadsheetCardItem {
-  id: string;
-  title: string;
-  description: string;
-  status: SpreadsheetStatus;
-  category: string;
-  updatedAt: string;
-  modelType: SpreadsheetModelType;
-  modelLabel: string;
-  isExample?: boolean;
+function formatCurrency(value: number | undefined) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value || 0);
 }
 
-const exampleSpreadsheetCards: SpreadsheetCardItem[] = [
-  {
-    id: "example-101",
-    title: "Exemplo — Dedicação Exclusiva",
-    description:
-      "Planilha-modelo para contratos com postos fixos, jornada definida, encargos, benefícios, insumos e consolidação global de custos.",
-    status: "Em elaboração",
-    category: "Modelo 01",
-    updatedAt: "14/03/2026",
-    modelType: "dedicated_labor",
-    modelLabel: "Terceirização com dedicação exclusiva",
-    isExample: true,
-  },
-  {
-    id: "example-102",
-    title: "Exemplo — Sem Dedicação Exclusiva",
-    description:
-      "Planilha-modelo para serviços executados por demanda, produtividade ou escopo, sem alocação contínua de postos fixos.",
-    status: "Em elaboração",
-    category: "Modelo 02",
-    updatedAt: "14/03/2026",
-    modelType: "non_dedicated_labor",
-    modelLabel: "Terceirização sem dedicação exclusiva",
-    isExample: true,
-  },
-  {
-    id: "example-103",
-    title: "Exemplo — Composição de Serviços",
-    description:
-      "Planilha-modelo para orçamentos estruturados por itens, subitens, equipes, materiais, equipamentos, logística e consolidação por etapas.",
-    status: "Em elaboração",
-    category: "Modelo 03",
-    updatedAt: "14/03/2026",
-    modelType: "service_composition",
-    modelLabel: "Serviços por composição",
-    isExample: true,
-  },
-  {
-    id: "example-104",
-    title: "Exemplo — Repactuação e Revisão",
-    description:
-      "Planilha-modelo para repactuação, reajuste, revisão e reequilíbrio econômico-financeiro, com base em versão anterior vinculada.",
-    status: "Em elaboração",
-    category: "Modelo 04",
-    updatedAt: "14/03/2026",
-    modelType: "economic_rebalance",
-    modelLabel: "Repactuação / revisão",
-    isExample: true,
-  },
-];
-
-function getModelLabel(modelType: SpreadsheetModelType) {
+function getModelLabel(modelType?: string) {
   switch (modelType) {
     case "dedicated_labor":
-      return "Terceirização com dedicação exclusiva";
+      return "Dedicação exclusiva";
     case "non_dedicated_labor":
-      return "Terceirização sem dedicação exclusiva";
+      return "Sem dedicação exclusiva";
     case "service_composition":
       return "Serviços por composição";
     case "economic_rebalance":
@@ -114,46 +57,22 @@ function getModelLabel(modelType: SpreadsheetModelType) {
   }
 }
 
-function mapStoredSpreadsheetToCard(item: SpreadsheetRecord): SpreadsheetCardItem {
-  return {
-    id: item.id,
-    title: item.title,
-    description: item.description,
-    status: (item.status as SpreadsheetStatus) || "Em elaboração",
-    category: item.category,
-    updatedAt: item.updatedAt,
-    modelType: item.modelType,
-    modelLabel: getModelLabel(item.modelType),
-    isExample: false,
-  };
-}
-
-function getStatusChipStyles(status: SpreadsheetStatus) {
-  switch (status) {
-    case "Em elaboração":
-      return {
-        backgroundColor: "#EFE7F6",
-        color: "#8E5AB5",
-      };
-    case "Concluída":
-      return {
-        backgroundColor: "#E7F6EC",
-        color: "#2E7D32",
-      };
-    case "Em revisão":
-      return {
-        backgroundColor: "#FFF3E0",
-        color: "#ED6C02",
-      };
+function getModelIcon(modelType?: string) {
+  switch (modelType) {
+    case "dedicated_labor":
+      return <Groups2OutlinedIcon sx={{ fontSize: 18 }} />;
+    case "non_dedicated_labor":
+      return <TableChartOutlinedIcon sx={{ fontSize: 18 }} />;
+    case "service_composition":
+      return <AccountTreeOutlinedIcon sx={{ fontSize: 18 }} />;
+    case "economic_rebalance":
+      return <CompareArrowsOutlinedIcon sx={{ fontSize: 18 }} />;
     default:
-      return {
-        backgroundColor: "#EFE7F6",
-        color: "#8E5AB5",
-      };
+      return <TableChartIcon sx={{ fontSize: 18 }} />;
   }
 }
 
-function getModelChipStyles(modelType: SpreadsheetModelType) {
+function getModelChipStyles(modelType?: string) {
   switch (modelType) {
     case "dedicated_labor":
       return {
@@ -183,69 +102,394 @@ function getModelChipStyles(modelType: SpreadsheetModelType) {
   }
 }
 
-function getModelIcon(modelType: SpreadsheetModelType) {
-  switch (modelType) {
-    case "dedicated_labor":
-      return <Groups2OutlinedIcon sx={{ fontSize: 18 }} />;
-    case "non_dedicated_labor":
-      return <TableChartOutlinedIcon sx={{ fontSize: 18 }} />;
-    case "service_composition":
-      return <AccountTreeOutlinedIcon sx={{ fontSize: 18 }} />;
-    case "economic_rebalance":
-      return <CompareArrowsOutlinedIcon sx={{ fontSize: 18 }} />;
+function getStatusChipStyles(status?: string) {
+  switch (status) {
+    case "Em elaboração":
+      return {
+        backgroundColor: "#EFE7F6",
+        color: "#8E5AB5",
+      };
+    case "Concluída":
+      return {
+        backgroundColor: "#E7F6EC",
+        color: "#2E7D32",
+      };
+    case "Em revisão":
+      return {
+        backgroundColor: "#FFF3E0",
+        color: "#ED6C02",
+      };
+    case "Exemplo nativo":
+      return {
+        backgroundColor: "#E3F2FD",
+        color: "#1565C0",
+      };
     default:
-      return <TableChartOutlinedIcon sx={{ fontSize: 18 }} />;
+      return {
+        backgroundColor: "#EFE7F6",
+        color: "#8E5AB5",
+      };
   }
 }
 
-export default function Home() {
-  const [search, setSearch] = useState("");
-  const [storedCards, setStoredCards] = useState<SpreadsheetCardItem[]>([]);
+function getDomainScenarioLabel(record: SpreadsheetRecord) {
+  if (record.trainingProfile?.domainScenarioLabel) {
+    return record.trainingProfile.domainScenarioLabel;
+  }
 
-  useEffect(() => {
-    document.title = "CustoPúblico — Gestão de Planilhas de Custos Públicas";
-    refreshLocalSpreadsheets();
-  }, []);
+  switch (record.domainScenario) {
+    case "reception_administrative_support":
+      return "Recepção e apoio administrativo";
+    case "cleaning_conservation":
+      return "Limpeza e conservação";
+    case "concierge_access_control":
+      return "Portaria e controle de acesso";
+    case "property_security":
+      return "Vigilância patrimonial";
+    default:
+      return "Domínio não classificado";
+  }
+}
 
-  const refreshLocalSpreadsheets = () => {
-    const items = getStoredSpreadsheets().map(mapStoredSpreadsheetToCard);
-    setStoredCards(items);
-  };
+function readEditorDraftField(
+  spreadsheet: SpreadsheetRecord,
+  field: string
+): string {
+  const editorDraft =
+    spreadsheet.metadata &&
+    typeof spreadsheet.metadata === "object" &&
+    spreadsheet.metadata.editorDraft &&
+    typeof spreadsheet.metadata.editorDraft === "object"
+      ? (spreadsheet.metadata.editorDraft as Record<string, unknown>)
+      : undefined;
 
-  const allCards = useMemo(
-    () => [...storedCards, ...exampleSpreadsheetCards],
-    [storedCards]
-  );
+  const value = editorDraft?.[field];
+  return typeof value === "string" ? value : "";
+}
 
-  const filteredCards = useMemo(() => {
-    const normalized = search.trim().toLowerCase();
+function getProfessionalCategory(spreadsheet: SpreadsheetRecord) {
+  const fromEditor = readEditorDraftField(spreadsheet, "professionalCategory");
+  if (fromEditor) {
+    return fromEditor;
+  }
 
-    if (!normalized) return allCards;
-
-    return allCards.filter((item) =>
-      [
-        item.title,
-        item.description,
-        item.category,
-        item.status,
-        item.modelLabel,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalized)
+  const laborRow = spreadsheet.rows.find((row) => {
+    const category = row.categoria.toLowerCase();
+    return (
+      category.includes("mão de obra") ||
+      category.includes("equipe operacional")
     );
-  }, [search, allCards]);
+  });
+
+  return laborRow?.item || "";
+}
+
+function StatCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+}) {
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 4 }}>
+      <CardContent>
+        <Typography variant="body2" color="text.secondary">
+          {label}
+        </Typography>
+        <Typography variant="h4" fontWeight={800} color="#241B3A">
+          {value}
+        </Typography>
+        {hint ? (
+          <Typography variant="caption" color="text.secondary">
+            {hint}
+          </Typography>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SpreadsheetCard({ spreadsheet }: { spreadsheet: SpreadsheetRecord }) {
+  const modelStyles = getModelChipStyles(spreadsheet.modelType);
+  const statusStyles = getStatusChipStyles(spreadsheet.status);
+  const domainLabel = getDomainScenarioLabel(spreadsheet);
+  const professionalCategory = getProfessionalCategory(spreadsheet);
+  const municipality = readEditorDraftField(spreadsheet, "municipality");
+  const state = readEditorDraftField(spreadsheet, "state");
+  const cctReference = readEditorDraftField(spreadsheet, "cctReference");
+  const cboCode = readEditorDraftField(spreadsheet, "cboCode");
+  const referenceLocation =
+    [municipality, state].filter(Boolean).join(" / ") || "Não informado";
 
   return (
-    <Box
+    <Card
+      variant="outlined"
       sx={{
-        minHeight: "100vh",
-        bgcolor: "#F7F3F8",
-        py: { xs: 3, md: 5 },
+        borderRadius: 4,
+        height: "100%",
+        borderColor: "rgba(91, 58, 122, 0.10)",
+        transition: "0.2s ease",
+        "&:hover": {
+          borderColor: "rgba(91, 58, 122, 0.24)",
+          boxShadow: "0 10px 24px rgba(79, 55, 103, 0.08)",
+        },
       }}
     >
-      <Container maxWidth="lg">
+      <CardContent sx={{ p: 3 }}>
+        <Stack spacing={2.2}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            justifyContent="space-between"
+            spacing={1.5}
+          >
+            <Box>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 800,
+                  color: "#241B3A",
+                  lineHeight: 1.2,
+                }}
+              >
+                {spreadsheet.title}
+              </Typography>
+
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "#6D6186",
+                  mt: 1,
+                  lineHeight: 1.7,
+                }}
+              >
+                {spreadsheet.description}
+              </Typography>
+            </Box>
+
+            <Button
+              component={RouterLink}
+              to={`/spreadsheet/${spreadsheet.id}`}
+              variant="outlined"
+              sx={{ alignSelf: { xs: "flex-start", sm: "flex-start" } }}
+            >
+              Abrir
+            </Button>
+          </Stack>
+
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Chip
+              icon={getModelIcon(spreadsheet.modelType)}
+              label={getModelLabel(spreadsheet.modelType)}
+              sx={{
+                backgroundColor: modelStyles.backgroundColor,
+                color: modelStyles.color,
+                fontWeight: 700,
+              }}
+            />
+
+            <Chip
+              label={spreadsheet.status}
+              sx={{
+                backgroundColor: statusStyles.backgroundColor,
+                color: statusStyles.color,
+                fontWeight: 700,
+              }}
+            />
+
+            <Chip
+              label={domainLabel}
+              variant="outlined"
+              sx={{
+                fontWeight: 700,
+                borderColor: "rgba(21, 101, 192, 0.24)",
+                color: "#1565C0",
+              }}
+            />
+
+            <Chip
+              label={spreadsheet.isSeedExample ? "Exemplo nativo" : "Planilha criada"}
+              variant="outlined"
+            />
+
+            <Chip
+              label={spreadsheet.source === "api" ? "Origem API" : "Origem local"}
+              variant="outlined"
+            />
+          </Stack>
+
+          <Divider />
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" },
+              gap: 1.5,
+            }}
+          >
+            <Stack direction="row" spacing={1} alignItems="flex-start">
+              <ApartmentOutlinedIcon sx={{ fontSize: 18, color: "#7A708D", mt: "2px" }} />
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Órgão / unidade
+                </Typography>
+                <Typography variant="body2" color="#241B3A" fontWeight={600}>
+                  {spreadsheet.contractingAgency || "Não informado"}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {spreadsheet.unitName || "Unidade não informada"}
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Stack direction="row" spacing={1} alignItems="flex-start">
+              <SourceOutlinedIcon sx={{ fontSize: 18, color: "#7A708D", mt: "2px" }} />
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Processo / lote
+                </Typography>
+                <Typography variant="body2" color="#241B3A" fontWeight={600}>
+                  {spreadsheet.contractReference || "Sem referência"}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {spreadsheet.lotName || "Lote não informado"}
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Stack direction="row" spacing={1} alignItems="flex-start">
+              <FactCheckOutlinedIcon sx={{ fontSize: 18, color: "#7A708D", mt: "2px" }} />
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Categoria / CBO / CCT
+                </Typography>
+                <Typography variant="body2" color="#241B3A" fontWeight={600}>
+                  {professionalCategory || "Categoria não informada"}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {cboCode || "CBO não informado"}
+                  {cctReference ? ` • ${cctReference}` : " • CCT não informada"}
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Stack direction="row" spacing={1} alignItems="flex-start">
+              <AttachMoneyOutlinedIcon sx={{ fontSize: 18, color: "#7A708D", mt: "2px" }} />
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Valor de referência
+                </Typography>
+                <Typography variant="body2" color="#241B3A" fontWeight={600}>
+                  {formatCurrency(spreadsheet.monthlyBaseValue)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {spreadsheet.headcount || 0} postos/unidades • {spreadsheet.rows.length} itens
+                </Typography>
+              </Box>
+            </Stack>
+          </Box>
+
+          <Divider />
+
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            justifyContent="space-between"
+            spacing={1.5}
+          >
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Inventory2OutlinedIcon sx={{ fontSize: 16, color: "#7A708D" }} />
+              <Typography variant="body2" color="text.secondary">
+                Localidade: {referenceLocation}
+              </Typography>
+            </Stack>
+
+            <Stack direction="row" spacing={1} alignItems="center">
+              <AccessTimeIcon sx={{ fontSize: 16, color: "#7A708D" }} />
+              <Typography variant="body2" color="text.secondary">
+                Atualizado em {spreadsheet.updatedAt}
+              </Typography>
+            </Stack>
+          </Stack>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function Home() {
+  const [spreadsheets, setSpreadsheets] = useState<SpreadsheetRecord[]>([]);
+  const [lastRefresh, setLastRefresh] = useState<string>("");
+
+  const reloadSpreadsheets = useCallback(() => {
+    const data = getAllSpreadsheets();
+    setSpreadsheets(data);
+    setLastRefresh(new Date().toLocaleString("pt-BR"));
+  }, []);
+
+  useEffect(() => {
+    document.title = "CustoPúblico — Painel";
+    reloadSpreadsheets();
+  }, [reloadSpreadsheets]);
+
+  useEffect(() => {
+    function handleFocus() {
+      reloadSpreadsheets();
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        reloadSpreadsheets();
+      }
+    }
+
+    function handleStorage() {
+      reloadSpreadsheets();
+    }
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("storage", handleStorage);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("storage", handleStorage);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [reloadSpreadsheets]);
+
+  const createdSpreadsheets = useMemo(
+    () => spreadsheets.filter((item) => !item.isSeedExample),
+    [spreadsheets]
+  );
+
+  const seedExamples = useMemo(
+    () => spreadsheets.filter((item) => item.isSeedExample),
+    [spreadsheets]
+  );
+
+  const totalEstimatedValue = useMemo(() => {
+    return createdSpreadsheets.reduce(
+      (sum, spreadsheet) => sum + (spreadsheet.monthlyBaseValue || 0),
+      0
+    );
+  }, [createdSpreadsheets]);
+
+  const inProgressCount = useMemo(() => {
+    return createdSpreadsheets.filter(
+      (spreadsheet) => spreadsheet.status === "Em elaboração"
+    ).length;
+  }, [createdSpreadsheets]);
+
+  return (
+    <Box sx={{ minHeight: "100vh", bgcolor: "#F7F3F8", py: 4 }}>
+      <Container maxWidth="xl">
         <Stack spacing={3}>
+          <Breadcrumbs separator={<ChevronRightIcon fontSize="small" />}>
+            <Typography color="text.primary">Início</Typography>
+          </Breadcrumbs>
+
           <Card
             elevation={0}
             sx={{
@@ -256,7 +500,7 @@ export default function Home() {
             }}
           >
             <CardContent sx={{ p: { xs: 3, md: 4 } }}>
-              <Stack spacing={3}>
+              <Stack spacing={2.5}>
                 <Stack
                   direction={{ xs: "column", md: "row" }}
                   justifyContent="space-between"
@@ -282,13 +526,11 @@ export default function Home() {
                     </Stack>
 
                     <Typography
-                      variant="h3"
+                      variant="h4"
                       sx={{
                         fontWeight: 800,
                         color: "#2B2340",
-                        fontSize: { xs: "2rem", md: "2.35rem" },
-                        lineHeight: 1.1,
-                        maxWidth: 820,
+                        lineHeight: 1.15,
                       }}
                     >
                       Gestão de Planilhas de Custos Públicas
@@ -298,377 +540,172 @@ export default function Home() {
                       variant="body1"
                       sx={{
                         color: "#6D6186",
-                        mt: 2,
-                        maxWidth: 820,
+                        mt: 1.5,
                         lineHeight: 1.8,
+                        maxWidth: 980,
                       }}
                     >
-                      Plataforma para elaboração, análise, comparação e
-                      acompanhamento de planilhas de custos públicas, com modelos
-                      específicos por tipo de contratação e ciclo contratual.
+                      Painel inicial com exemplos nativos de domínio e planilhas já
+                      criadas. A partir daqui, o produto deixa de funcionar como
+                      listagem genérica e passa a expor contexto contratual, cenário
+                      setorial e base técnica para elaboração, leitura e análise.
                     </Typography>
                   </Box>
 
-                  <Stack
-                    direction={{ xs: "column", sm: "row" }}
-                    spacing={1.5}
-                    sx={{ minWidth: { md: 260 } }}
-                  >
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
                     <Button
                       component={RouterLink}
                       to="/models/new"
+                      variant="outlined"
+                    >
+                      Ver modelos
+                    </Button>
+
+                    <Button
+                      component={RouterLink}
+                      to="/create"
                       variant="contained"
-                      startIcon={<AddIcon />}
-                      sx={{
-                        borderRadius: 3,
-                        px: 2.5,
-                        py: 1.2,
-                        textTransform: "none",
-                        fontWeight: 700,
-                        backgroundColor: "#8E5AB5",
-                        "&:hover": {
-                          backgroundColor: "#7B4CA1",
-                        },
-                      }}
+                      startIcon={<AddCircleOutlineIcon />}
                     >
                       Nova planilha
                     </Button>
 
                     <Button
-                      component={RouterLink}
-                      to="/models/new"
                       variant="outlined"
-                      startIcon={<DashboardCustomizeOutlinedIcon />}
-                      sx={{
-                        borderRadius: 3,
-                        px: 2.5,
-                        py: 1.2,
-                        textTransform: "none",
-                        fontWeight: 700,
-                        borderColor: "rgba(142, 90, 181, 0.35)",
-                        color: "#6B3E90",
-                        "&:hover": {
-                          borderColor: "#8E5AB5",
-                          backgroundColor: "rgba(142, 90, 181, 0.04)",
-                        },
-                      }}
+                      startIcon={<RefreshIcon />}
+                      onClick={reloadSpreadsheets}
                     >
-                      Escolher modelo
+                      Atualizar painel
                     </Button>
                   </Stack>
+                </Stack>
+
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  <Chip label="Recepção / apoio administrativo" variant="outlined" />
+                  <Chip label="Limpeza e conservação" variant="outlined" />
+                  <Chip label="Portaria / controle de acesso" variant="outlined" />
+                  <Chip label="Vigilância patrimonial" variant="outlined" />
                 </Stack>
               </Stack>
             </CardContent>
           </Card>
 
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            spacing={2}
-            alignItems={{ xs: "stretch", md: "center" }}
-          >
-            <TextField
-              fullWidth
-              placeholder="Pesquisar por título, modelo, categoria, descrição ou status..."
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              variant="outlined"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ color: "#7A708D" }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 999,
-                  backgroundColor: "#FFFFFF",
-                },
-              }}
-            />
-
-            <Button
-              variant="outlined"
-              startIcon={<RefreshOutlinedIcon />}
-              onClick={refreshLocalSpreadsheets}
-              sx={{
-                minWidth: 170,
-                borderRadius: 999,
-                textTransform: "none",
-                fontWeight: 700,
-              }}
-            >
-              Atualizar painel
-            </Button>
-          </Stack>
-
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            spacing={1}
-            justifyContent="space-between"
-            alignItems={{ xs: "flex-start", md: "center" }}
-          >
-            <Typography variant="body2" color="#6D6186">
-              {storedCards.length} planilha(s) criada(s) localmente e{" "}
-              {exampleSpreadsheetCards.length} modelo(s) de exemplo no painel.
-            </Typography>
-          </Stack>
-
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
-              gap: 3,
+              gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" },
+              gap: 2,
             }}
           >
-            {filteredCards.map((item) => {
-              const statusStyles = getStatusChipStyles(item.status);
-              const modelStyles = getModelChipStyles(item.modelType);
-
-              return (
-                <Card
-                  key={item.id}
-                  elevation={0}
-                  sx={{
-                    borderRadius: 4,
-                    backgroundColor: "#FFFFFF",
-                    border: "1px solid rgba(43, 35, 64, 0.06)",
-                    minHeight: 270,
-                  }}
-                >
-                  <CardContent
-                    sx={{
-                      p: 3,
-                      height: "100%",
-                      display: "flex",
-                      flexDirection: "column",
-                    }}
-                  >
-                    <Stack spacing={2}>
-                      <Stack
-                        direction="row"
-                        justifyContent="space-between"
-                        alignItems="flex-start"
-                        spacing={2}
-                      >
-                        <Box>
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            alignItems="center"
-                            sx={{ mb: 1 }}
-                          >
-                            <Box
-                              sx={{
-                                width: 28,
-                                height: 28,
-                                borderRadius: 2,
-                                display: "grid",
-                                placeItems: "center",
-                                backgroundColor: modelStyles.backgroundColor,
-                                color: modelStyles.color,
-                              }}
-                            >
-                              {getModelIcon(item.modelType)}
-                            </Box>
-
-                            <Chip
-                              label={item.category}
-                              size="small"
-                              sx={{
-                                backgroundColor: modelStyles.backgroundColor,
-                                color: modelStyles.color,
-                                fontWeight: 700,
-                                borderRadius: 2,
-                              }}
-                            />
-
-                            {item.isExample ? (
-                              <Chip
-                                label="Exemplo"
-                                size="small"
-                                variant="outlined"
-                                sx={{ fontWeight: 700 }}
-                              />
-                            ) : (
-                              <Chip
-                                label="Criada"
-                                size="small"
-                                color="success"
-                                variant="outlined"
-                                sx={{ fontWeight: 700 }}
-                              />
-                            )}
-                          </Stack>
-
-                          <Typography
-                            variant="h5"
-                            sx={{
-                              fontWeight: 800,
-                              color: "#241B3A",
-                              fontSize: "1.65rem",
-                              lineHeight: 1.15,
-                              maxWidth: 390,
-                            }}
-                          >
-                            {item.title}
-                          </Typography>
-                        </Box>
-
-                        <Chip
-                          label={item.status}
-                          size="small"
-                          sx={{
-                            ...statusStyles,
-                            fontWeight: 700,
-                            borderRadius: 2,
-                          }}
-                        />
-                      </Stack>
-
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: "#5B3A7A",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {item.modelLabel}
-                      </Typography>
-
-                      <Typography
-                        variant="body1"
-                        sx={{
-                          color: "#6D6186",
-                          lineHeight: 1.8,
-                          maxWidth: 520,
-                        }}
-                      >
-                        {item.description}
-                      </Typography>
-
-                      <Stack
-                        direction={{ xs: "column", sm: "row" }}
-                        spacing={1.5}
-                        justifyContent="space-between"
-                        alignItems={{ xs: "flex-start", sm: "center" }}
-                        sx={{ mt: "auto", pt: 3 }}
-                      >
-                        <Stack direction="row" spacing={0.75} alignItems="center">
-                          <AccessTimeIcon
-                            sx={{ fontSize: 16, color: "#7A708D" }}
-                          />
-                          <Typography
-                            variant="body2"
-                            sx={{ color: "#7A708D", fontWeight: 500 }}
-                          >
-                            Atualizado em {item.updatedAt}
-                          </Typography>
-                        </Stack>
-
-                        <Stack
-                          direction={{ xs: "column", sm: "row" }}
-                          spacing={1.25}
-                        >
-                          {item.isExample ? (
-                            <>
-                              <Button
-                                component={RouterLink}
-                                to={`/models/new/create?model=${item.modelType}`}
-                                variant="outlined"
-                                sx={{
-                                  borderRadius: 2.5,
-                                  px: 2.25,
-                                  py: 1.1,
-                                  textTransform: "none",
-                                  fontWeight: 700,
-                                  borderColor: "rgba(142, 90, 181, 0.35)",
-                                  color: "#6B3E90",
-                                }}
-                              >
-                                Ver estrutura
-                              </Button>
-
-                              <Button
-                                component={RouterLink}
-                                to={`/models/new/create?model=${item.modelType}`}
-                                variant="contained"
-                                endIcon={
-                                  <ArrowForwardIosRoundedIcon sx={{ fontSize: 14 }} />
-                                }
-                                sx={{
-                                  minWidth: 140,
-                                  borderRadius: 2.5,
-                                  px: 2.5,
-                                  py: 1.1,
-                                  textTransform: "none",
-                                  fontWeight: 700,
-                                  backgroundColor: "#8E5AB5",
-                                  boxShadow: "0 6px 16px rgba(142, 90, 181, 0.24)",
-                                  "&:hover": {
-                                    backgroundColor: "#7B4CA1",
-                                  },
-                                }}
-                              >
-                                Usar modelo
-                              </Button>
-                            </>
-                          ) : (
-                            <Button
-                              component={RouterLink}
-                              to={`/spreadsheet/${item.id}`}
-                              variant="contained"
-                              endIcon={
-                                <ArrowForwardIosRoundedIcon sx={{ fontSize: 14 }} />
-                              }
-                              sx={{
-                                minWidth: 120,
-                                borderRadius: 2.5,
-                                px: 2.5,
-                                py: 1.1,
-                                textTransform: "none",
-                                fontWeight: 700,
-                                backgroundColor: "#8E5AB5",
-                                boxShadow: "0 6px 16px rgba(142, 90, 181, 0.24)",
-                                "&:hover": {
-                                  backgroundColor: "#7B4CA1",
-                                },
-                              }}
-                            >
-                              Abrir
-                            </Button>
-                          )}
-                        </Stack>
-                      </Stack>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              );
-            })}
+            <StatCard
+              label="Planilhas criadas"
+              value={createdSpreadsheets.length}
+              hint="Itens reais do ambiente local"
+            />
+            <StatCard
+              label="Exemplos nativos"
+              value={seedExamples.length}
+              hint="Base inicial do domínio"
+            />
+            <StatCard
+              label="Em elaboração"
+              value={inProgressCount}
+              hint="Status atual das planilhas criadas"
+            />
+            <StatCard
+              label="Valor de referência"
+              value={formatCurrency(totalEstimatedValue)}
+              hint="Somatório das planilhas criadas"
+            />
           </Box>
 
-          {filteredCards.length === 0 ? (
-            <Card
-              elevation={0}
+          <Alert severity="info" sx={{ borderRadius: 3 }}>
+            A Home agora lê melhor o contexto das planilhas e se atualiza novamente ao
+            retornar o foco da aba, ao mudar a visibilidade da página e ao clicar em
+            “Atualizar painel”.
+          </Alert>
+
+          <Stack spacing={2}>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              justifyContent="space-between"
+              alignItems={{ xs: "flex-start", md: "center" }}
+              spacing={1.5}
+            >
+              <Typography variant="h5" fontWeight={800} color="#241B3A">
+                Planilhas criadas
+              </Typography>
+
+              <Typography variant="body2" color="text.secondary">
+                Última atualização: {lastRefresh || "—"}
+              </Typography>
+            </Stack>
+
+            {createdSpreadsheets.length === 0 ? (
+              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+                <CardContent>
+                  <Stack spacing={1.5}>
+                    <Typography variant="h6" fontWeight={700}>
+                      Nenhuma planilha criada ainda
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Comece pelos modelos e já crie uma planilha com cenário setorial,
+                      órgão, referência contratual e parâmetros iniciais do editor.
+                    </Typography>
+                    <Box>
+                      <Button
+                        component={RouterLink}
+                        to="/models/new"
+                        variant="contained"
+                        startIcon={<AddCircleOutlineIcon />}
+                      >
+                        Criar primeira planilha
+                      </Button>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+            ) : (
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    lg: "repeat(2, minmax(0, 1fr))",
+                  },
+                  gap: 2,
+                }}
+              >
+                {createdSpreadsheets.map((spreadsheet) => (
+                  <SpreadsheetCard
+                    key={spreadsheet.id}
+                    spreadsheet={spreadsheet}
+                  />
+                ))}
+              </Box>
+            )}
+          </Stack>
+
+          <Stack spacing={2}>
+            <Typography variant="h5" fontWeight={800} color="#241B3A">
+              Exemplos nativos do domínio
+            </Typography>
+
+            <Box
               sx={{
-                borderRadius: 4,
-                backgroundColor: "#FFFFFF",
-                border: "1px solid rgba(43, 35, 64, 0.06)",
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  lg: "repeat(2, minmax(0, 1fr))",
+                },
+                gap: 2,
               }}
             >
-              <CardContent sx={{ p: 4 }}>
-                <Stack spacing={1}>
-                  <Typography variant="h6" fontWeight={700} color="#241B3A">
-                    Nenhum resultado encontrado
-                  </Typography>
-                  <Typography variant="body2" color="#6D6186">
-                    Ajuste a busca ou utilize o botão “Nova planilha” para iniciar
-                    uma nova estrutura.
-                  </Typography>
-                </Stack>
-              </CardContent>
-            </Card>
-          ) : null}
+              {seedExamples.map((spreadsheet) => (
+                <SpreadsheetCard key={spreadsheet.id} spreadsheet={spreadsheet} />
+              ))}
+            </Box>
+          </Stack>
         </Stack>
       </Container>
     </Box>
