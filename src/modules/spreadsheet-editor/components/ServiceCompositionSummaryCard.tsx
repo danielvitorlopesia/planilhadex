@@ -47,7 +47,7 @@ export default function ServiceCompositionSummaryCard({ summary }: Props) {
           </Typography>
 
           <Typography variant="body2" color="text.secondary">
-            Consolidação por bloco operacional da composição atual.
+            Consolidação por bloco operacional e por recorrência da composição atual.
           </Typography>
 
           <Box
@@ -82,6 +82,10 @@ export default function ServiceCompositionSummaryCard({ summary }: Props) {
 
           <Divider />
 
+          <Typography variant="subtitle2" fontWeight={700}>
+            Totais por bloco
+          </Typography>
+
           <SummaryLine
             label="Equipe técnica / operacional"
             value={summary.workforceTotal}
@@ -102,6 +106,16 @@ export default function ServiceCompositionSummaryCard({ summary }: Props) {
             label="Apoio operacional"
             value={summary.supportTotal}
           />
+
+          <Divider />
+
+          <Typography variant="subtitle2" fontWeight={700}>
+            Totais por recorrência
+          </Typography>
+
+          <SummaryLine label="Recorrente" value={summary.recurringTotal} />
+          <SummaryLine label="Eventual" value={summary.eventualTotal} />
+          <SummaryLine label="Sob demanda" value={summary.onDemandTotal} />
         </Stack>
       </CardContent>
     </Card>
