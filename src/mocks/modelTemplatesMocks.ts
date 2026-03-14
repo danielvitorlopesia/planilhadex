@@ -189,6 +189,15 @@ export const MODEL_TEMPLATES: Record<SpreadsheetModelType, SpreadsheetModelTempl
 };
 
 export const MODEL_TEMPLATE_LIST = Object.values(MODEL_TEMPLATES);
+
+/**
+ * Compatibilidade com arquivos antigos que importam este nome.
+ */
+export const spreadsheetModelTemplates = MODEL_TEMPLATES;
+
+/**
+ * Compatibilidade adicional com outro alias já usado no projeto.
+ */
 export const modelTemplates = MODEL_TEMPLATES;
 
 export function getModelTemplateByType(modelType?: string) {
