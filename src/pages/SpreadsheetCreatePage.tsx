@@ -9,7 +9,6 @@ import {
   Chip,
   Container,
   Divider,
-  Grid,
   Link,
   MenuItem,
   Stack,
@@ -164,7 +163,6 @@ export default function SpreadsheetCreatePage() {
     setTouched(true);
 
     if (!selectedModel) return;
-
     if (requiredErrors.length > 0) return;
 
     alert(
@@ -176,7 +174,6 @@ export default function SpreadsheetCreatePage() {
     setTouched(true);
 
     if (!selectedModel) return;
-
     if (requiredErrors.length > 0) return;
 
     alert(
@@ -311,10 +308,7 @@ export default function SpreadsheetCreatePage() {
                       Trocar modelo
                     </Button>
 
-                    <Button
-                      onClick={() => navigate("/")}
-                      variant="text"
-                    >
+                    <Button onClick={() => navigate("/")} variant="text">
                       Voltar ao início
                     </Button>
                   </Stack>
@@ -323,157 +317,168 @@ export default function SpreadsheetCreatePage() {
             </CardContent>
           </Card>
 
-          <Grid container spacing={3}>
-            <Grid item xs={12} lg={8}>
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                <CardContent sx={{ p: 3 }}>
-                  <Stack spacing={3}>
-                    <Box>
-                      <Typography variant="h5" fontWeight={700}>
-                        Dados iniciais da planilha
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                        Preencha os campos iniciais para criar a estrutura base do modelo
-                        selecionado. Os campos exibidos abaixo já respeitam o tipo de
-                        planilha escolhido.
-                      </Typography>
-                    </Box>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 2fr) minmax(320px, 1fr)" },
+              gap: 3,
+            }}
+          >
+            <Card variant="outlined" sx={{ borderRadius: 4 }}>
+              <CardContent sx={{ p: 3 }}>
+                <Stack spacing={3}>
+                  <Box>
+                    <Typography variant="h5" fontWeight={700}>
+                      Dados iniciais da planilha
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      Preencha os campos iniciais para criar a estrutura base do modelo
+                      selecionado. Os campos exibidos abaixo já respeitam o tipo de
+                      planilha escolhido.
+                    </Typography>
+                  </Box>
 
-                    <Divider />
+                  <Divider />
 
-                    {touched && requiredErrors.length > 0 ? (
-                      <Alert severity="error">
-                        Preencha os campos obrigatórios pendentes:{" "}
-                        <strong>{requiredErrors.join(", ")}</strong>.
-                      </Alert>
-                    ) : null}
+                  {touched && requiredErrors.length > 0 ? (
+                    <Alert severity="error">
+                      Preencha os campos obrigatórios pendentes:{" "}
+                      <strong>{requiredErrors.join(", ")}</strong>.
+                    </Alert>
+                  ) : null}
 
-                    <Grid container spacing={2}>
-                      {selectedModel.initialFormFields.map((field) => (
-                        <Grid
-                          item
-                          xs={12}
-                          md={field.type === "textarea" ? 12 : 6}
-                          key={field.key}
-                        >
-                          {renderField(field, draft, handleChange)}
-                        </Grid>
-                      ))}
-                    </Grid>
-
-                    <Divider />
-
-                    <Stack
-                      direction={{ xs: "column", sm: "row" }}
-                      spacing={1.5}
-                      justifyContent="flex-end"
-                    >
-                      <Button
-                        variant="outlined"
-                        startIcon={<SaveOutlinedIcon />}
-                        onClick={handleSaveDraft}
-                      >
-                        Salvar rascunho
-                      </Button>
-
-                      <Button
-                        variant="contained"
-                        startIcon={<PlaylistAddCheckCircleOutlinedIcon />}
-                        onClick={handleContinue}
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                      gap: 2,
+                    }}
+                  >
+                    {selectedModel.initialFormFields.map((field) => (
+                      <Box
+                        key={field.key}
                         sx={{
-                          backgroundColor: "#8E5AB5",
-                          "&:hover": {
-                            backgroundColor: "#7B4CA1",
+                          gridColumn: {
+                            xs: "span 1",
+                            md: field.type === "textarea" ? "1 / -1" : "span 1",
                           },
                         }}
                       >
-                        Criar e continuar
-                      </Button>
+                        {renderField(field, draft, handleChange)}
+                      </Box>
+                    ))}
+                  </Box>
+
+                  <Divider />
+
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={1.5}
+                    justifyContent="flex-end"
+                  >
+                    <Button
+                      variant="outlined"
+                      startIcon={<SaveOutlinedIcon />}
+                      onClick={handleSaveDraft}
+                    >
+                      Salvar rascunho
+                    </Button>
+
+                    <Button
+                      variant="contained"
+                      startIcon={<PlaylistAddCheckCircleOutlinedIcon />}
+                      onClick={handleContinue}
+                      sx={{
+                        backgroundColor: "#8E5AB5",
+                        "&:hover": {
+                          backgroundColor: "#7B4CA1",
+                        },
+                      }}
+                    >
+                      Criar e continuar
+                    </Button>
+                  </Stack>
+                </Stack>
+              </CardContent>
+            </Card>
+
+            <Stack spacing={3}>
+              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Stack spacing={2}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <InfoOutlinedIcon color="primary" fontSize="small" />
+                      <Typography variant="subtitle1" fontWeight={700}>
+                        Resumo do modelo
+                      </Typography>
+                    </Stack>
+
+                    <Typography variant="body2" color="text.secondary">
+                      <strong>Nome:</strong> {selectedModel.shortTitle}
+                    </Typography>
+
+                    <Typography variant="body2" color="text.secondary">
+                      <strong>Aderente ao setor público:</strong>{" "}
+                      {selectedModel.recommendedForPublicBodies ? "Sim" : "Não"}
+                    </Typography>
+
+                    <Typography variant="body2" color="text.secondary">
+                      <strong>Exige planilha-base:</strong>{" "}
+                      {selectedModel.requiresReferenceSpreadsheet ? "Sim" : "Não"}
+                    </Typography>
+
+                    <Divider />
+
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                        Blocos principais
+                      </Typography>
+
+                      <Stack spacing={0.75}>
+                        {selectedModel.primaryBlocks.map((block) => (
+                          <Typography key={block} variant="body2" color="text.secondary">
+                            • {block}
+                          </Typography>
+                        ))}
+                      </Stack>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+
+              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Stack spacing={2}>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      Orientações iniciais
+                    </Typography>
+
+                    <Stack spacing={1}>
+                      {selectedModel.creationHints.map((hint) => (
+                        <Typography key={hint} variant="body2" color="text.secondary">
+                          • {hint}
+                        </Typography>
+                      ))}
                     </Stack>
                   </Stack>
                 </CardContent>
               </Card>
-            </Grid>
 
-            <Grid item xs={12} lg={4}>
-              <Stack spacing={3}>
-                <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                  <CardContent sx={{ p: 3 }}>
-                    <Stack spacing={2}>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <InfoOutlinedIcon color="primary" fontSize="small" />
-                        <Typography variant="subtitle1" fontWeight={700}>
-                          Resumo do modelo
-                        </Typography>
-                      </Stack>
-
-                      <Typography variant="body2" color="text.secondary">
-                        <strong>Nome:</strong> {selectedModel.shortTitle}
-                      </Typography>
-
-                      <Typography variant="body2" color="text.secondary">
-                        <strong>Aderente ao setor público:</strong>{" "}
-                        {selectedModel.recommendedForPublicBodies ? "Sim" : "Não"}
-                      </Typography>
-
-                      <Typography variant="body2" color="text.secondary">
-                        <strong>Exige planilha-base:</strong>{" "}
-                        {selectedModel.requiresReferenceSpreadsheet ? "Sim" : "Não"}
-                      </Typography>
-
-                      <Divider />
-
-                      <Box>
-                        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                          Blocos principais
-                        </Typography>
-
-                        <Stack spacing={0.75}>
-                          {selectedModel.primaryBlocks.map((block) => (
-                            <Typography key={block} variant="body2" color="text.secondary">
-                              • {block}
-                            </Typography>
-                          ))}
-                        </Stack>
-                      </Box>
-                    </Stack>
-                  </CardContent>
-                </Card>
-
-                <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                  <CardContent sx={{ p: 3 }}>
-                    <Stack spacing={2}>
-                      <Typography variant="subtitle1" fontWeight={700}>
-                        Orientações iniciais
-                      </Typography>
-
-                      <Stack spacing={1}>
-                        {selectedModel.creationHints.map((hint) => (
-                          <Typography key={hint} variant="body2" color="text.secondary">
-                            • {hint}
-                          </Typography>
-                        ))}
-                      </Stack>
-                    </Stack>
-                  </CardContent>
-                </Card>
-
-                <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                  <CardContent sx={{ p: 3 }}>
-                    <Stack spacing={1.5}>
-                      <Typography variant="subtitle1" fontWeight={700}>
-                        Próxima etapa
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Após esta fase, o sistema deverá abrir o editor principal da
-                        planilha já configurado com a estrutura do modelo selecionado.
-                      </Typography>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              </Stack>
-            </Grid>
-          </Grid>
+              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Stack spacing={1.5}>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      Próxima etapa
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Após esta fase, o sistema deverá abrir o editor principal da
+                      planilha já configurado com a estrutura do modelo selecionado.
+                    </Typography>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Stack>
+          </Box>
         </Stack>
       </Container>
     </Box>
