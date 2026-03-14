@@ -191,19 +191,29 @@ export const MODEL_TEMPLATES: Record<SpreadsheetModelType, SpreadsheetModelTempl
 export const MODEL_TEMPLATE_LIST = Object.values(MODEL_TEMPLATES);
 
 /**
- * Compatibilidade com arquivos antigos que importam este nome.
+ * Compatibilidade com imports antigos do projeto.
  */
 export const spreadsheetModelTemplates = MODEL_TEMPLATES;
 
 /**
- * Compatibilidade adicional com outro alias já usado no projeto.
+ * Compatibilidade adicional com alias antigo.
  */
 export const modelTemplates = MODEL_TEMPLATES;
 
+/**
+ * Função principal para buscar template por tipo.
+ */
 export function getModelTemplateByType(modelType?: string) {
   if (!modelType) {
     return undefined;
   }
 
   return MODEL_TEMPLATES[modelType as SpreadsheetModelType];
+}
+
+/**
+ * Compatibilidade com código legado que usa este nome.
+ */
+export function getSpreadsheetModelTemplate(modelType?: string) {
+  return getModelTemplateByType(modelType);
 }
