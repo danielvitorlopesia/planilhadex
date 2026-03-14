@@ -1,708 +1,527 @@
-import React, { useMemo, useState } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Collapse,
-  Divider,
-  Grid,
-  InputAdornment,
-  MenuItem,
-  Paper,
-  Stack,
-  TextField,
-  Typography,
-} from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
-import FilterAltIcon from "@mui/icons-material/FilterAlt";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
-import TimelineIcon from "@mui/icons-material/Timeline";
-import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
-import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
-import DifferenceIcon from "@mui/icons-material/Difference";
-import type {
-  AnalysisDecision,
-  AnalysisHistoryItem,
-  AnalysisMaterialStatus,
-  AnalysisRiskLevel,
-} from "../mocks/analysisHistoryMocks";
+export type AnalysisDecision =
+  | "approved"
+  | "approved_with_remarks"
+  | "diligence_requested"
+  | "rejected";
 
-interface AnalysisHistoryPanelProps {
-  items: AnalysisHistoryItem[];
-  selectedAnalysisId: string | null;
-  onSelectAnalysis: (analysisId: string) => void;
+export type AnalysisRiskLevel = "low" | "medium" | "high";
+
+export type AnalysisMaterialStatus =
+  | "exequivel"
+  | "exequivel_com_diligencia"
+  | "inexequivel";
+
+export type AnalysisProcessingStatus = "completed" | "processing" | "failed";
+
+export type ExplanationType =
+  | "technical"
+  | "technical_legal"
+  | "manager_friendly"
+  | "recommendation";
+
+export interface AnalysisExplanationItem {
+  id: string;
+  type: ExplanationType;
+  title: string;
+  content: string;
 }
 
-type DecisionFilterValue = AnalysisDecision | "all";
-type StatusFilterValue = AnalysisMaterialStatus | "all";
-type RiskFilterValue = AnalysisRiskLevel | "all";
+export interface InternalDecisionItem {
+  decision: AnalysisDecision;
+  despacho: string;
+  decidedAt: string;
+  decidedBy: string;
+}
 
-function formatCurrency(value: number) {
+export interface ConsolidatedOpinionSection {
+  title: string;
+  content: string;
+}
+
+export interface ConsolidatedOpinion {
+  ementa: string;
+  conclusao: string;
+  fundamentacaoTecnica: ConsolidatedOpinionSection;
+  fundamentacaoTecnicoJuridica: ConsolidatedOpinionSection;
+  versaoGestorLeigo: ConsolidatedOpinionSection;
+  recomendacaoFinal: ConsolidatedOpinionSection;
+}
+
+export interface AnalysisHistoryItem {
+  analysisId: string;
+  spreadsheetId: string;
+  spreadsheetVersionId: number;
+  spreadsheetVersionLabel: string;
+  analysisType: string;
+  analysisProcessingStatus: AnalysisProcessingStatus;
+  materialStatus: AnalysisMaterialStatus;
+  scoreGlobal: number;
+  riskLevel: AnalysisRiskLevel;
+  proposedTotalValue: number;
+  mandatoryCostTotal: number;
+  evidentiaryCostTotal: number;
+  retentionTotal: number;
+  executabilityBalance: number;
+  createdAt: string;
+  createdBy: string;
+  isLatest?: boolean;
+  explanations: AnalysisExplanationItem[];
+  internalDecision?: InternalDecisionItem | null;
+}
+
+export interface AnalysisTimelineEvent {
+  id: string;
+  type:
+    | "analysis_created"
+    | "analysis_completed"
+    | "explanations_generated"
+    | "internal_decision"
+    | "comparison_available"
+    | "opinion_generated";
+  title: string;
+  description: string;
+  occurredAt: string;
+  actor: string;
+  highlight?: boolean;
+}
+
+export interface AnalysisComparisonItem {
+  label: string;
+  previousValue: string;
+  currentValue: string;
+  delta?: string;
+  direction?: "up" | "down" | "neutral";
+}
+
+export interface AnalysisDetail {
+  analysis: AnalysisHistoryItem;
+  consolidatedOpinion: ConsolidatedOpinion;
+  timeline: AnalysisTimelineEvent[];
+  comparison: AnalysisComparisonItem[];
+}
+
+const baseSpreadsheetId = "30db5807-27ac-412d-909b-306fdc54ba43";
+
+export const analysisHistoryMocks: AnalysisHistoryItem[] = [
+  {
+    analysisId: "9ad0fc6f-be95-4655-8c48-9b55c8e0a222",
+    spreadsheetId: baseSpreadsheetId,
+    spreadsheetVersionId: 1,
+    spreadsheetVersionLabel: "Versão 1",
+    analysisType: "executability_v1",
+    analysisProcessingStatus: "completed",
+    materialStatus: "exequivel_com_diligencia",
+    scoreGlobal: 65,
+    riskLevel: "medium",
+    proposedTotalValue: 3600,
+    mandatoryCostTotal: 3200,
+    evidentiaryCostTotal: 700,
+    retentionTotal: 250,
+    executabilityBalance: 150,
+    createdAt: "2026-03-13T10:00:00.000Z",
+    createdBy: "Sistema IA",
+    isLatest: false,
+    explanations: [
+      {
+        id: "4d15d2ea-aa1c-4a60-ae17-2406a31965bc",
+        type: "technical",
+        title: "Fundamentação técnica",
+        content:
+          "A composição apresentada demonstra viabilidade material condicionada ao saneamento de custos acessórios e ao reforço documental dos insumos evidenciários.",
+      },
+      {
+        id: "acf18aa5-621e-4d0c-a4d2-8d6dfaeeb796",
+        type: "technical_legal",
+        title: "Fundamentação técnico-jurídica",
+        content:
+          "A exequibilidade depende da aderência entre os itens planilhados, a memória de cálculo, os parâmetros normativos e a coerência interna da composição apresentada.",
+      },
+      {
+        id: "aa1955a2-597b-49e0-bdb6-1070e569bcce",
+        type: "manager_friendly",
+        title: "Versão para gestor",
+        content:
+          "A planilha pode seguir, mas ainda precisa de diligência complementar para reduzir o risco de questionamento posterior.",
+      },
+      {
+        id: "e324e975-b6e3-48e7-b6f4-b674abd951fa",
+        type: "recommendation",
+        title: "Recomendação operacional",
+        content:
+          "Solicitar ajuste dos custos evidenciários, revisar retenções e consolidar justificativa final antes da aprovação interna.",
+      },
+    ],
+    internalDecision: {
+      decision: "diligence_requested",
+      despacho:
+        "Determino a realização de diligência complementar para saneamento dos custos evidenciários e complementação justificativa.",
+      decidedAt: "2026-03-13T11:10:00.000Z",
+      decidedBy: "Gestor Interno",
+    },
+  },
+  {
+    analysisId: "d03a2e84-1f3f-4781-9d40-0f5a2a0f1001",
+    spreadsheetId: baseSpreadsheetId,
+    spreadsheetVersionId: 2,
+    spreadsheetVersionLabel: "Versão 2",
+    analysisType: "executability_v1",
+    analysisProcessingStatus: "completed",
+    materialStatus: "exequivel",
+    scoreGlobal: 82,
+    riskLevel: "low",
+    proposedTotalValue: 3890,
+    mandatoryCostTotal: 3200,
+    evidentiaryCostTotal: 440,
+    retentionTotal: 250,
+    executabilityBalance: 440,
+    createdAt: "2026-03-13T15:20:00.000Z",
+    createdBy: "Sistema IA",
+    isLatest: true,
+    explanations: [
+      {
+        id: "f1",
+        type: "technical",
+        title: "Fundamentação técnica",
+        content:
+          "Após os ajustes realizados, a estrutura de custos tornou-se compatível com os parâmetros mínimos obrigatórios e com a memória de cálculo validada.",
+      },
+      {
+        id: "f2",
+        type: "technical_legal",
+        title: "Fundamentação técnico-jurídica",
+        content:
+          "Os elementos apresentados reduzem o risco de inexequibilidade e reforçam a consistência interna da proposta.",
+      },
+      {
+        id: "f3",
+        type: "manager_friendly",
+        title: "Versão para gestor",
+        content:
+          "A nova versão está melhor estruturada, com menor risco e saldo de exequibilidade mais confortável.",
+      },
+      {
+        id: "f4",
+        type: "recommendation",
+        title: "Recomendação operacional",
+        content:
+          "Prosseguir com validação final e, se cabível, emissão do parecer consolidado para aprovação.",
+      },
+    ],
+    internalDecision: {
+      decision: "approved_with_remarks",
+      despacho:
+        "Aprovo com ressalvas de monitoramento posterior quanto à aderência documental e à rastreabilidade dos parâmetros utilizados.",
+      decidedAt: "2026-03-13T16:00:00.000Z",
+      decidedBy: "Gestor Interno",
+    },
+  },
+  {
+    analysisId: "8be1f577-7b52-4bd4-8f90-3b6c9d5ea321",
+    spreadsheetId: baseSpreadsheetId,
+    spreadsheetVersionId: 3,
+    spreadsheetVersionLabel: "Versão 3",
+    analysisType: "executability_v1",
+    analysisProcessingStatus: "processing",
+    materialStatus: "exequivel_com_diligencia",
+    scoreGlobal: 0,
+    riskLevel: "medium",
+    proposedTotalValue: 0,
+    mandatoryCostTotal: 0,
+    evidentiaryCostTotal: 0,
+    retentionTotal: 0,
+    executabilityBalance: 0,
+    createdAt: "2026-03-14T08:40:00.000Z",
+    createdBy: "Sistema IA",
+    isLatest: false,
+    explanations: [],
+    internalDecision: null,
+  },
+];
+
+function getDefaultHistory(): AnalysisHistoryItem[] {
+  return analysisHistoryMocks;
+}
+
+function findAnalysisById(analysisId?: string | null): AnalysisHistoryItem {
+  const history = getDefaultHistory();
+
+  if (!analysisId) {
+    return history.find((item) => item.isLatest) ?? history[0];
+  }
+
+  return (
+    history.find((item) => item.analysisId === analysisId) ??
+    history.find((item) => item.isLatest) ??
+    history[0]
+  );
+}
+
+function buildOpinionForAnalysis(item: AnalysisHistoryItem): ConsolidatedOpinion {
+  const technical =
+    item.explanations.find((exp) => exp.type === "technical")?.content ??
+    "A análise técnica ainda não possui conteúdo consolidado disponível.";
+
+  const technicalLegal =
+    item.explanations.find((exp) => exp.type === "technical_legal")?.content ??
+    "A análise técnico-jurídica ainda não possui conteúdo consolidado disponível.";
+
+  const managerFriendly =
+    item.explanations.find((exp) => exp.type === "manager_friendly")?.content ??
+    "A versão resumida para gestor ainda não foi gerada.";
+
+  const recommendation =
+    item.explanations.find((exp) => exp.type === "recommendation")?.content ??
+    "A recomendação final ainda não foi consolidada.";
+
+  const statusLabel =
+    item.materialStatus === "exequivel"
+      ? "exequível"
+      : item.materialStatus === "exequivel_com_diligencia"
+        ? "exequível com diligência"
+        : "inexequível";
+
+  const riskLabel =
+    item.riskLevel === "low"
+      ? "baixo"
+      : item.riskLevel === "medium"
+        ? "médio"
+        : "alto";
+
+  return {
+    ementa: `Análise ${item.analysisType} da ${item.spreadsheetVersionLabel}, com resultado material ${statusLabel}, score global ${item.scoreGlobal} e risco ${riskLabel}.`,
+    conclusao:
+      item.materialStatus === "exequivel"
+        ? "Conclui-se pela viabilidade da composição analisada, recomendando-se apenas monitoramento documental e rastreabilidade dos parâmetros utilizados."
+        : item.materialStatus === "exequivel_com_diligencia"
+          ? "Conclui-se pela viabilidade condicionada da composição analisada, com necessidade de diligência complementar para saneamento dos pontos remanescentes."
+          : "Conclui-se pela inviabilidade da composição analisada, diante de inconsistências que comprometem sua sustentação técnica e jurídica.",
+    fundamentacaoTecnica: {
+      title: "Fundamentação técnica",
+      content: technical,
+    },
+    fundamentacaoTecnicoJuridica: {
+      title: "Fundamentação técnico-jurídica",
+      content: technicalLegal,
+    },
+    versaoGestorLeigo: {
+      title: "Versão gestor leigo",
+      content: managerFriendly,
+    },
+    recomendacaoFinal: {
+      title: "Recomendação final",
+      content: recommendation,
+    },
+  };
+}
+
+function buildTimelineForAnalysis(item: AnalysisHistoryItem): AnalysisTimelineEvent[] {
+  const events: AnalysisTimelineEvent[] = [
+    {
+      id: `${item.analysisId}-created`,
+      type: "analysis_created",
+      title: "Análise criada",
+      description: `A ${item.analysisType} foi aberta para a ${item.spreadsheetVersionLabel}.`,
+      occurredAt: item.createdAt,
+      actor: item.createdBy,
+    },
+  ];
+
+  if (item.analysisProcessingStatus === "completed") {
+    events.push({
+      id: `${item.analysisId}-completed`,
+      type: "analysis_completed",
+      title: "Análise concluída",
+      description: `Processamento concluído com status material ${item.materialStatus}.`,
+      occurredAt: item.createdAt,
+      actor: "Motor analítico",
+      highlight: true,
+    });
+  }
+
+  if (item.explanations.length > 0) {
+    events.push({
+      id: `${item.analysisId}-explanations`,
+      type: "explanations_generated",
+      title: "Explicações geradas",
+      description: `Foram produzidas ${item.explanations.length} explicações para suporte ao parecer e à leitura gerencial.`,
+      occurredAt: item.createdAt,
+      actor: "Camada de explicabilidade",
+    });
+  }
+
+  events.push({
+    id: `${item.analysisId}-comparison`,
+    type: "comparison_available",
+    title: "Comparação disponível",
+    description:
+      "Os indicadores principais foram organizados para comparação com a versão anterior da planilha.",
+    occurredAt: item.createdAt,
+    actor: "Módulo de comparação",
+  });
+
+  events.push({
+    id: `${item.analysisId}-opinion`,
+    type: "opinion_generated",
+    title: "Parecer consolidado preparado",
+    description:
+      "A estrutura de parecer consolidado foi disponibilizada para leitura técnica, técnico-jurídica e gerencial.",
+    occurredAt: item.createdAt,
+    actor: "Módulo de parecer",
+  });
+
+  if (item.internalDecision) {
+    events.push({
+      id: `${item.analysisId}-decision`,
+      type: "internal_decision",
+      title: "Decisão interna registrada",
+      description: item.internalDecision.despacho,
+      occurredAt: item.internalDecision.decidedAt,
+      actor: item.internalDecision.decidedBy,
+      highlight: true,
+    });
+  }
+
+  return events.sort(
+    (a, b) =>
+      new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
+  );
+}
+
+function buildComparisonForAnalysis(item: AnalysisHistoryItem): AnalysisComparisonItem[] {
+  const history = getDefaultHistory();
+  const previous = history
+    .filter((entry) => entry.spreadsheetVersionId < item.spreadsheetVersionId)
+    .sort((a, b) => b.spreadsheetVersionId - a.spreadsheetVersionId)[0];
+
+  if (!previous) {
+    return [
+      {
+        label: "Versão anterior",
+        previousValue: "-",
+        currentValue: item.spreadsheetVersionLabel,
+        delta: "Primeira versão analisada",
+        direction: "neutral",
+      },
+      {
+        label: "Score global",
+        previousValue: "-",
+        currentValue: String(item.scoreGlobal),
+        delta: "Sem base anterior",
+        direction: "neutral",
+      },
+      {
+        label: "Saldo de exequibilidade",
+        previousValue: "-",
+        currentValue: formatCurrency(item.executabilityBalance),
+        delta: "Sem base anterior",
+        direction: "neutral",
+      },
+    ];
+  }
+
+  const scoreDelta = item.scoreGlobal - previous.scoreGlobal;
+  const balanceDelta = item.executabilityBalance - previous.executabilityBalance;
+  const evidentiaryDelta =
+    item.evidentiaryCostTotal - previous.evidentiaryCostTotal;
+
+  return [
+    {
+      label: "Versão comparada",
+      previousValue: previous.spreadsheetVersionLabel,
+      currentValue: item.spreadsheetVersionLabel,
+      delta: `${previous.spreadsheetVersionId} → ${item.spreadsheetVersionId}`,
+      direction: "neutral",
+    },
+    {
+      label: "Score global",
+      previousValue: String(previous.scoreGlobal),
+      currentValue: String(item.scoreGlobal),
+      delta: withSignal(scoreDelta),
+      direction:
+        scoreDelta > 0 ? "up" : scoreDelta < 0 ? "down" : "neutral",
+    },
+    {
+      label: "Saldo de exequibilidade",
+      previousValue: formatCurrency(previous.executabilityBalance),
+      currentValue: formatCurrency(item.executabilityBalance),
+      delta: formatSignedCurrency(balanceDelta),
+      direction:
+        balanceDelta > 0 ? "up" : balanceDelta < 0 ? "down" : "neutral",
+    },
+    {
+      label: "Custos evidenciários",
+      previousValue: formatCurrency(previous.evidentiaryCostTotal),
+      currentValue: formatCurrency(item.evidentiaryCostTotal),
+      delta: formatSignedCurrency(evidentiaryDelta),
+      direction:
+        evidentiaryDelta < 0 ? "up" : evidentiaryDelta > 0 ? "down" : "neutral",
+    },
+    {
+      label: "Risco",
+      previousValue: previous.riskLevel,
+      currentValue: item.riskLevel,
+      delta: `${previous.riskLevel} → ${item.riskLevel}`,
+      direction: compareRiskDirection(previous.riskLevel, item.riskLevel),
+    },
+  ];
+}
+
+function compareRiskDirection(
+  previous: AnalysisRiskLevel,
+  current: AnalysisRiskLevel
+): "up" | "down" | "neutral" {
+  const weight: Record<AnalysisRiskLevel, number> = {
+    low: 1,
+    medium: 2,
+    high: 3,
+  };
+
+  if (weight[current] < weight[previous]) return "up";
+  if (weight[current] > weight[previous]) return "down";
+  return "neutral";
+}
+
+function withSignal(value: number): string {
+  if (value > 0) return `+${value}`;
+  if (value < 0) return `${value}`;
+  return "0";
+}
+
+function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
   }).format(value || 0);
 }
 
-function formatDate(value: string) {
-  if (!value) return "-";
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
+function formatSignedCurrency(value: number): string {
+  const formatted = formatCurrency(Math.abs(value));
+  if (value > 0) return `+${formatted}`;
+  if (value < 0) return `-${formatted}`;
+  return formatCurrency(0);
 }
 
-function getRiskChipColor(risk: AnalysisRiskLevel) {
-  switch (risk) {
-    case "low":
-      return "success";
-    case "medium":
-      return "warning";
-    case "high":
-      return "error";
-    default:
-      return "default";
+export function buildMockAnalysisHistory(
+  spreadsheetId?: string
+): AnalysisHistoryItem[] {
+  const history = getDefaultHistory();
+
+  if (!spreadsheetId) {
+    return history;
   }
+
+  return history.filter((item) => item.spreadsheetId === spreadsheetId);
 }
 
-function getMaterialStatusChipColor(status: AnalysisMaterialStatus) {
-  switch (status) {
-    case "exequivel":
-      return "success";
-    case "exequivel_com_diligencia":
-      return "warning";
-    case "inexequivel":
-      return "error";
-    default:
-      return "default";
-  }
-}
+export function buildMockAnalysisDetail(
+  analysisId?: string | null
+): AnalysisDetail {
+  const analysis = findAnalysisById(analysisId);
 
-function getDecisionChipColor(decision?: AnalysisDecision | null) {
-  switch (decision) {
-    case "approved":
-      return "success";
-    case "approved_with_remarks":
-      return "warning";
-    case "diligence_requested":
-      return "warning";
-    case "rejected":
-      return "error";
-    default:
-      return "default";
-  }
-}
-
-function getDecisionLabel(decision?: AnalysisDecision | null) {
-  switch (decision) {
-    case "approved":
-      return "Aprovado";
-    case "approved_with_remarks":
-      return "Aprovado com ressalvas";
-    case "diligence_requested":
-      return "Diligência";
-    case "rejected":
-      return "Rejeitado";
-    default:
-      return "Sem decisão";
-  }
-}
-
-function getRiskLabel(risk: AnalysisRiskLevel) {
-  switch (risk) {
-    case "low":
-      return "Baixo";
-    case "medium":
-      return "Médio";
-    case "high":
-      return "Alto";
-    default:
-      return risk;
-  }
-}
-
-function getMaterialStatusLabel(status: AnalysisMaterialStatus) {
-  switch (status) {
-    case "exequivel":
-      return "Exequível";
-    case "exequivel_com_diligencia":
-      return "Exequível com diligência";
-    case "inexequivel":
-      return "Inexequível";
-    default:
-      return status;
-  }
-}
-
-export default function AnalysisHistoryPanel({
-  items,
-  selectedAnalysisId,
-  onSelectAnalysis,
-}: AnalysisHistoryPanelProps) {
-  const [showFilters, setShowFilters] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("all");
-  const [riskFilter, setRiskFilter] = useState<RiskFilterValue>("all");
-  const [decisionFilter, setDecisionFilter] = useState<DecisionFilterValue>("all");
-  const [searchTerm, setSearchTerm] = useState("");
-
-  const summary = useMemo(() => {
-    const total = items.length;
-    const lowRisk = items.filter((item) => item.riskLevel === "low").length;
-    const mediumRisk = items.filter((item) => item.riskLevel === "medium").length;
-    const highRisk = items.filter((item) => item.riskLevel === "high").length;
-    const withDecision = items.filter((item) => item.internalDecision?.decision).length;
-
-    return {
-      total,
-      lowRisk,
-      mediumRisk,
-      highRisk,
-      withDecision,
-    };
-  }, [items]);
-
-  const filteredItems = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-
-    return items.filter((item) => {
-      const matchesStatus =
-        statusFilter === "all" ? true : item.materialStatus === statusFilter;
-
-      const matchesRisk =
-        riskFilter === "all" ? true : item.riskLevel === riskFilter;
-
-      const itemDecision = item.internalDecision?.decision ?? null;
-      const matchesDecision =
-        decisionFilter === "all" ? true : itemDecision === decisionFilter;
-
-      const matchesSearch =
-        normalizedSearch.length === 0
-          ? true
-          : [
-              item.analysisId,
-              item.spreadsheetVersionLabel,
-              String(item.spreadsheetVersionId),
-              item.analysisType,
-              item.createdBy,
-              item.internalDecision?.despacho ?? "",
-            ]
-              .join(" ")
-              .toLowerCase()
-              .includes(normalizedSearch);
-
-      return matchesStatus && matchesRisk && matchesDecision && matchesSearch;
-    });
-  }, [items, statusFilter, riskFilter, decisionFilter, searchTerm]);
-
-  const selectedItem = useMemo(
-    () => filteredItems.find((item) => item.analysisId === selectedAnalysisId) ?? null,
-    [filteredItems, selectedAnalysisId]
-  );
-
-  const clearFilters = () => {
-    setStatusFilter("all");
-    setRiskFilter("all");
-    setDecisionFilter("all");
-    setSearchTerm("");
+  return {
+    analysis,
+    consolidatedOpinion: buildOpinionForAnalysis(analysis),
+    timeline: buildTimelineForAnalysis(analysis),
+    comparison: buildComparisonForAnalysis(analysis),
   };
-
-  return (
-    <Stack spacing={3}>
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack spacing={2}>
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            justifyContent="space-between"
-            alignItems={{ xs: "flex-start", md: "center" }}
-            spacing={2}
-          >
-            <Box>
-              <Typography variant="h6" fontWeight={700}>
-                Histórico analítico
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Filtros e busca para localizar análises por status, risco, decisão interna
-                e referência textual.
-              </Typography>
-            </Box>
-
-            <Stack direction="row" spacing={1}>
-              <Button
-                variant="outlined"
-                startIcon={<FilterAltIcon />}
-                onClick={() => setShowFilters((prev) => !prev)}
-              >
-                {showFilters ? "Ocultar filtros" : "Mostrar filtros"}
-              </Button>
-
-              <Button
-                variant="text"
-                startIcon={<RestartAltIcon />}
-                onClick={clearFilters}
-              >
-                Limpar
-              </Button>
-            </Stack>
-          </Stack>
-
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={3}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Stack spacing={1}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <TimelineIcon fontSize="small" />
-                      <Typography variant="subtitle2">Total</Typography>
-                    </Stack>
-                    <Typography variant="h5" fontWeight={700}>
-                      {summary.total}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      análises no histórico
-                    </Typography>
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid item xs={12} md={3}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Stack spacing={1}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <WarningAmberIcon fontSize="small" />
-                      <Typography variant="subtitle2">Risco</Typography>
-                    </Stack>
-                    <Typography variant="body2">
-                      Baixo: <strong>{summary.lowRisk}</strong>
-                    </Typography>
-                    <Typography variant="body2">
-                      Médio: <strong>{summary.mediumRisk}</strong>
-                    </Typography>
-                    <Typography variant="body2">
-                      Alto: <strong>{summary.highRisk}</strong>
-                    </Typography>
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid item xs={12} md={3}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Stack spacing={1}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <AssignmentTurnedInIcon fontSize="small" />
-                      <Typography variant="subtitle2">Decisão interna</Typography>
-                    </Stack>
-                    <Typography variant="h5" fontWeight={700}>
-                      {summary.withDecision}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      análises com despacho registrado
-                    </Typography>
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid item xs={12} md={3}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Stack spacing={1}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <InsightsOutlinedIcon fontSize="small" />
-                      <Typography variant="subtitle2">Resultado filtrado</Typography>
-                    </Stack>
-                    <Typography variant="h5" fontWeight={700}>
-                      {filteredItems.length}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      análises visíveis após filtros
-                    </Typography>
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-
-          <Collapse in={showFilters}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    label="Busca textual"
-                    placeholder="analysis id, versão, tipo, despacho..."
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Grid>
-
-                <Grid item xs={12} md={2.66}>
-                  <TextField
-                    select
-                    fullWidth
-                    label="Status material"
-                    value={statusFilter}
-                    onChange={(event) =>
-                      setStatusFilter(event.target.value as StatusFilterValue)
-                    }
-                  >
-                    <MenuItem value="all">Todos</MenuItem>
-                    <MenuItem value="exequivel">Exequível</MenuItem>
-                    <MenuItem value="exequivel_com_diligencia">
-                      Exequível com diligência
-                    </MenuItem>
-                    <MenuItem value="inexequivel">Inexequível</MenuItem>
-                  </TextField>
-                </Grid>
-
-                <Grid item xs={12} md={2.66}>
-                  <TextField
-                    select
-                    fullWidth
-                    label="Risco"
-                    value={riskFilter}
-                    onChange={(event) =>
-                      setRiskFilter(event.target.value as RiskFilterValue)
-                    }
-                  >
-                    <MenuItem value="all">Todos</MenuItem>
-                    <MenuItem value="low">Baixo</MenuItem>
-                    <MenuItem value="medium">Médio</MenuItem>
-                    <MenuItem value="high">Alto</MenuItem>
-                  </TextField>
-                </Grid>
-
-                <Grid item xs={12} md={2.66}>
-                  <TextField
-                    select
-                    fullWidth
-                    label="Decisão interna"
-                    value={decisionFilter}
-                    onChange={(event) =>
-                      setDecisionFilter(event.target.value as DecisionFilterValue)
-                    }
-                  >
-                    <MenuItem value="all">Todas</MenuItem>
-                    <MenuItem value="approved">Aprovado</MenuItem>
-                    <MenuItem value="approved_with_remarks">
-                      Aprovado com ressalvas
-                    </MenuItem>
-                    <MenuItem value="diligence_requested">Diligência</MenuItem>
-                    <MenuItem value="rejected">Rejeitado</MenuItem>
-                  </TextField>
-                </Grid>
-              </Grid>
-            </Paper>
-          </Collapse>
-        </Stack>
-      </Paper>
-
-      {filteredItems.length === 0 ? (
-        <Alert severity="info">
-          Nenhuma análise corresponde aos filtros aplicados.
-        </Alert>
-      ) : (
-        <Grid container spacing={2}>
-          <Grid item xs={12} lg={7}>
-            <Stack spacing={2}>
-              {filteredItems.map((item) => {
-                const isSelected = item.analysisId === selectedAnalysisId;
-
-                return (
-                  <Card
-                    key={item.analysisId}
-                    variant="outlined"
-                    sx={{
-                      borderWidth: isSelected ? 2 : 1,
-                      cursor: "pointer",
-                    }}
-                    onClick={() => onSelectAnalysis(item.analysisId)}
-                  >
-                    <CardContent>
-                      <Stack spacing={2}>
-                        <Stack
-                          direction={{ xs: "column", md: "row" }}
-                          justifyContent="space-between"
-                          spacing={2}
-                        >
-                          <Box>
-                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                              <Chip
-                                size="small"
-                                label={item.spreadsheetVersionLabel}
-                                variant="outlined"
-                              />
-                              <Chip
-                                size="small"
-                                label={getMaterialStatusLabel(item.materialStatus)}
-                                color={getMaterialStatusChipColor(item.materialStatus)}
-                              />
-                              <Chip
-                                size="small"
-                                label={`Risco ${getRiskLabel(item.riskLevel)}`}
-                                color={getRiskChipColor(item.riskLevel)}
-                              />
-                              <Chip
-                                size="small"
-                                label={getDecisionLabel(item.internalDecision?.decision)}
-                                color={getDecisionChipColor(item.internalDecision?.decision)}
-                                variant="outlined"
-                              />
-                              {item.isLatest ? (
-                                <Chip
-                                  size="small"
-                                  label="Mais recente"
-                                  color="primary"
-                                />
-                              ) : null}
-                            </Stack>
-
-                            <Typography variant="subtitle1" fontWeight={700} sx={{ mt: 1 }}>
-                              {item.analysisType}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              Analysis ID: {item.analysisId}
-                            </Typography>
-                          </Box>
-
-                          <Stack alignItems={{ xs: "flex-start", md: "flex-end" }}>
-                            <Typography variant="body2" color="text.secondary">
-                              Criado em
-                            </Typography>
-                            <Typography variant="body2" fontWeight={600}>
-                              {formatDate(item.createdAt)}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              por {item.createdBy}
-                            </Typography>
-                          </Stack>
-                        </Stack>
-
-                        <Divider />
-
-                        <Grid container spacing={2}>
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="caption" color="text.secondary">
-                              Score global
-                            </Typography>
-                            <Typography variant="body1" fontWeight={700}>
-                              {item.scoreGlobal}
-                            </Typography>
-                          </Grid>
-
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="caption" color="text.secondary">
-                              Valor proposto
-                            </Typography>
-                            <Typography variant="body1" fontWeight={700}>
-                              {formatCurrency(item.proposedTotalValue)}
-                            </Typography>
-                          </Grid>
-
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="caption" color="text.secondary">
-                              Custos obrigatórios
-                            </Typography>
-                            <Typography variant="body1" fontWeight={700}>
-                              {formatCurrency(item.mandatoryCostTotal)}
-                            </Typography>
-                          </Grid>
-
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="caption" color="text.secondary">
-                              Saldo exequibilidade
-                            </Typography>
-                            <Typography variant="body1" fontWeight={700}>
-                              {formatCurrency(item.executabilityBalance)}
-                            </Typography>
-                          </Grid>
-                        </Grid>
-
-                        {item.internalDecision?.despacho ? (
-                          <>
-                            <Divider />
-                            <Box>
-                              <Typography variant="caption" color="text.secondary">
-                                Despacho interno
-                              </Typography>
-                              <Typography variant="body2" sx={{ mt: 0.5 }}>
-                                {item.internalDecision.despacho}
-                              </Typography>
-                            </Box>
-                          </>
-                        ) : null}
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </Stack>
-          </Grid>
-
-          <Grid item xs={12} lg={5}>
-            <Card variant="outlined" sx={{ position: "sticky", top: 24 }}>
-              <CardContent>
-                {!selectedItem ? (
-                  <Alert severity="info">
-                    Selecione uma análise para visualizar o detalhamento.
-                  </Alert>
-                ) : (
-                  <Stack spacing={2}>
-                    <Stack spacing={1}>
-                      <Typography variant="h6" fontWeight={700}>
-                        Detalhe da análise selecionada
-                      </Typography>
-                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                        <Chip
-                          size="small"
-                          label={selectedItem.spreadsheetVersionLabel}
-                          variant="outlined"
-                        />
-                        <Chip
-                          size="small"
-                          label={getMaterialStatusLabel(selectedItem.materialStatus)}
-                          color={getMaterialStatusChipColor(selectedItem.materialStatus)}
-                        />
-                        <Chip
-                          size="small"
-                          label={`Risco ${getRiskLabel(selectedItem.riskLevel)}`}
-                          color={getRiskChipColor(selectedItem.riskLevel)}
-                        />
-                      </Stack>
-                    </Stack>
-
-                    <Divider />
-
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">
-                        Analysis ID
-                      </Typography>
-                      <Typography variant="body2">{selectedItem.analysisId}</Typography>
-                    </Box>
-
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">
-                        Data de criação
-                      </Typography>
-                      <Typography variant="body2">
-                        {formatDate(selectedItem.createdAt)}
-                      </Typography>
-                    </Box>
-
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">
-                        Decisão interna
-                      </Typography>
-                      <Typography variant="body2">
-                        {getDecisionLabel(selectedItem.internalDecision?.decision)}
-                      </Typography>
-                    </Box>
-
-                    <Divider />
-
-                    <Stack spacing={1.5}>
-                      <Typography variant="subtitle2" fontWeight={700}>
-                        Explicações disponíveis
-                      </Typography>
-
-                      {selectedItem.explanations.length === 0 ? (
-                        <Alert severity="warning">
-                          Esta análise ainda não possui explicações disponíveis.
-                        </Alert>
-                      ) : (
-                        selectedItem.explanations.map((explanation) => (
-                          <Paper key={explanation.id} variant="outlined" sx={{ p: 1.5 }}>
-                            <Typography variant="body2" fontWeight={700}>
-                              {explanation.title}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{ display: "block", mb: 1 }}
-                            >
-                              {explanation.type}
-                            </Typography>
-                            <Typography variant="body2">
-                              {explanation.content}
-                            </Typography>
-                          </Paper>
-                        ))
-                      )}
-                    </Stack>
-
-                    <Divider />
-
-                    <Stack spacing={1}>
-                      <Typography variant="subtitle2" fontWeight={700}>
-                        Comparativo financeiro rápido
-                      </Typography>
-
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography variant="body2">Valor proposto</Typography>
-                        <Typography variant="body2" fontWeight={700}>
-                          {formatCurrency(selectedItem.proposedTotalValue)}
-                        </Typography>
-                      </Stack>
-
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography variant="body2">Custos obrigatórios</Typography>
-                        <Typography variant="body2" fontWeight={700}>
-                          {formatCurrency(selectedItem.mandatoryCostTotal)}
-                        </Typography>
-                      </Stack>
-
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography variant="body2">Custos evidenciários</Typography>
-                        <Typography variant="body2" fontWeight={700}>
-                          {formatCurrency(selectedItem.evidentiaryCostTotal)}
-                        </Typography>
-                      </Stack>
-
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography variant="body2">Retenções</Typography>
-                        <Typography variant="body2" fontWeight={700}>
-                          {formatCurrency(selectedItem.retentionTotal)}
-                        </Typography>
-                      </Stack>
-
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography variant="body2">Saldo exequibilidade</Typography>
-                        <Typography variant="body2" fontWeight={700}>
-                          {formatCurrency(selectedItem.executabilityBalance)}
-                        </Typography>
-                      </Stack>
-                    </Stack>
-
-                    <Divider />
-
-                    <Button
-                      variant="contained"
-                      startIcon={<DifferenceIcon />}
-                      onClick={() => onSelectAnalysis(selectedItem.analysisId)}
-                    >
-                      Manter selecionada
-                    </Button>
-                  </Stack>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
-    </Stack>
-  );
 }
