@@ -25,12 +25,14 @@ import ServiceCompositionSummaryCard from "../components/ServiceCompositionSumma
 import {
   buildServiceCompositionRowMemory,
   buildServiceCompositionSummary,
-  calculateServiceCompositionEffectiveUnitCost,
   calculateServiceCompositionItemSubtotal,
+  inferRecurrenceTypeFromPeriodicity,
   inferServiceCompositionCategory,
   sanitizeServiceCompositionDraftRow,
   SERVICE_COMPOSITION_CATEGORY_OPTIONS,
+  SERVICE_COMPOSITION_DEPRECIATION_OPTIONS,
   SERVICE_COMPOSITION_PERIODICITY_OPTIONS,
+  SERVICE_COMPOSITION_RECURRENCE_OPTIONS,
   SERVICE_COMPOSITION_STATUS_OPTIONS,
   ServiceCompositionDraftRow,
 } from "../utils/serviceCompositionCalculator";
@@ -110,14 +112,26 @@ function extractDraftRowsFromSpreadsheetRows(
             : `svc_${Date.now()}_${Math.random().toString(36).slice(2)}`,
         item: String(row.item || ""),
         category: inferServiceCompositionCategory(String(row.categoria || "")),
+        recurrenceType: inferRecurrenceTypeFromPeriodicity("mensal"),
         serviceUnit: "unidade",
         periodicity: "mensal",
         quantity: Number(row.quantidade || 0),
         unitCost: Number(row.valorUnitario || 0),
         productivityFactor: 1,
         allocationFactor: 1,
+        depreciationMethod:
+          inferServiceCompositionCategory(String(row.categoria || "")) ===
+          "Equipamentos"
+            ? "rateio_linear"
+            : "nao_aplica",
+        usefulLifeMonths:
+          inferServiceCompositionCategory(String(row.categoria || "")) ===
+          "Equipamentos"
+            ? 12
+            : 0,
         status: String(row.status || "Pendente"),
-        notes: "",
+        consumptionBasis: "",
+        technicalJustification: row.memoriaCalculo || "",
       })
     );
 }
@@ -126,20 +140,25 @@ function convertDraftRowToSpreadsheetRow(
   row: ServiceCompositionDraftRow
 ): SpreadsheetRow {
   const subtotal = calculateServiceCompositionItemSubtotal(row);
-  const effectiveUnitCost = calculateServiceCompositionEffectiveUnitCost(row);
 
   return {
     id: row.id,
     item: row.item.trim() || "Item sem nome",
     categoria: row.category,
     quantidade: Math.max(0, Number(row.quantity || 0)),
-    valorUnitario: effectiveUnitCost,
+    valorUnitario: row.quantity > 0 ? Number((subtotal / row.quantity).toFixed(2)) : 0,
     subtotal,
     status: row.status.trim() || "Pendente",
     memoriaCalculo: buildServiceCompositionRowMemory(row),
     origem: "edição local",
     automatico: false,
-    trainingTags: ["service_composition_row"],
+    trainingTags: [
+      "service_composition_row",
+      `recurrence_${row.recurrenceType}`,
+      row.depreciationMethod === "rateio_linear"
+        ? "with_depreciation"
+        : "without_depreciation",
+    ],
   };
 }
 
@@ -194,10 +213,36 @@ export default function ServiceCompositionEditor({
             field === "quantity" ||
             field === "unitCost" ||
             field === "productivityFactor" ||
-            field === "allocationFactor"
+            field === "allocationFactor" ||
+            field === "usefulLifeMonths"
               ? normalizeNumberInput(value)
               : value,
         } as ServiceCompositionDraftRow;
+
+        if (field === "category" && value === "Equipamentos") {
+          if (next.depreciationMethod === "nao_aplica") {
+            next.depreciationMethod = "rateio_linear";
+          }
+          if (!next.usefulLifeMonths || next.usefulLifeMonths <= 0) {
+            next.usefulLifeMonths = 12;
+          }
+        }
+
+        if (field === "periodicity") {
+          if (value === "sob_demanda") {
+            next.recurrenceType = "sob_demanda";
+          } else if (next.recurrenceType === "sob_demanda") {
+            next.recurrenceType = "recorrente";
+          }
+        }
+
+        if (field === "depreciationMethod" && value === "nao_aplica") {
+          next.usefulLifeMonths = 0;
+        }
+
+        if (field === "depreciationMethod" && value === "rateio_linear") {
+          next.usefulLifeMonths = next.usefulLifeMonths > 0 ? next.usefulLifeMonths : 12;
+        }
 
         return sanitizeServiceCompositionDraftRow(next);
       })
@@ -210,14 +255,18 @@ export default function ServiceCompositionEditor({
       sanitizeServiceCompositionDraftRow({
         item: "Novo componente",
         category: "Materiais e insumos",
+        recurrenceType: "recorrente",
         serviceUnit: "unidade",
         periodicity: "mensal",
         quantity: 1,
         unitCost: 0,
         productivityFactor: 1,
         allocationFactor: 1,
+        depreciationMethod: "nao_aplica",
+        usefulLifeMonths: 0,
         status: "Pendente",
-        notes: "",
+        consumptionBasis: "",
+        technicalJustification: "",
       }),
     ]);
   }
@@ -301,8 +350,8 @@ export default function ServiceCompositionEditor({
 
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
                 Este bloco permite montar a composição material e operacional do
-                serviço, com unidade de serviço, periodicidade, produtividade,
-                rateio/depreciação e subtotal por item.
+                serviço, com recorrência, periodicidade, produtividade,
+                rateio/depreciação, base de consumo e memória técnica por item.
               </Typography>
             </Box>
 
@@ -360,7 +409,11 @@ export default function ServiceCompositionEditor({
                     <strong>Bloco</strong>
                   </TableCell>
 
-                  <TableCell sx={{ minWidth: 140 }}>
+                  <TableCell sx={{ minWidth: 150 }}>
+                    <strong>Recorrência</strong>
+                  </TableCell>
+
+                  <TableCell sx={{ minWidth: 150 }}>
                     <strong>Unidade</strong>
                   </TableCell>
 
@@ -381,11 +434,23 @@ export default function ServiceCompositionEditor({
                   </TableCell>
 
                   <TableCell sx={{ minWidth: 170 }}>
-                    <strong>Rateio / depreciação</strong>
+                    <strong>Rateio contratual</strong>
                   </TableCell>
 
-                  <TableCell sx={{ minWidth: 180 }}>
-                    <strong>Observações</strong>
+                  <TableCell sx={{ minWidth: 170 }}>
+                    <strong>Depreciação</strong>
+                  </TableCell>
+
+                  <TableCell sx={{ minWidth: 150 }}>
+                    <strong>Vida útil (meses)</strong>
+                  </TableCell>
+
+                  <TableCell sx={{ minWidth: 220 }}>
+                    <strong>Base de consumo</strong>
+                  </TableCell>
+
+                  <TableCell sx={{ minWidth: 240 }}>
+                    <strong>Justificativa técnica</strong>
                   </TableCell>
 
                   <TableCell align="right" sx={{ minWidth: 130 }}>
@@ -420,6 +485,17 @@ export default function ServiceCompositionEditor({
                           options={SERVICE_COMPOSITION_CATEGORY_OPTIONS}
                           onChange={(value) =>
                             updateRow(index, "category", value)
+                          }
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <EditableCell
+                          type="select"
+                          value={row.recurrenceType}
+                          options={SERVICE_COMPOSITION_RECURRENCE_OPTIONS}
+                          onChange={(value) =>
+                            updateRow(index, "recurrenceType", value)
                           }
                         />
                       </TableCell>
@@ -494,8 +570,43 @@ export default function ServiceCompositionEditor({
 
                       <TableCell>
                         <EditableCell
-                          value={row.notes}
-                          onChange={(value) => updateRow(index, "notes", value)}
+                          type="select"
+                          value={row.depreciationMethod}
+                          options={SERVICE_COMPOSITION_DEPRECIATION_OPTIONS}
+                          onChange={(value) =>
+                            updateRow(index, "depreciationMethod", value)
+                          }
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <EditableCell
+                          type="number"
+                          value={row.usefulLifeMonths}
+                          onChange={(value) =>
+                            updateRow(index, "usefulLifeMonths", value)
+                          }
+                          min={0}
+                          step={1}
+                          disabled={row.depreciationMethod === "nao_aplica"}
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <EditableCell
+                          value={row.consumptionBasis}
+                          onChange={(value) =>
+                            updateRow(index, "consumptionBasis", value)
+                          }
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <EditableCell
+                          value={row.technicalJustification}
+                          onChange={(value) =>
+                            updateRow(index, "technicalJustification", value)
+                          }
                         />
                       </TableCell>
 
@@ -530,7 +641,7 @@ export default function ServiceCompositionEditor({
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={12}>
+                    <TableCell colSpan={16}>
                       <Typography variant="body2" color="text.secondary">
                         Nenhum componente foi identificado ainda. Adicione a primeira
                         linha para começar a montar a composição de serviços.
