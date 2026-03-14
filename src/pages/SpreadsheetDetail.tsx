@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  AppBar,
   Box,
   Breadcrumbs,
   Button,
@@ -12,1824 +11,398 @@ import {
   Container,
   Divider,
   Link,
-  List,
-  ListItemButton,
-  ListItemText,
-  MenuItem,
-  Paper,
   Stack,
-  Tab,
-  Tabs,
-  TextField,
-  Toolbar,
   Typography,
 } from "@mui/material";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
-import CategoryIcon from "@mui/icons-material/Category";
-import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
-import HistoryIcon from "@mui/icons-material/History";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
-import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
-import GavelRoundedIcon from "@mui/icons-material/GavelRounded";
-import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
-import SummarizeRoundedIcon from "@mui/icons-material/SummarizeRounded";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
-import TrendingDownRoundedIcon from "@mui/icons-material/TrendingDownRounded";
-import TrendingFlatRoundedIcon from "@mui/icons-material/TrendingFlatRounded";
-import CompareArrowsRoundedIcon from "@mui/icons-material/CompareArrowsRounded";
-import ArticleRoundedIcon from "@mui/icons-material/ArticleRounded";
-import NotesRoundedIcon from "@mui/icons-material/NotesRounded";
-import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
-import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
-import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
-import KeyboardDoubleArrowUpRoundedIcon from "@mui/icons-material/KeyboardDoubleArrowUpRounded";
-import SwapHorizRoundedIcon from "@mui/icons-material/SwapHorizRounded";
-import DifferenceRoundedIcon from "@mui/icons-material/DifferenceRounded";
-import FactCheckRoundedIcon from "@mui/icons-material/FactCheckRounded";
-import TaskAltRoundedIcon from "@mui/icons-material/TaskAltRounded";
-import RuleRoundedIcon from "@mui/icons-material/RuleRounded";
-import ErrorOutlineRoundedIcon from "@mui/icons-material/ErrorOutlineRounded";
-import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
-import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
-import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
-import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordRounded";
-import FilterAltRoundedIcon from "@mui/icons-material/FilterAltRounded";
-import CloudDoneRoundedIcon from "@mui/icons-material/CloudDoneRounded";
-import SaveAsRoundedIcon from "@mui/icons-material/SaveAsRounded";
-import StorageRoundedIcon from "@mui/icons-material/StorageRounded";
-import { Link as RouterLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import TableChartIcon from "@mui/icons-material/TableChart";
+import Groups2OutlinedIcon from "@mui/icons-material/Groups2Outlined";
+import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
+import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
+import CompareArrowsOutlinedIcon from "@mui/icons-material/CompareArrowsOutlined";
+import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
+import { Link as RouterLink, useParams } from "react-router-dom";
 import {
-  AnalysisDetail,
-  AnalysisExplanation,
-  AnalysisHistoryItem,
-  ConsolidatedOpinion,
-  buildMockAnalysisDetail,
-  buildMockAnalysisHistory,
-} from "../mocks/analysisHistoryMocks";
+  getSpreadsheetById,
+  SpreadsheetRecord,
+} from "../services/spreadsheetService";
 
-type SpreadsheetDetailData = {
-  id: string;
-  title: string;
-  description?: string | null;
-  status?: string | null;
-  category?: string | null;
-  updatedAt?: string | null;
-};
+type LoadState = "loading" | "success" | "error";
 
-type DetailViewTab =
-  | "summary"
-  | "comparison"
-  | "opinion"
-  | "explanations"
-  | "timeline";
-
-type InternalDecision =
-  | "approved"
-  | "approved_with_remarks"
-  | "diligence_requested"
-  | "rejected"
-  | null;
-
-type InternalDecisionState = {
-  decision: InternalDecision;
-  despacho: string;
-  decidedAt: string | null;
-};
-
-type DecisionPersistenceMode = "backend" | "local";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
-const ENABLE_MOCK_ANALYSIS_HISTORY = true;
-const VALID_TABS: DetailViewTab[] = [
-  "summary",
-  "comparison",
-  "opinion",
-  "explanations",
-  "timeline",
-];
-
-function buildUrl(path: string) {
-  return `${API_BASE_URL}${path}`;
-}
-
-function getDecisionStorageKey(spreadsheetId?: string | null) {
-  return `spreadsheet-detail:internal-decisions:${spreadsheetId || "unknown"}`;
-}
-
-function readDecisionStateFromStorage(
-  spreadsheetId?: string | null
-): Record<string, InternalDecisionState> {
-  if (typeof window === "undefined") return {};
-
-  try {
-    const raw = window.localStorage.getItem(getDecisionStorageKey(spreadsheetId));
-    if (!raw) return {};
-
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return {};
-
-    return parsed;
-  } catch {
-    return {};
-  }
-}
-
-function writeDecisionStateToStorage(
-  spreadsheetId: string | null | undefined,
-  value: Record<string, InternalDecisionState>
-) {
-  if (typeof window === "undefined") return;
-  if (!spreadsheetId) return;
-
-  try {
-    window.localStorage.setItem(
-      getDecisionStorageKey(spreadsheetId),
-      JSON.stringify(value)
-    );
-  } catch {
-    // noop
-  }
-}
-
-function formatDateTime(value?: string | null): string {
-  if (!value) return "—";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function formatCurrency(value?: number | null): string {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return "—";
-  }
-
+function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
-  }).format(Number(value));
+  }).format(value || 0);
 }
 
-function formatLabel(value?: string | null): string {
-  if (!value) return "—";
-
-  return value
-    .replaceAll("_", " ")
-    .replaceAll("-", " ")
-    .trim()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function normalizeWhitespace(text?: string | null): string {
-  return (text || "").replace(/\s+/g, " ").trim();
-}
-
-function hasMeaningfulChange(current?: string | null, previous?: string | null): boolean {
-  return normalizeWhitespace(current) !== normalizeWhitespace(previous);
-}
-
-function getRiskChipColor(
-  riskLevel?: string | null
-):
-  | "default"
-  | "success"
-  | "warning"
-  | "error"
-  | "info"
-  | "primary"
-  | "secondary" {
-  const value = (riskLevel || "").toLowerCase();
-
-  if (value.includes("low") || value.includes("baixo")) return "success";
-  if (value.includes("medium") || value.includes("médio") || value.includes("medio")) {
-    return "warning";
-  }
-  if (value.includes("high") || value.includes("alto")) return "error";
-
-  return "default";
-}
-
-function getStatusChipColor(
-  status?: string | null
-):
-  | "default"
-  | "success"
-  | "warning"
-  | "error"
-  | "info"
-  | "primary"
-  | "secondary" {
-  const value = (status || "").toLowerCase();
-
-  if (
-    value.includes("completed") ||
-    value.includes("concluído") ||
-    value.includes("concluido") ||
-    value.includes("exequivel")
-  ) {
-    return "success";
-  }
-
-  if (
-    value.includes("diligencia") ||
-    value.includes("pendente") ||
-    value.includes("warning") ||
-    value.includes("ressalvas")
-  ) {
-    return "warning";
-  }
-
-  if (
-    value.includes("erro") ||
-    value.includes("error") ||
-    value.includes("inexequivel")
-  ) {
-    return "error";
-  }
-
-  if (value.includes("processing") || value.includes("processando")) {
-    return "info";
-  }
-
-  return "default";
-}
-
-function getDecisionLabel(decision: InternalDecision): string {
-  switch (decision) {
-    case "approved":
-      return "Aprovada";
-    case "approved_with_remarks":
-      return "Aprovada com ressalvas";
-    case "diligence_requested":
-      return "Diligência solicitada";
-    case "rejected":
-      return "Rejeitada";
+function getModelLabel(modelType?: SpreadsheetRecord["modelType"]) {
+  switch (modelType) {
+    case "dedicated_labor":
+      return "Terceirização com dedicação exclusiva";
+    case "non_dedicated_labor":
+      return "Terceirização sem dedicação exclusiva";
+    case "service_composition":
+      return "Serviços por composição";
+    case "economic_rebalance":
+      return "Repactuação / revisão";
     default:
-      return "Sem decisão";
+      return "Planilha";
   }
 }
 
-function getDecisionChipColor(
-  decision: InternalDecision
-):
-  | "default"
-  | "success"
-  | "warning"
-  | "error"
-  | "info"
-  | "primary"
-  | "secondary" {
-  switch (decision) {
-    case "approved":
-      return "success";
-    case "approved_with_remarks":
-      return "warning";
-    case "diligence_requested":
-      return "info";
-    case "rejected":
-      return "error";
+function getModelIcon(modelType?: SpreadsheetRecord["modelType"]) {
+  switch (modelType) {
+    case "dedicated_labor":
+      return <Groups2OutlinedIcon sx={{ fontSize: 18 }} />;
+    case "non_dedicated_labor":
+      return <TableChartOutlinedIcon sx={{ fontSize: 18 }} />;
+    case "service_composition":
+      return <AccountTreeOutlinedIcon sx={{ fontSize: 18 }} />;
+    case "economic_rebalance":
+      return <CompareArrowsOutlinedIcon sx={{ fontSize: 18 }} />;
     default:
-      return "default";
+      return <TableChartIcon sx={{ fontSize: 18 }} />;
   }
 }
 
-function getDecisionIcon(decision: InternalDecision) {
-  switch (decision) {
-    case "approved":
-      return <TaskAltRoundedIcon fontSize="small" />;
-    case "approved_with_remarks":
-      return <RuleRoundedIcon fontSize="small" />;
-    case "diligence_requested":
-      return <SearchRoundedIcon fontSize="small" />;
-    case "rejected":
-      return <ErrorOutlineRoundedIcon fontSize="small" />;
-    default:
-      return <FactCheckRoundedIcon fontSize="small" />;
-  }
-}
-
-function normalizeSpreadsheet(payload: any): SpreadsheetDetailData {
-  const source =
-    payload?.data ||
-    payload?.spreadsheet ||
-    payload?.item ||
-    payload ||
-    {};
-
-  return {
-    id: String(source.id ?? ""),
-    title: source.title ?? source.name ?? source.nome ?? "Planilha sem título",
-    description: source.description ?? source.descricao ?? null,
-    status: source.status ?? source.situacao ?? null,
-    category: source.category ?? source.categoria ?? null,
-    updatedAt:
-      source.updatedAt ?? source.updated_at ?? source.updatedat ?? null,
-  };
-}
-
-function normalizeAnalysisHistory(payload: any): AnalysisHistoryItem[] {
-  const rawList =
-    payload?.data ||
-    payload?.items ||
-    payload?.analyses ||
-    payload?.analysises ||
-    payload?.history ||
-    payload?.results ||
-    payload ||
-    [];
-
-  if (!Array.isArray(rawList)) return [];
-
-  return rawList.map((item: any, index: number) => ({
-    analysisId: String(
-      item.analysisId ??
-        item.analysis_id ??
-        item.id ??
-        `analysis-${index + 1}`
-    ),
-    spreadsheetId: item.spreadsheetId ?? item.spreadsheet_id ?? null,
-    spreadsheetVersionId:
-      item.spreadsheetVersionId ?? item.spreadsheet_version_id ?? null,
-    analysisType: item.analysisType ?? item.analysis_type ?? null,
-    processingStatus: item.processingStatus ?? item.processing_status ?? null,
-    finalStatus: item.finalStatus ?? item.final_status ?? null,
-    executabilityStatus:
-      item.executabilityStatus ?? item.executability_status ?? null,
-    riskLevel: item.riskLevel ?? item.risk_level ?? null,
-    scoreGlobal:
-      item.scoreGlobal !== undefined && item.scoreGlobal !== null
-        ? Number(item.scoreGlobal)
-        : item.score_global !== undefined && item.score_global !== null
-        ? Number(item.score_global)
-        : null,
-    createdAt: item.createdAt ?? item.created_at ?? null,
-    updatedAt: item.updatedAt ?? item.updated_at ?? null,
-    isLatest: Boolean(item.isLatest ?? item.is_latest ?? index === 0),
-  }));
-}
-
-function normalizeAnalysisDetail(payload: any): AnalysisDetail {
-  const source = payload?.data || payload?.analysis || payload || {};
-
-  const explanationsRaw =
-    source.explanations ||
-    source.analysis_explanations ||
-    source.explanation_bundle ||
-    [];
-
-  const explanations: AnalysisExplanation[] = Array.isArray(explanationsRaw)
-    ? explanationsRaw.map((item: any) => ({
-        explanationType:
-          item.explanationType ?? item.explanation_type ?? "general",
-        title: item.title ?? "Sem título",
-        payload:
-          typeof item.payload === "string"
-            ? item.payload
-            : JSON.stringify(item.payload ?? "", null, 2),
-      }))
-    : [];
-
-  const consolidatedOpinionRaw =
-    source.consolidatedOpinion ??
-    source.consolidated_opinion ??
-    null;
-
-  const consolidatedOpinion: ConsolidatedOpinion | null =
-    consolidatedOpinionRaw
-      ? {
-          ementa: consolidatedOpinionRaw.ementa ?? "",
-          conclusao: consolidatedOpinionRaw.conclusao ?? "",
-          fundamentacaoTecnica:
-            consolidatedOpinionRaw.fundamentacaoTecnica ??
-            consolidatedOpinionRaw.fundamentacao_tecnica ??
-            "",
-          fundamentacaoTecnicoJuridica:
-            consolidatedOpinionRaw.fundamentacaoTecnicoJuridica ??
-            consolidatedOpinionRaw.fundamentacao_tecnico_juridica ??
-            "",
-          versaoGestorLeigo:
-            consolidatedOpinionRaw.versaoGestorLeigo ??
-            consolidatedOpinionRaw.versao_gestor_leigo ??
-            "",
-          recomendacaoFinal:
-            consolidatedOpinionRaw.recomendacaoFinal ??
-            consolidatedOpinionRaw.recomendacao_final ??
-            "",
-        }
-      : null;
-
-  return {
-    analysisId: String(source.analysisId ?? source.analysis_id ?? source.id ?? ""),
-    spreadsheetId: source.spreadsheetId ?? source.spreadsheet_id ?? null,
-    spreadsheetVersionId:
-      source.spreadsheetVersionId ?? source.spreadsheet_version_id ?? null,
-    analysisType: source.analysisType ?? source.analysis_type ?? null,
-    processingStatus: source.processingStatus ?? source.processing_status ?? null,
-    finalStatus: source.finalStatus ?? source.final_status ?? null,
-    executabilityStatus:
-      source.executabilityStatus ?? source.executability_status ?? null,
-    riskLevel: source.riskLevel ?? source.risk_level ?? null,
-    scoreGlobal:
-      source.scoreGlobal !== undefined && source.scoreGlobal !== null
-        ? Number(source.scoreGlobal)
-        : source.score_global !== undefined && source.score_global !== null
-        ? Number(source.score_global)
-        : null,
-    proposedTotalValue:
-      source.proposedTotalValue !== undefined && source.proposedTotalValue !== null
-        ? Number(source.proposedTotalValue)
-        : source.proposed_total_value !== undefined &&
-          source.proposed_total_value !== null
-        ? Number(source.proposed_total_value)
-        : null,
-    mandatoryCostTotal:
-      source.mandatoryCostTotal !== undefined && source.mandatoryCostTotal !== null
-        ? Number(source.mandatoryCostTotal)
-        : source.mandatory_cost_total !== undefined &&
-          source.mandatory_cost_total !== null
-        ? Number(source.mandatory_cost_total)
-        : null,
-    evidentiaryCostTotal:
-      source.evidentiaryCostTotal !== undefined &&
-      source.evidentiaryCostTotal !== null
-        ? Number(source.evidentiaryCostTotal)
-        : source.evidentiary_cost_total !== undefined &&
-          source.evidentiary_cost_total !== null
-        ? Number(source.evidentiary_cost_total)
-        : null,
-    retentionTotal:
-      source.retentionTotal !== undefined && source.retentionTotal !== null
-        ? Number(source.retentionTotal)
-        : source.retention_total !== undefined && source.retention_total !== null
-        ? Number(source.retention_total)
-        : null,
-    executabilityBalance:
-      source.executabilityBalance !== undefined &&
-      source.executabilityBalance !== null
-        ? Number(source.executabilityBalance)
-        : source.executability_balance !== undefined &&
-          source.executability_balance !== null
-        ? Number(source.executability_balance)
-        : null,
-    createdAt: source.createdAt ?? source.created_at ?? null,
-    updatedAt: source.updatedAt ?? source.updated_at ?? null,
-    explanations,
-    consolidatedOpinion,
-  };
-}
-
-function normalizeInternalDecisionMap(
-  payload: any
-): Record<string, InternalDecisionState> {
-  const source =
-    payload?.data ??
-    payload?.items ??
-    payload?.decisions ??
-    payload?.internalDecisions ??
-    payload;
-
-  if (Array.isArray(source)) {
-    return source.reduce<Record<string, InternalDecisionState>>((acc, item) => {
-      const analysisId = String(
-        item.analysisId ??
-          item.analysis_id ??
-          item.id ??
-          ""
-      ).trim();
-
-      if (!analysisId) return acc;
-
-      acc[analysisId] = {
-        decision: (item.decision ?? item.status ?? null) as InternalDecision,
-        despacho: item.despacho ?? item.dispatch ?? "",
-        decidedAt: item.decidedAt ?? item.decided_at ?? item.updatedAt ?? item.updated_at ?? null,
+function getModelChipStyles(modelType?: SpreadsheetRecord["modelType"]) {
+  switch (modelType) {
+    case "dedicated_labor":
+      return {
+        backgroundColor: "#EDE7F6",
+        color: "#5E35B1",
       };
-
-      return acc;
-    }, {});
-  }
-
-  if (source && typeof source === "object") {
-    const output: Record<string, InternalDecisionState> = {};
-
-    Object.entries(source).forEach(([analysisId, value]: [string, any]) => {
-      if (!analysisId) return;
-
-      output[analysisId] = {
-        decision: (value?.decision ?? value?.status ?? null) as InternalDecision,
-        despacho: value?.despacho ?? value?.dispatch ?? "",
-        decidedAt:
-          value?.decidedAt ??
-          value?.decided_at ??
-          value?.updatedAt ??
-          value?.updated_at ??
-          null,
+    case "non_dedicated_labor":
+      return {
+        backgroundColor: "#E3F2FD",
+        color: "#1565C0",
       };
-    });
-
-    return output;
+    case "service_composition":
+      return {
+        backgroundColor: "#E8F5E9",
+        color: "#2E7D32",
+      };
+    case "economic_rebalance":
+      return {
+        backgroundColor: "#FFF3E0",
+        color: "#EF6C00",
+      };
+    default:
+      return {
+        backgroundColor: "#EDE7F6",
+        color: "#5E35B1",
+      };
   }
-
-  return {};
 }
 
-async function fetchRequiredJson<T = any>(url: string): Promise<T> {
-  const response = await fetch(url, {
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(
-      `Falha ao carregar ${url}. Status ${response.status}. ${text || ""}`.trim()
-    );
+function getStatusChipStyles(status?: string) {
+  switch (status) {
+    case "Em elaboração":
+      return {
+        backgroundColor: "#EFE7F6",
+        color: "#8E5AB5",
+      };
+    case "Concluída":
+      return {
+        backgroundColor: "#E7F6EC",
+        color: "#2E7D32",
+      };
+    case "Em revisão":
+      return {
+        backgroundColor: "#FFF3E0",
+        color: "#ED6C02",
+      };
+    default:
+      return {
+        backgroundColor: "#EFE7F6",
+        color: "#8E5AB5",
+      };
   }
-
-  return response.json();
-}
-
-async function fetchOptionalJson<T = any>(url: string): Promise<T | null> {
-  const response = await fetch(url, {
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (response.status === 404) {
-    return null;
-  }
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(
-      `Falha ao carregar ${url}. Status ${response.status}. ${text || ""}`.trim()
-    );
-  }
-
-  return response.json();
-}
-
-async function tryFetchFirstAvailable<T = any>(urls: string[]): Promise<T | null> {
-  for (const url of urls) {
-    const payload = await fetchOptionalJson<T>(url);
-    if (payload !== null) {
-      return payload;
-    }
-  }
-
-  return null;
-}
-
-async function tryMutateFirstAvailable(
-  urls: string[],
-  options: RequestInit
-): Promise<boolean> {
-  for (const url of urls) {
-    try {
-      const response = await fetch(url, {
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          ...(options.headers || {}),
-        },
-        ...options,
-      });
-
-      if (response.ok) {
-        return true;
-      }
-
-      if (response.status === 404 || response.status === 405) {
-        continue;
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return false;
-}
-
-async function tryLoadInternalDecisionsFromBackend(
-  spreadsheetId: string
-): Promise<Record<string, InternalDecisionState> | null> {
-  const payload = await tryFetchFirstAvailable([
-    buildUrl(`/api/spreadsheets/${spreadsheetId}/internal-decisions`),
-    buildUrl(`/api/spreadsheets/${spreadsheetId}/decisions`),
-    buildUrl(`/api/internal-decisions?spreadsheetId=${spreadsheetId}`),
-    buildUrl(`/api/decisions?spreadsheetId=${spreadsheetId}`),
-  ]);
-
-  if (!payload) return null;
-
-  return normalizeInternalDecisionMap(payload);
-}
-
-async function trySaveInternalDecisionToBackend(params: {
-  spreadsheetId: string;
-  analysisId: string;
-  state: InternalDecisionState;
-}): Promise<boolean> {
-  const { spreadsheetId, analysisId, state } = params;
-
-  const body = JSON.stringify({
-    spreadsheetId,
-    analysisId,
-    decision: state.decision,
-    despacho: state.despacho,
-    decidedAt: state.decidedAt,
-  });
-
-  return tryMutateFirstAvailable(
-    [
-      buildUrl(`/api/spreadsheets/${spreadsheetId}/internal-decisions`),
-      buildUrl(`/api/spreadsheets/${spreadsheetId}/analyses/${analysisId}/internal-decision`),
-      buildUrl(`/api/internal-decisions`),
-      buildUrl(`/api/decisions`),
-    ],
-    {
-      method: "POST",
-      body,
-    }
-  );
-}
-
-async function tryDeleteInternalDecisionFromBackend(params: {
-  spreadsheetId: string;
-  analysisId: string;
-}): Promise<boolean> {
-  const { spreadsheetId, analysisId } = params;
-
-  return tryMutateFirstAvailable(
-    [
-      buildUrl(`/api/spreadsheets/${spreadsheetId}/analyses/${analysisId}/internal-decision`),
-      buildUrl(`/api/spreadsheets/${spreadsheetId}/internal-decisions/${analysisId}`),
-      buildUrl(`/api/internal-decisions/${analysisId}?spreadsheetId=${spreadsheetId}`),
-      buildUrl(`/api/decisions/${analysisId}?spreadsheetId=${spreadsheetId}`),
-    ],
-    {
-      method: "DELETE",
-    }
-  );
-}
-
-function MetricCard({
-  title,
-  value,
-  icon,
-}: {
-  title: string;
-  value: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <Card variant="outlined" sx={{ height: "100%" }}>
-      <CardContent>
-        <Stack direction="row" spacing={1.5} alignItems="center" mb={1}>
-          {icon}
-          <Typography variant="body2" color="text.secondary">
-            {title}
-          </Typography>
-        </Stack>
-
-        <Typography variant="h6" fontWeight={700}>
-          {value}
-        </Typography>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ExplanationBlock({
-  explanation,
-}: {
-  explanation: AnalysisExplanation;
-}) {
-  return (
-    <Card variant="outlined">
-      <CardContent>
-        <Stack direction="row" spacing={1} alignItems="center" mb={1}>
-          <DescriptionRoundedIcon fontSize="small" />
-          <Typography variant="subtitle1" fontWeight={700}>
-            {explanation.title}
-          </Typography>
-          <Chip
-            size="small"
-            label={formatLabel(explanation.explanationType)}
-            variant="outlined"
-          />
-        </Stack>
-
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}
-        >
-          {explanation.payload || "Sem conteúdo disponível."}
-        </Typography>
-      </CardContent>
-    </Card>
-  );
-}
-
-function OpinionSection({
-  title,
-  content,
-}: {
-  title: string;
-  content?: string | null;
-}) {
-  return (
-    <Card variant="outlined">
-      <CardContent>
-        <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-          {title}
-        </Typography>
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ whiteSpace: "pre-wrap", lineHeight: 1.75 }}
-        >
-          {content || "Conteúdo não disponível."}
-        </Typography>
-      </CardContent>
-    </Card>
-  );
-}
-
-function TextDiffSection({
-  title,
-  current,
-  previous,
-}: {
-  title: string;
-  current?: string | null;
-  previous?: string | null;
-}) {
-  const changed = hasMeaningfulChange(current, previous);
-
-  return (
-    <Card variant="outlined">
-      <CardContent>
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          justifyContent="space-between"
-          spacing={1}
-          mb={2}
-        >
-          <Typography variant="subtitle1" fontWeight={700}>
-            {title}
-          </Typography>
-          <Chip
-            size="small"
-            label={changed ? "Alterado" : "Sem alteração"}
-            color={changed ? "warning" : "success"}
-            variant="outlined"
-          />
-        </Stack>
-
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
-            gap: 2,
-          }}
-        >
-          <Paper variant="outlined" sx={{ p: 2 }}>
-            <Typography variant="caption" color="text.secondary">
-              Texto atual
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{ mt: 1, whiteSpace: "pre-wrap", lineHeight: 1.75 }}
-            >
-              {current || "—"}
-            </Typography>
-          </Paper>
-
-          <Paper variant="outlined" sx={{ p: 2 }}>
-            <Typography variant="caption" color="text.secondary">
-              Texto anterior
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{ mt: 1, whiteSpace: "pre-wrap", lineHeight: 1.75 }}
-            >
-              {previous || "—"}
-            </Typography>
-          </Paper>
-        </Box>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ComparisonRow({
-  label,
-  current,
-  previous,
-  direction,
-}: {
-  label: string;
-  current: string;
-  previous: string;
-  direction: "up" | "down" | "same";
-}) {
-  const icon =
-    direction === "up" ? (
-      <TrendingUpRoundedIcon color="success" fontSize="small" />
-    ) : direction === "down" ? (
-      <TrendingDownRoundedIcon color="error" fontSize="small" />
-    ) : (
-      <TrendingFlatRoundedIcon color="disabled" fontSize="small" />
-    );
-
-  const chipColor =
-    direction === "up"
-      ? "success"
-      : direction === "down"
-      ? "error"
-      : "default";
-
-  const chipLabel =
-    direction === "up"
-      ? "Melhorou"
-      : direction === "down"
-      ? "Piorou"
-      : "Sem mudança";
-
-  return (
-    <Box
-      sx={{
-        display: "grid",
-        gridTemplateColumns: { xs: "1fr", md: "180px 1fr 1fr auto" },
-        gap: 1.5,
-        alignItems: "center",
-        py: 1.25,
-      }}
-    >
-      <Typography variant="body2" fontWeight={700}>
-        {label}
-      </Typography>
-
-      <Typography variant="body2" color="text.secondary">
-        Atual: <strong>{current}</strong>
-      </Typography>
-
-      <Typography variant="body2" color="text.secondary">
-        Anterior: <strong>{previous}</strong>
-      </Typography>
-
-      <Stack direction="row" spacing={1} alignItems="center">
-        {icon}
-        <Chip size="small" label={chipLabel} color={chipColor} variant="outlined" />
-      </Stack>
-    </Box>
-  );
-}
-
-function TimelineEventCard({
-  item,
-  isSelected,
-  isMostRecent,
-  decisionState,
-}: {
-  item: AnalysisHistoryItem;
-  isSelected: boolean;
-  isMostRecent: boolean;
-  decisionState?: InternalDecisionState;
-}) {
-  return (
-    <Box
-      sx={{
-        display: "grid",
-        gridTemplateColumns: "20px 1fr",
-        gap: 1.5,
-        alignItems: "start",
-      }}
-    >
-      <Stack alignItems="center" spacing={0}>
-        <FiberManualRecordRoundedIcon
-          fontSize="small"
-          color={isSelected ? "primary" : "disabled"}
-        />
-        <Box
-          sx={{
-            width: "2px",
-            flex: 1,
-            minHeight: 56,
-            bgcolor: "divider",
-            mt: 0.5,
-          }}
-        />
-      </Stack>
-
-      <Card
-        variant="outlined"
-        sx={{
-          borderColor: isSelected ? "primary.main" : "divider",
-        }}
-      >
-        <CardContent>
-          <Stack spacing={1.5}>
-            <Stack
-              direction="row"
-              spacing={1}
-              flexWrap="wrap"
-              useFlexGap
-              alignItems="center"
-            >
-              <Typography variant="subtitle2" fontWeight={700}>
-                {formatLabel(item.analysisType || "Análise")}
-              </Typography>
-
-              <Chip
-                size="small"
-                label={formatLabel(item.executabilityStatus || item.finalStatus)}
-                color={getStatusChipColor(item.executabilityStatus || item.finalStatus)}
-                variant="outlined"
-              />
-
-              <Chip
-                size="small"
-                label={`Risco: ${formatLabel(item.riskLevel)}`}
-                color={getRiskChipColor(item.riskLevel)}
-                variant="outlined"
-              />
-
-              {isMostRecent ? (
-                <Chip size="small" label="Mais recente" color="primary" variant="outlined" />
-              ) : null}
-
-              {isSelected ? (
-                <Chip size="small" label="Selecionada" color="primary" />
-              ) : null}
-            </Stack>
-
-            <Typography variant="body2" color="text.secondary">
-              <strong>Analysis ID:</strong> {item.analysisId}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              <strong>Versão da planilha:</strong> {item.spreadsheetVersionId ?? "—"}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              <strong>Criada em:</strong> {formatDateTime(item.createdAt)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              <strong>Score global:</strong>{" "}
-              {item.scoreGlobal !== null && item.scoreGlobal !== undefined
-                ? item.scoreGlobal
-                : "—"}
-            </Typography>
-
-            <Divider />
-
-            <Stack
-              direction="row"
-              spacing={1}
-              flexWrap="wrap"
-              useFlexGap
-              alignItems="center"
-            >
-              <Chip
-                size="small"
-                label={getDecisionLabel(decisionState?.decision || null)}
-                color={getDecisionChipColor(decisionState?.decision || null)}
-                variant="outlined"
-              />
-              <Typography variant="caption" color="text.secondary">
-                Despacho em: {formatDateTime(decisionState?.decidedAt)}
-              </Typography>
-            </Stack>
-
-            {decisionState?.despacho ? (
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}
-              >
-                {decisionState.despacho}
-              </Typography>
-            ) : null}
-          </Stack>
-        </CardContent>
-      </Card>
-    </Box>
-  );
-}
-
-function RightPanelHeader({
-  currentTab,
-  onChange,
-}: {
-  currentTab: DetailViewTab;
-  onChange: (tab: DetailViewTab) => void;
-}) {
-  return (
-    <Card variant="outlined">
-      <CardContent sx={{ pb: "16px !important" }}>
-        <Stack spacing={2}>
-          <Typography variant="h6" fontWeight={800}>
-            Navegação da análise
-          </Typography>
-
-          <Tabs
-            value={currentTab}
-            onChange={(_, value: DetailViewTab) => onChange(value)}
-            variant="scrollable"
-            scrollButtons="auto"
-            allowScrollButtonsMobile
-          >
-            <Tab value="summary" label="Resumo" icon={<DashboardRoundedIcon />} iconPosition="start" />
-            <Tab value="comparison" label="Comparação" icon={<CompareArrowsRoundedIcon />} iconPosition="start" />
-            <Tab value="opinion" label="Parecer" icon={<ArticleRoundedIcon />} iconPosition="start" />
-            <Tab value="explanations" label="Explicações" icon={<NotesRoundedIcon />} iconPosition="start" />
-            <Tab value="timeline" label="Linha do tempo" icon={<TimelineRoundedIcon />} iconPosition="start" />
-          </Tabs>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
-}
-
-function buildOpinionText(detail: AnalysisDetail | null): string {
-  if (!detail?.consolidatedOpinion) return "Parecer consolidado não disponível.";
-
-  const opinion = detail.consolidatedOpinion;
-
-  return [
-    "PARECER CONSOLIDADO",
-    "",
-    "EMENTA",
-    opinion.ementa || "—",
-    "",
-    "CONCLUSÃO",
-    opinion.conclusao || "—",
-    "",
-    "FUNDAMENTAÇÃO TÉCNICA",
-    opinion.fundamentacaoTecnica || "—",
-    "",
-    "FUNDAMENTAÇÃO TÉCNICO-JURÍDICA",
-    opinion.fundamentacaoTecnicoJuridica || "—",
-    "",
-    "VERSÃO PARA GESTOR LEIGO",
-    opinion.versaoGestorLeigo || "—",
-    "",
-    "RECOMENDAÇÃO FINAL",
-    opinion.recomendacaoFinal || "—",
-  ].join("\n");
-}
-
-function buildExplanationsText(detail: AnalysisDetail | null): string {
-  if (!detail?.explanations?.length) return "Explicações não disponíveis.";
-
-  const parts: string[] = ["EXPLICAÇÕES VINCULADAS", ""];
-
-  detail.explanations.forEach((item, index) => {
-    parts.push(`${index + 1}. ${item.title}`);
-    parts.push(`Tipo: ${item.explanationType}`);
-    parts.push(item.payload || "—");
-    parts.push("");
-  });
-
-  return parts.join("\n");
-}
-
-function downloadTextFile(filename: string, content: string) {
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
 }
 
 export default function SpreadsheetDetail() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [state, setState] = useState<LoadState>("loading");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [spreadsheet, setSpreadsheet] = useState<SpreadsheetRecord | null>(null);
+  const [dataSource, setDataSource] = useState<"api" | "local" | null>(null);
 
-  const [spreadsheet, setSpreadsheet] = useState<SpreadsheetDetailData | null>(null);
-  const [history, setHistory] = useState<AnalysisHistoryItem[]>([]);
-  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(
-    searchParams.get("analysisId")
-  );
-  const [analysisDetail, setAnalysisDetail] = useState<AnalysisDetail | null>(null);
+  useEffect(() => {
+    document.title = "CustoPúblico — Detalhe da Planilha";
+  }, []);
 
-  const initialTab = searchParams.get("tab");
-  const [detailViewTab, setDetailViewTab] = useState<DetailViewTab>(
-    VALID_TABS.includes(initialTab as DetailViewTab)
-      ? (initialTab as DetailViewTab)
-      : "summary"
-  );
+  useEffect(() => {
+    let isMounted = true;
 
-  const [pageLoading, setPageLoading] = useState(true);
-  const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [pageError, setPageError] = useState<string | null>(null);
-  const [historyWarning, setHistoryWarning] = useState<string | null>(null);
-  const [usingMockData, setUsingMockData] = useState(false);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
-
-  const [despachoDraft, setDespachoDraft] = useState("");
-  const [decisionByAnalysis, setDecisionByAnalysis] = useState<
-    Record<string, InternalDecisionState>
-  >({});
-  const [decisionPersistenceMode, setDecisionPersistenceMode] =
-    useState<DecisionPersistenceMode>("local");
-  const [decisionSyncLoading, setDecisionSyncLoading] = useState(false);
-
-  const [historySearch, setHistorySearch] = useState(searchParams.get("q") || "");
-  const [historyStatusFilter, setHistoryStatusFilter] = useState(
-    searchParams.get("status") || "all"
-  );
-  const [historyRiskFilter, setHistoryRiskFilter] = useState(
-    searchParams.get("risk") || "all"
-  );
-
-  const selectedHistoryItem = useMemo(() => {
-    return history.find((item) => item.analysisId === selectedAnalysisId) || null;
-  }, [history, selectedAnalysisId]);
-
-  const selectedHistoryIndex = useMemo(() => {
-    return history.findIndex((item) => item.analysisId === selectedAnalysisId);
-  }, [history, selectedAnalysisId]);
-
-  const previousHistoryItem = useMemo(() => {
-    if (selectedHistoryIndex < 0) return null;
-    return history[selectedHistoryIndex + 1] || null;
-  }, [history, selectedHistoryIndex]);
-
-  const mostRecentHistoryItem = useMemo(() => {
-    return history[0] || null;
-  }, [history]);
-
-  const filteredHistory = useMemo(() => {
-    const term = normalizeWhitespace(historySearch).toLowerCase();
-
-    return history.filter((item) => {
-      const searchableText = [
-        item.analysisId,
-        item.analysisType,
-        item.executabilityStatus,
-        item.finalStatus,
-        item.processingStatus,
-        item.riskLevel,
-        item.spreadsheetVersionId !== null && item.spreadsheetVersionId !== undefined
-          ? String(item.spreadsheetVersionId)
-          : "",
-        item.spreadsheetVersionId !== null && item.spreadsheetVersionId !== undefined
-          ? `versão ${item.spreadsheetVersionId}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      const statusValue = (
-        item.executabilityStatus ||
-        item.finalStatus ||
-        item.processingStatus ||
-        ""
-      ).toLowerCase();
-
-      const riskValue = (item.riskLevel || "").toLowerCase();
-
-      const matchesSearch = !term || searchableText.includes(term);
-      const matchesStatus =
-        historyStatusFilter === "all" ||
-        statusValue.includes(historyStatusFilter.toLowerCase());
-      const matchesRisk =
-        historyRiskFilter === "all" ||
-        riskValue.includes(historyRiskFilter.toLowerCase());
-
-      return matchesSearch && matchesStatus && matchesRisk;
-    });
-  }, [history, historySearch, historyStatusFilter, historyRiskFilter]);
-
-  const currentInternalDecision = useMemo(() => {
-    if (!selectedAnalysisId) return null;
-    return (
-      decisionByAnalysis[selectedAnalysisId] || {
-        decision: null,
-        despacho: "",
-        decidedAt: null,
+    async function loadSpreadsheet() {
+      if (!id) {
+        if (!isMounted) return;
+        setState("error");
+        setErrorMessage("ID da planilha não informado.");
+        return;
       }
-    );
-  }, [decisionByAnalysis, selectedAnalysisId]);
 
-  const syncUrlParams = useCallback(
-    (overrides?: Partial<Record<"q" | "status" | "risk" | "tab" | "analysisId", string | null>>) => {
-      const next = new URLSearchParams(searchParams);
-
-      const values = {
-        q: historySearch || null,
-        status: historyStatusFilter !== "all" ? historyStatusFilter : null,
-        risk: historyRiskFilter !== "all" ? historyRiskFilter : null,
-        tab: detailViewTab !== "summary" ? detailViewTab : null,
-        analysisId: selectedAnalysisId || null,
-        ...overrides,
-      };
-
-      Object.entries(values).forEach(([key, value]) => {
-        if (!value || value === "all") {
-          next.delete(key);
-        } else {
-          next.set(key, value);
-        }
-      });
-
-      setSearchParams(next, { replace: true });
-    },
-    [
-      detailViewTab,
-      historyRiskFilter,
-      historySearch,
-      historyStatusFilter,
-      searchParams,
-      selectedAnalysisId,
-      setSearchParams,
-    ]
-  );
-
-  const loadAnalysisDetail = useCallback(
-    async (analysisId: string, spreadsheetIdForMock?: string, forceMock = false) => {
-      setAnalysisLoading(true);
+      setState("loading");
+      setErrorMessage("");
+      setSpreadsheet(null);
 
       try {
-        if ((usingMockData || forceMock) && spreadsheetIdForMock) {
-          const mockDetail = buildMockAnalysisDetail(analysisId, spreadsheetIdForMock);
-          setAnalysisDetail(mockDetail);
-          return;
-        }
+        const response = await fetch(`/api/spreadsheets/${id}`);
 
-        const payload = await tryFetchFirstAvailable([
-          buildUrl(`/api/analyses/${analysisId}`),
-          buildUrl(`/api/analysis/${analysisId}`),
-        ]);
+        if (response.ok) {
+          const data = await response.json();
+          const payload = (data?.spreadsheet ?? data) as SpreadsheetRecord;
 
-        if (!payload) {
-          if (ENABLE_MOCK_ANALYSIS_HISTORY && spreadsheetIdForMock) {
-            const mockDetail = buildMockAnalysisDetail(analysisId, spreadsheetIdForMock);
-            setAnalysisDetail(mockDetail);
-            return;
+          if (isMounted) {
+            setSpreadsheet(payload);
+            setDataSource("api");
+            setState("success");
           }
-
-          setAnalysisDetail(null);
           return;
         }
 
-        const normalized = normalizeAnalysisDetail(payload);
-        setAnalysisDetail(normalized);
-      } catch (err: any) {
-        setPageError(
-          err?.message ||
-            "Não foi possível carregar os detalhes da análise selecionada."
-        );
-      } finally {
-        setAnalysisLoading(false);
-      }
-    },
-    [usingMockData]
-  );
+        const localSpreadsheet = getSpreadsheetById(id);
 
-  const loadPage = useCallback(async () => {
-    if (!id) {
-      setPageError("ID da planilha não informado.");
-      setPageLoading(false);
-      return;
+        if (localSpreadsheet) {
+          if (isMounted) {
+            setSpreadsheet(localSpreadsheet);
+            setDataSource("local");
+            setState("success");
+          }
+          return;
+        }
+
+        const data = await response.json().catch(() => null);
+        const message =
+          data?.message ??
+          `Falha ao carregar /api/spreadsheets/${id}. Status ${response.status}.`;
+
+        if (isMounted) {
+          setState("error");
+          setErrorMessage(message);
+        }
+      } catch (error) {
+        const localSpreadsheet = getSpreadsheetById(id);
+
+        if (localSpreadsheet) {
+          if (isMounted) {
+            setSpreadsheet(localSpreadsheet);
+            setDataSource("local");
+            setState("success");
+          }
+          return;
+        }
+
+        if (isMounted) {
+          setState("error");
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Erro inesperado ao carregar a planilha."
+          );
+        }
+      }
     }
 
-    setPageLoading(true);
-    setPageError(null);
-    setHistoryWarning(null);
+    loadSpreadsheet();
 
-    try {
-      const spreadsheetPayload = await fetchRequiredJson(
-        buildUrl(`/api/spreadsheets/${id}`)
-      );
-      const normalizedSpreadsheet = normalizeSpreadsheet(spreadsheetPayload);
-      setSpreadsheet(normalizedSpreadsheet);
-
-      const historyPayload = await tryFetchFirstAvailable([
-        buildUrl(`/api/spreadsheets/${id}/analyses`),
-        buildUrl(`/api/spreadsheets/${id}/analysis`),
-        buildUrl(`/api/analyses?spreadsheetId=${id}`),
-        buildUrl(`/api/analysis?spreadsheetId=${id}`),
-      ]);
-
-      let normalizedHistory: AnalysisHistoryItem[] = [];
-
-      if (historyPayload) {
-        normalizedHistory = normalizeAnalysisHistory(historyPayload).sort((a, b) => {
-          const dateA = new Date(a.createdAt || a.updatedAt || 0).getTime();
-          const dateB = new Date(b.createdAt || b.updatedAt || 0).getTime();
-          return dateB - dateA;
-        });
-      }
-
-      let useMock = false;
-
-      if (normalizedHistory.length === 0 && ENABLE_MOCK_ANALYSIS_HISTORY) {
-        normalizedHistory = buildMockAnalysisHistory(id);
-        useMock = true;
-        setUsingMockData(true);
-        setHistoryWarning(
-          "O backend ainda não possui histórico real. A tela está exibindo modelos simulados para teste visual."
-        );
-      } else if (normalizedHistory.length === 0) {
-        setUsingMockData(false);
-        setHistoryWarning(
-          "O histórico de análises ainda não possui endpoint disponível no backend."
-        );
-      } else {
-        setUsingMockData(false);
-      }
-
-      setHistory(normalizedHistory);
-
-      const backendDecisions = await tryLoadInternalDecisionsFromBackend(id);
-      if (backendDecisions) {
-        setDecisionByAnalysis(backendDecisions);
-        setDecisionPersistenceMode("backend");
-        writeDecisionStateToStorage(id, backendDecisions);
-      } else {
-        const restoredDecisions = readDecisionStateFromStorage(id);
-        setDecisionByAnalysis(restoredDecisions);
-        setDecisionPersistenceMode("local");
-      }
-
-      const requestedAnalysisId = searchParams.get("analysisId");
-      const existingRequestedAnalysis = normalizedHistory.find(
-        (item) => item.analysisId === requestedAnalysisId
-      );
-
-      const initialAnalysisId =
-        existingRequestedAnalysis?.analysisId ||
-        normalizedHistory.find((item) => item.isLatest)?.analysisId ||
-        normalizedHistory[0]?.analysisId ||
-        null;
-
-      setSelectedAnalysisId(initialAnalysisId);
-
-      if (initialAnalysisId) {
-        await loadAnalysisDetail(initialAnalysisId, id, useMock);
-      } else {
-        setAnalysisDetail(null);
-      }
-    } catch (err: any) {
-      setPageError(
-        err?.message || "Não foi possível carregar os dados da planilha."
-      );
-    } finally {
-        setPageLoading(false);
-    }
-  }, [id, loadAnalysisDetail, searchParams]);
-
-  useEffect(() => {
-    loadPage();
-  }, [loadPage]);
-
-  useEffect(() => {
-    if (!id) return;
-    writeDecisionStateToStorage(id, decisionByAnalysis);
-  }, [decisionByAnalysis, id]);
-
-  useEffect(() => {
-    if (!filteredHistory.length) return;
-
-    const stillVisible = filteredHistory.some(
-      (item) => item.analysisId === selectedAnalysisId
-    );
-
-    if (!stillVisible) {
-      setSelectedAnalysisId(filteredHistory[0].analysisId);
-    }
-  }, [filteredHistory, selectedAnalysisId]);
-
-  useEffect(() => {
-    if (!id || !selectedAnalysisId) return;
-
-    const selectedInFiltered = filteredHistory.find(
-      (item) => item.analysisId === selectedAnalysisId
-    );
-
-    if (!selectedInFiltered) return;
-
-    loadAnalysisDetail(selectedAnalysisId, id);
-  }, [selectedAnalysisId, filteredHistory, id, loadAnalysisDetail]);
-
-  useEffect(() => {
-    syncUrlParams();
-  }, [
-    historySearch,
-    historyStatusFilter,
-    historyRiskFilter,
-    detailViewTab,
-    selectedAnalysisId,
-    syncUrlParams,
-  ]);
-
-  const handleSelectAnalysis = async (analysisId: string) => {
-    if (!analysisId || analysisId === selectedAnalysisId || !id) return;
-
-    setSelectedAnalysisId(analysisId);
-    setPageError(null);
-    setActionMessage(null);
-    await loadAnalysisDetail(analysisId, id);
-  };
-
-  const previousDetail = useMemo(() => {
-    if (!id || !previousHistoryItem) return null;
-    return buildMockAnalysisDetail(previousHistoryItem.analysisId, id);
-  }, [id, previousHistoryItem]);
-
-  const comparisonSummary = useMemo(() => {
-    if (!analysisDetail || !previousHistoryItem || !previousDetail) return null;
-
-    const currentStatus =
-      analysisDetail.executabilityStatus || analysisDetail.finalStatus || null;
-    const previousStatus =
-      previousHistoryItem.executabilityStatus || previousHistoryItem.finalStatus || null;
-
-    const currentScore = analysisDetail.scoreGlobal ?? null;
-    const previousScore = previousHistoryItem.scoreGlobal ?? null;
-
-    const scoreDirection =
-      currentScore === null || previousScore === null
-        ? "same"
-        : currentScore > previousScore
-        ? "up"
-        : currentScore < previousScore
-        ? "down"
-        : "same";
-
-    const currentRiskOrder = (() => {
-      const value = (analysisDetail.riskLevel || "").toLowerCase();
-      if (value.includes("low") || value.includes("baixo")) return 1;
-      if (value.includes("medium") || value.includes("médio") || value.includes("medio")) return 2;
-      if (value.includes("high") || value.includes("alto")) return 3;
-      return 0;
-    })();
-
-    const previousRiskOrder = (() => {
-      const value = (previousHistoryItem.riskLevel || "").toLowerCase();
-      if (value.includes("low") || value.includes("baixo")) return 1;
-      if (value.includes("medium") || value.includes("médio") || value.includes("medio")) return 2;
-      if (value.includes("high") || value.includes("alto")) return 3;
-      return 0;
-    })();
-
-    const riskDirection =
-      currentRiskOrder === 0 || previousRiskOrder === 0
-        ? "same"
-        : currentRiskOrder < previousRiskOrder
-        ? "up"
-        : currentRiskOrder > previousRiskOrder
-        ? "down"
-        : "same";
-
-    const currentStatusOrder = (() => {
-      const value = (currentStatus || "").toLowerCase();
-      if (value.includes("inexequivel")) return 1;
-      if (value.includes("ressalvas")) return 2;
-      if (value.includes("diligencia")) return 3;
-      if (value.includes("exequivel")) return 4;
-      return 0;
-    })();
-
-    const previousStatusOrder = (() => {
-      const value = (previousStatus || "").toLowerCase();
-      if (value.includes("inexequivel")) return 1;
-      if (value.includes("ressalvas")) return 2;
-      if (value.includes("diligencia")) return 3;
-      if (value.includes("exequivel")) return 4;
-      return 0;
-    })();
-
-    const statusDirection =
-      currentStatusOrder === 0 || previousStatusOrder === 0
-        ? "same"
-        : currentStatusOrder > previousStatusOrder
-        ? "up"
-        : currentStatusOrder < previousStatusOrder
-        ? "down"
-        : "same";
-
-    const currentBalance = analysisDetail.executabilityBalance;
-    const previousBalance = previousDetail.executabilityBalance;
-
-    const balanceDirection =
-      currentBalance === null ||
-      currentBalance === undefined ||
-      previousBalance === null ||
-      previousBalance === undefined
-        ? "same"
-        : currentBalance > previousBalance
-        ? "up"
-        : currentBalance < previousBalance
-        ? "down"
-        : "same";
-
-    return {
-      scoreDirection,
-      riskDirection,
-      statusDirection,
-      balanceDirection,
+    return () => {
+      isMounted = false;
     };
-  }, [analysisDetail, previousDetail, previousHistoryItem]);
+  }, [id]);
 
-  useEffect(() => {
-    setActionMessage(null);
-  }, [selectedAnalysisId]);
+  const totalValue = useMemo(() => {
+    if (!spreadsheet) return 0;
+    return spreadsheet.rows.reduce((sum, row) => sum + (row.subtotal || 0), 0);
+  }, [spreadsheet]);
 
-  useEffect(() => {
-    setDespachoDraft(currentInternalDecision?.despacho || "");
-  }, [currentInternalDecision?.despacho, selectedAnalysisId]);
+  const totalItems = spreadsheet?.rows.length ?? 0;
+  const pendingItems =
+    spreadsheet?.rows.filter((row) => row.status === "Pendente").length ?? 0;
 
-  const handleCopyOpinion = async () => {
-    try {
-      const content = buildOpinionText(analysisDetail);
-      await navigator.clipboard.writeText(content);
-      setActionMessage("Parecer consolidado copiado para a área de transferência.");
-    } catch {
-      setActionMessage("Não foi possível copiar o parecer.");
-    }
-  };
-
-  const handleCopyExplanations = async () => {
-    try {
-      const content = buildExplanationsText(analysisDetail);
-      await navigator.clipboard.writeText(content);
-      setActionMessage("Explicações copiadas para a área de transferência.");
-    } catch {
-      setActionMessage("Não foi possível copiar as explicações.");
-    }
-  };
-
-  const handleExportText = () => {
-    const titleBase =
-      spreadsheet?.title?.trim().replace(/[^\p{L}\p{N}\-_ ]/gu, "").replace(/\s+/g, "_") ||
-      "analise";
-
-    const content = [
-      `PLANILHA: ${spreadsheet?.title || "—"}`,
-      `ANALYSIS ID: ${analysisDetail?.analysisId || "—"}`,
-      `VERSÃO: ${analysisDetail?.spreadsheetVersionId ?? "—"}`,
-      `STATUS: ${formatLabel(
-        analysisDetail?.executabilityStatus || analysisDetail?.finalStatus
-      )}`,
-      `RISCO: ${formatLabel(analysisDetail?.riskLevel)}`,
-      `SCORE: ${
-        analysisDetail?.scoreGlobal !== null &&
-        analysisDetail?.scoreGlobal !== undefined
-          ? analysisDetail?.scoreGlobal
-          : "—"
-      }`,
-      "",
-      buildOpinionText(analysisDetail),
-      "",
-      buildExplanationsText(analysisDetail),
-      "",
-      "DESPACHO INTERNO",
-      getDecisionLabel(currentInternalDecision?.decision || null),
-      currentInternalDecision?.despacho || "—",
-    ].join("\n");
-
-    downloadTextFile(`${titleBase}_analise.txt`, content);
-    setActionMessage("Arquivo de texto exportado com sucesso.");
-  };
-
-  const handleGoToMostRecent = async () => {
-    if (!mostRecentHistoryItem || !id) return;
-
-    setSelectedAnalysisId(mostRecentHistoryItem.analysisId);
-    setDetailViewTab("summary");
-    await loadAnalysisDetail(mostRecentHistoryItem.analysisId, id);
-    setActionMessage("Análise mais recente carregada.");
-  };
-
-  const handleCompareWithMostRecent = async () => {
-    if (!mostRecentHistoryItem || !id) return;
-
-    if (selectedAnalysisId !== mostRecentHistoryItem.analysisId) {
-      setSelectedAnalysisId(mostRecentHistoryItem.analysisId);
-      await loadAnalysisDetail(mostRecentHistoryItem.analysisId, id);
-    }
-
-    setDetailViewTab("comparison");
-    setActionMessage("Comparação com a análise mais recente aberta.");
-  };
-
-  const handleSaveDecision = async (decision: InternalDecision) => {
-    if (!selectedAnalysisId || !id) return;
-
-    const nextState: InternalDecisionState = {
-      decision,
-      despacho: despachoDraft.trim(),
-      decidedAt: new Date().toISOString(),
-    };
-
-    setDecisionSyncLoading(true);
-
-    setDecisionByAnalysis((prev) => ({
-      ...prev,
-      [selectedAnalysisId]: nextState,
-    }));
-
-    const savedInBackend = await trySaveInternalDecisionToBackend({
-      spreadsheetId: id,
-      analysisId: selectedAnalysisId,
-      state: nextState,
-    });
-
-    if (savedInBackend) {
-      setDecisionPersistenceMode("backend");
-      setActionMessage(
-        `Despacho interno salvo no backend como: ${getDecisionLabel(decision)}.`
-      );
-    } else {
-      setDecisionPersistenceMode("local");
-      setActionMessage(
-        `Despacho salvo localmente como: ${getDecisionLabel(decision)}. O endpoint do backend ainda não respondeu.`
-      );
-    }
-
-    setDecisionSyncLoading(false);
-  };
-
-  const handleResetDecision = async () => {
-    if (!selectedAnalysisId || !id) return;
-
-    setDecisionSyncLoading(true);
-
-    setDecisionByAnalysis((prev) => ({
-      ...prev,
-      [selectedAnalysisId]: {
-        decision: null,
-        despacho: "",
-        decidedAt: null,
-      },
-    }));
-    setDespachoDraft("");
-
-    const removedInBackend = await tryDeleteInternalDecisionFromBackend({
-      spreadsheetId: id,
-      analysisId: selectedAnalysisId,
-    });
-
-    if (removedInBackend) {
-      setDecisionPersistenceMode("backend");
-      setActionMessage("Despacho interno removido no backend.");
-    } else {
-      setDecisionPersistenceMode("local");
-      setActionMessage(
-        "Despacho interno removido localmente. O endpoint do backend ainda não respondeu."
-      );
-    }
-
-    setDecisionSyncLoading(false);
-  };
-
-  const handleClearHistoryFilters = () => {
-    setHistorySearch("");
-    setHistoryStatusFilter("all");
-    setHistoryRiskFilter("all");
-  };
-
-  const currentOpinion = analysisDetail?.consolidatedOpinion || null;
-  const previousOpinion = previousDetail?.consolidatedOpinion || null;
-
-  const activeHistoryFilterCount = [
-    historySearch.trim() !== "",
-    historyStatusFilter !== "all",
-    historyRiskFilter !== "all",
-  ].filter(Boolean).length;
-
-  if (pageLoading) {
+  if (state === "loading") {
     return (
       <Box
         sx={{
           minHeight: "100vh",
+          bgcolor: "#F7F3F8",
           display: "grid",
           placeItems: "center",
-          bgcolor: "background.default",
-          px: 2,
+          px: 3,
         }}
       >
         <Stack spacing={2} alignItems="center">
           <CircularProgress />
-          <Typography variant="body1" color="text.secondary">
-            Carregando detalhes da planilha e histórico de análises...
+          <Typography color="text.secondary">
+            Carregando detalhes da planilha...
           </Typography>
         </Stack>
       </Box>
     );
   }
 
+  if (state === "error" || !spreadsheet) {
+    return (
+      <Box sx={{ minHeight: "100vh", bgcolor: "#F7F3F8", py: 4 }}>
+        <Container maxWidth="lg">
+          <Stack spacing={3}>
+            <Breadcrumbs separator={<ChevronRightIcon fontSize="small" />}>
+              <Link component={RouterLink} underline="hover" color="inherit" to="/">
+                Início
+              </Link>
+              <Typography color="text.primary">Planilha</Typography>
+            </Breadcrumbs>
+
+            <Alert severity="error">
+              Falha ao carregar <strong>/api/spreadsheets/{id}</strong>. {errorMessage}
+            </Alert>
+
+            <Button
+              component={RouterLink}
+              to="/"
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              sx={{ alignSelf: "flex-start" }}
+            >
+              Voltar ao painel
+            </Button>
+          </Stack>
+        </Container>
+      </Box>
+    );
+  }
+
+  const modelStyles = getModelChipStyles(spreadsheet.modelType);
+  const statusStyles = getStatusChipStyles(spreadsheet.status);
+
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
-      <AppBar
-        position="static"
-        color="inherit"
-        elevation={0}
-        sx={{
-          borderBottom: "1px solid",
-          borderColor: "divider",
-          bgcolor: "background.paper",
-        }}
-      >
-        <Toolbar sx={{ gap: 2 }}>
-          <Button
-            variant="text"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/")}
-          >
-            Voltar
-          </Button>
-
-          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Typography variant="h6" fontWeight={700} noWrap>
-              {spreadsheet?.title || "Detalhes da planilha"}
-            </Typography>
-
-            <Typography variant="body2" color="text.secondary" noWrap>
-              Histórico de análises, seleção de versões e leitura consolidada
-            </Typography>
-          </Box>
-        </Toolbar>
-      </AppBar>
-
-      <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Box sx={{ minHeight: "100vh", bgcolor: "#F7F3F8", py: 4 }}>
+      <Container maxWidth="lg">
         <Stack spacing={3}>
           <Breadcrumbs separator={<ChevronRightIcon fontSize="small" />}>
             <Link component={RouterLink} underline="hover" color="inherit" to="/">
               Início
             </Link>
-            <Typography color="text.primary">
-              {spreadsheet?.title || "Planilha"}
-            </Typography>
+            <Typography color="text.primary">Planilha</Typography>
           </Breadcrumbs>
 
-          {pageError ? <Alert severity="error">{pageError}</Alert> : null}
-          {historyWarning ? <Alert severity="info">{historyWarning}</Alert> : null}
-          {actionMessage ? <Alert severity="success">{actionMessage}</Alert> : null}
-
-          <Card variant="outlined">
-            <CardContent>
-              <Stack spacing={2}>
+          <Card
+            elevation={0}
+            sx={{
+              borderRadius: 5,
+              background:
+                "linear-gradient(180deg, rgba(238,229,243,1) 0%, rgba(235,226,240,1) 100%)",
+              border: "1px solid rgba(142, 90, 181, 0.12)",
+            }}
+          >
+            <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+              <Stack spacing={2.5}>
                 <Stack
                   direction={{ xs: "column", md: "row" }}
                   justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", md: "center" }}
                   spacing={2}
                 >
                   <Box>
-                    <Typography variant="h5" fontWeight={800} gutterBottom>
-                      {spreadsheet?.title || "Planilha sem título"}
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                      <AutoAwesomeOutlinedIcon
+                        sx={{ fontSize: 16, color: "#9C6BC0" }}
+                      />
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontWeight: 700,
+                          letterSpacing: "0.08em",
+                          color: "#9C6BC0",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        CustoPúblico
+                      </Typography>
+                    </Stack>
+
+                    <Typography
+                      variant="h4"
+                      sx={{
+                        fontWeight: 800,
+                        color: "#2B2340",
+                        lineHeight: 1.15,
+                      }}
+                    >
+                      {spreadsheet.title}
                     </Typography>
 
-                    <Typography variant="body1" color="text.secondary">
-                      {spreadsheet?.description || "Sem descrição cadastrada."}
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        color: "#6D6186",
+                        mt: 1.5,
+                        lineHeight: 1.8,
+                        maxWidth: 900,
+                      }}
+                    >
+                      {spreadsheet.description}
                     </Typography>
                   </Box>
 
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    flexWrap="wrap"
-                    useFlexGap
-                    alignItems="flex-start"
-                  >
-                    <Chip
-                      icon={<CategoryIcon />}
-                      label={spreadsheet?.category || "Sem categoria"}
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
+                    <Button
+                      component={RouterLink}
+                      to="/"
                       variant="outlined"
-                    />
-                    <Chip
-                      icon={<FolderOpenIcon />}
-                      label={spreadsheet?.status || "Sem status"}
-                      color={getStatusChipColor(spreadsheet?.status)}
-                    />
-                    <Chip
-                      icon={<CalendarMonthIcon />}
-                      label={`Atualizada em ${formatDateTime(spreadsheet?.updatedAt)}`}
-                      variant="outlined"
-                    />
+                      startIcon={<ArrowBackIcon />}
+                    >
+                      Voltar
+                    </Button>
                   </Stack>
+                </Stack>
+
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  <Chip
+                    icon={getModelIcon(spreadsheet.modelType)}
+                    label={getModelLabel(spreadsheet.modelType)}
+                    sx={{
+                      backgroundColor: modelStyles.backgroundColor,
+                      color: modelStyles.color,
+                      fontWeight: 700,
+                    }}
+                  />
+
+                  <Chip
+                    label={spreadsheet.category}
+                    variant="outlined"
+                    sx={{
+                      fontWeight: 700,
+                      borderColor: "rgba(91, 58, 122, 0.24)",
+                      color: "#5B3A7A",
+                    }}
+                  />
+
+                  <Chip
+                    label={spreadsheet.status}
+                    sx={{
+                      backgroundColor: statusStyles.backgroundColor,
+                      color: statusStyles.color,
+                      fontWeight: 700,
+                    }}
+                  />
+
+                  <Chip
+                    label={
+                      dataSource === "local"
+                        ? "Origem local"
+                        : "Origem API"
+                    }
+                    variant="outlined"
+                  />
                 </Stack>
               </Stack>
             </CardContent>
@@ -1838,901 +411,166 @@ export default function SpreadsheetDetail() {
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", lg: "360px minmax(0, 1fr)" },
-              gap: 3,
-              alignItems: "start",
+              gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" },
+              gap: 2,
             }}
           >
-            <Paper variant="outlined" sx={{ overflow: "hidden" }}>
-              <Box
-                sx={{
-                  px: 2,
-                  py: 1.5,
-                  borderBottom: "1px solid",
-                  borderColor: "divider",
-                  bgcolor: "background.paper",
-                }}
-              >
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <HistoryIcon fontSize="small" />
-                  <Typography variant="subtitle1" fontWeight={700}>
-                    Histórico de análises
+            <Card variant="outlined" sx={{ borderRadius: 4 }}>
+              <CardContent>
+                <Typography variant="body2" color="text.secondary">
+                  Itens da planilha
+                </Typography>
+                <Typography variant="h4" fontWeight={800} color="#241B3A">
+                  {totalItems}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined" sx={{ borderRadius: 4 }}>
+              <CardContent>
+                <Typography variant="body2" color="text.secondary">
+                  Itens pendentes
+                </Typography>
+                <Typography variant="h4" fontWeight={800} color="#241B3A">
+                  {pendingItems}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined" sx={{ borderRadius: 4 }}>
+              <CardContent>
+                <Typography variant="body2" color="text.secondary">
+                  Valor total estimado
+                </Typography>
+                <Typography variant="h4" fontWeight={800} color="#241B3A">
+                  {formatCurrency(totalValue)}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Box>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 2fr) minmax(320px, 1fr)" },
+              gap: 3,
+            }}
+          >
+            <Card variant="outlined" sx={{ borderRadius: 4 }}>
+              <CardContent sx={{ p: 0 }}>
+                <Box sx={{ px: 3, py: 2.5 }}>
+                  <Typography variant="h6" fontWeight={700}>
+                    Estrutura inicial da planilha
                   </Typography>
-                  <Chip size="small" label={history.length} />
-                  {usingMockData ? (
-                    <Chip size="small" color="warning" label="Mock" variant="outlined" />
-                  ) : null}
-                </Stack>
-              </Box>
-
-              <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-                <Stack spacing={2}>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <FilterAltRoundedIcon fontSize="small" />
-                    <Typography variant="subtitle2" fontWeight={700}>
-                      Busca e filtros
-                    </Typography>
-                  </Stack>
-
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Buscar no histórico"
-                    placeholder="Analysis ID, tipo, status, risco ou versão"
-                    value={historySearch}
-                    onChange={(event) => setHistorySearch(event.target.value)}
-                    InputProps={{
-                      startAdornment: <SearchRoundedIcon fontSize="small" sx={{ mr: 1 }} />,
-                    }}
-                  />
-
-                  <TextField
-                    select
-                    fullWidth
-                    size="small"
-                    label="Filtrar por status"
-                    value={historyStatusFilter}
-                    onChange={(event) => setHistoryStatusFilter(event.target.value)}
-                  >
-                    <MenuItem value="all">Todos</MenuItem>
-                    <MenuItem value="exequivel">Exequível</MenuItem>
-                    <MenuItem value="diligencia">Diligência</MenuItem>
-                    <MenuItem value="pendente">Pendente</MenuItem>
-                    <MenuItem value="inexequivel">Inexequível</MenuItem>
-                    <MenuItem value="completed">Completed</MenuItem>
-                    <MenuItem value="processing">Processing</MenuItem>
-                  </TextField>
-
-                  <TextField
-                    select
-                    fullWidth
-                    size="small"
-                    label="Filtrar por risco"
-                    value={historyRiskFilter}
-                    onChange={(event) => setHistoryRiskFilter(event.target.value)}
-                  >
-                    <MenuItem value="all">Todos</MenuItem>
-                    <MenuItem value="low">Baixo</MenuItem>
-                    <MenuItem value="medium">Médio</MenuItem>
-                    <MenuItem value="high">Alto</MenuItem>
-                    <MenuItem value="baixo">Baixo</MenuItem>
-                    <MenuItem value="médio">Médio</MenuItem>
-                    <MenuItem value="alto">Alto</MenuItem>
-                  </TextField>
-
-                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                    <Chip
-                      size="small"
-                      label={`${filteredHistory.length} resultado(s)`}
-                      color="primary"
-                      variant="outlined"
-                    />
-                    <Chip
-                      size="small"
-                      label={`${activeHistoryFilterCount} filtro(s) ativo(s)`}
-                      variant="outlined"
-                    />
-                  </Stack>
-
-                  <Button
-                    variant="outlined"
-                    startIcon={<RestartAltRoundedIcon />}
-                    onClick={handleClearHistoryFilters}
-                  >
-                    Limpar filtros
-                  </Button>
-                </Stack>
-              </Box>
-
-              {filteredHistory.length === 0 ? (
-                <Box sx={{ p: 2 }}>
-                  <Alert severity="info" icon={<InfoOutlinedIcon />}>
-                    Nenhuma análise encontrada com os filtros atuais.
-                  </Alert>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+                    Itens-base gerados a partir do modelo selecionado.
+                  </Typography>
                 </Box>
-              ) : (
-                <List disablePadding>
-                  {filteredHistory.map((item, index) => {
-                    const selected = item.analysisId === selectedAnalysisId;
-                    const savedDecision = decisionByAnalysis[item.analysisId]?.decision || null;
 
-                    return (
-                      <React.Fragment key={item.analysisId}>
-                        <ListItemButton
-                          selected={selected}
-                          onClick={() => handleSelectAnalysis(item.analysisId)}
-                          sx={{
-                            alignItems: "flex-start",
-                            py: 1.75,
-                            px: 2,
-                          }}
-                        >
-                          <ListItemText
-                            primary={
-                              <Stack spacing={1}>
-                                <Stack
-                                  direction="row"
-                                  spacing={1}
-                                  alignItems="center"
-                                  flexWrap="wrap"
-                                  useFlexGap
-                                >
-                                  <Typography variant="body1" fontWeight={700}>
-                                    {formatLabel(item.analysisType || "Análise")}
-                                  </Typography>
+                <Divider />
 
-                                  {item.isLatest ? (
-                                    <Chip
-                                      size="small"
-                                      label="Mais recente"
-                                      color="primary"
-                                      variant={selected ? "filled" : "outlined"}
-                                    />
-                                  ) : null}
+                <Box sx={{ overflowX: "auto" }}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell><strong>Item</strong></TableCell>
+                        <TableCell><strong>Categoria</strong></TableCell>
+                        <TableCell align="right"><strong>Quantidade</strong></TableCell>
+                        <TableCell align="right"><strong>Valor unitário</strong></TableCell>
+                        <TableCell align="right"><strong>Subtotal</strong></TableCell>
+                        <TableCell><strong>Status</strong></TableCell>
+                      </TableRow>
+                    </TableHead>
 
-                                  <Chip
-                                    size="small"
-                                    label={formatLabel(
-                                      item.executabilityStatus || item.finalStatus
-                                    )}
-                                    color={getStatusChipColor(
-                                      item.executabilityStatus || item.finalStatus
-                                    )}
-                                    variant={selected ? "filled" : "outlined"}
-                                  />
-
-                                  {savedDecision ? (
-                                    <Chip
-                                      size="small"
-                                      label={getDecisionLabel(savedDecision)}
-                                      color={getDecisionChipColor(savedDecision)}
-                                      variant="outlined"
-                                    />
-                                  ) : null}
-                                </Stack>
-
-                                <Stack
-                                  direction="row"
-                                  spacing={1}
-                                  flexWrap="wrap"
-                                  useFlexGap
-                                >
-                                  <Chip
-                                    size="small"
-                                    label={`Risco: ${formatLabel(item.riskLevel)}`}
-                                    color={getRiskChipColor(item.riskLevel)}
-                                    variant="outlined"
-                                  />
-
-                                  <Chip
-                                    size="small"
-                                    label={`Score: ${
-                                      item.scoreGlobal !== null &&
-                                      item.scoreGlobal !== undefined
-                                        ? item.scoreGlobal
-                                        : "—"
-                                    }`}
-                                    variant="outlined"
-                                  />
-                                </Stack>
-                              </Stack>
-                            }
-                            secondary={
-                              <Box sx={{ mt: 1 }}>
-                                <Typography variant="caption" color="text.secondary">
-                                  Analysis ID: {item.analysisId}
-                                </Typography>
-                                <br />
-                                <Typography variant="caption" color="text.secondary">
-                                  Versão da planilha:{" "}
-                                  {item.spreadsheetVersionId ?? "—"}
-                                </Typography>
-                                <br />
-                                <Typography variant="caption" color="text.secondary">
-                                  Criada em: {formatDateTime(item.createdAt)}
-                                </Typography>
-                              </Box>
-                            }
-                          />
-                        </ListItemButton>
-
-                        {index < filteredHistory.length - 1 ? <Divider /> : null}
-                      </React.Fragment>
-                    );
-                  })}
-                </List>
-              )}
-            </Paper>
-
-            <Stack spacing={3}>
-              {analysisLoading ? (
-                <Paper
-                  variant="outlined"
-                  sx={{
-                    minHeight: 240,
-                    display: "grid",
-                    placeItems: "center",
-                    p: 3,
-                  }}
-                >
-                  <Stack spacing={2} alignItems="center">
-                    <CircularProgress />
-                    <Typography variant="body2" color="text.secondary">
-                      Carregando análise selecionada...
-                    </Typography>
-                  </Stack>
-                </Paper>
-              ) : analysisDetail ? (
-                <>
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Stack spacing={2}>
-                        <Typography variant="h6" fontWeight={800}>
-                          Ações rápidas
-                        </Typography>
-
-                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                          <Button
-                            variant="outlined"
-                            startIcon={<ContentCopyRoundedIcon />}
-                            onClick={handleCopyOpinion}
-                          >
-                            Copiar parecer
-                          </Button>
-
-                          <Button
-                            variant="outlined"
-                            startIcon={<NotesRoundedIcon />}
-                            onClick={handleCopyExplanations}
-                          >
-                            Copiar explicações
-                          </Button>
-
-                          <Button
-                            variant="outlined"
-                            startIcon={<DownloadRoundedIcon />}
-                            onClick={handleExportText}
-                          >
-                            Exportar texto
-                          </Button>
-
-                          <Button
-                            variant="outlined"
-                            startIcon={<KeyboardDoubleArrowUpRoundedIcon />}
-                            onClick={handleGoToMostRecent}
-                            disabled={!!mostRecentHistoryItem && selectedAnalysisId === mostRecentHistoryItem.analysisId}
-                          >
-                            Ir para a mais recente
-                          </Button>
-
-                          <Button
-                            variant="outlined"
-                            startIcon={<SwapHorizRoundedIcon />}
-                            onClick={handleCompareWithMostRecent}
-                            disabled={!mostRecentHistoryItem}
-                          >
-                            Comparar com a mais recente
-                          </Button>
-                        </Stack>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Stack spacing={2}>
-                        <Stack
-                          direction={{ xs: "column", md: "row" }}
-                          justifyContent="space-between"
-                          spacing={1}
-                        >
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            {getDecisionIcon(currentInternalDecision?.decision || null)}
-                            <Typography variant="h6" fontWeight={800}>
-                              Aprovação interna
-                            </Typography>
-                          </Stack>
-
-                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                    <TableBody>
+                      {spreadsheet.rows.map((row, index) => (
+                        <TableRow key={`${row.item}-${index}`}>
+                          <TableCell>{row.item}</TableCell>
+                          <TableCell>{row.categoria}</TableCell>
+                          <TableCell align="right">{row.quantidade}</TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(row.valorUnitario)}
+                          </TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(row.subtotal)}
+                          </TableCell>
+                          <TableCell>
                             <Chip
                               size="small"
-                              icon={
-                                decisionPersistenceMode === "backend" ? (
-                                  <CloudDoneRoundedIcon fontSize="small" />
-                                ) : (
-                                  <StorageRoundedIcon fontSize="small" />
-                                )
-                              }
-                              label={
-                                decisionPersistenceMode === "backend"
-                                  ? "Persistência: backend"
-                                  : "Persistência: local"
-                              }
-                              color={decisionPersistenceMode === "backend" ? "success" : "warning"}
-                              variant="outlined"
+                              label={row.status}
+                              sx={{
+                                backgroundColor:
+                                  row.status === "Pendente" ? "#FFF3E0" : "#E7F6EC",
+                                color:
+                                  row.status === "Pendente" ? "#EF6C00" : "#2E7D32",
+                                fontWeight: 700,
+                              }}
                             />
-                            {decisionSyncLoading ? (
-                              <Chip
-                                size="small"
-                                icon={<SaveAsRoundedIcon fontSize="small" />}
-                                label="Sincronizando..."
-                                color="info"
-                                variant="outlined"
-                              />
-                            ) : null}
-                          </Stack>
-                        </Stack>
-
-                        <Typography variant="body2" color="text.secondary">
-                          Registre uma deliberação interna resumida para esta análise,
-                          com despacho curto e status decisório.
-                        </Typography>
-
-                        <Stack
-                          direction="row"
-                          spacing={1}
-                          flexWrap="wrap"
-                          useFlexGap
-                          alignItems="center"
-                        >
-                          <Chip
-                            label={getDecisionLabel(currentInternalDecision?.decision || null)}
-                            color={getDecisionChipColor(
-                              currentInternalDecision?.decision || null
-                            )}
-                            variant="outlined"
-                          />
-                          <Typography variant="caption" color="text.secondary">
-                            Último registro: {formatDateTime(currentInternalDecision?.decidedAt)}
-                          </Typography>
-                        </Stack>
-
-                        <TextField
-                          label="Despacho curto do analista"
-                          value={despachoDraft}
-                          onChange={(event) => setDespachoDraft(event.target.value)}
-                          placeholder="Ex.: A análise pode seguir, desde que a memória de cálculo seja complementada antes da validação conclusiva."
-                          multiline
-                          minRows={3}
-                          fullWidth
-                        />
-
-                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                          <Button
-                            variant="contained"
-                            color="success"
-                            startIcon={<TaskAltRoundedIcon />}
-                            onClick={() => handleSaveDecision("approved")}
-                            disabled={decisionSyncLoading}
-                          >
-                            Aprovar
-                          </Button>
-
-                          <Button
-                            variant="contained"
-                            color="warning"
-                            startIcon={<RuleRoundedIcon />}
-                            onClick={() => handleSaveDecision("approved_with_remarks")}
-                            disabled={decisionSyncLoading}
-                          >
-                            Aprovar com ressalvas
-                          </Button>
-
-                          <Button
-                            variant="contained"
-                            color="info"
-                            startIcon={<SearchRoundedIcon />}
-                            onClick={() => handleSaveDecision("diligence_requested")}
-                            disabled={decisionSyncLoading}
-                          >
-                            Solicitar diligência
-                          </Button>
-
-                          <Button
-                            variant="contained"
-                            color="error"
-                            startIcon={<ErrorOutlineRoundedIcon />}
-                            onClick={() => handleSaveDecision("rejected")}
-                            disabled={decisionSyncLoading}
-                          >
-                            Rejeitar
-                          </Button>
-
-                          <Button
-                            variant="outlined"
-                            startIcon={<RestartAltRoundedIcon />}
-                            onClick={handleResetDecision}
-                            disabled={decisionSyncLoading}
-                          >
-                            Limpar decisão
-                          </Button>
-                        </Stack>
-
-                        {currentInternalDecision?.despacho ? (
-                          <Paper variant="outlined" sx={{ p: 2 }}>
-                            <Typography variant="caption" color="text.secondary">
-                              Despacho registrado
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{ mt: 1, whiteSpace: "pre-wrap", lineHeight: 1.75 }}
-                            >
-                              {currentInternalDecision.despacho}
-                            </Typography>
-                          </Paper>
-                        ) : null}
-                      </Stack>
-                    </CardContent>
-                  </Card>
-
-                  <RightPanelHeader
-                    currentTab={detailViewTab}
-                    onChange={setDetailViewTab}
-                  />
-
-                  {detailViewTab === "summary" ? (
-                    <>
-                      <Card variant="outlined">
-                        <CardContent>
-                          <Stack spacing={2.5}>
-                            <Stack
-                              direction={{ xs: "column", md: "row" }}
-                              justifyContent="space-between"
-                              spacing={2}
-                            >
-                              <Box>
-                                <Stack direction="row" spacing={1} alignItems="center" mb={1}>
-                                  <InsightsOutlinedIcon />
-                                  <Typography variant="h6" fontWeight={800}>
-                                    Análise selecionada
-                                  </Typography>
-                                </Stack>
-
-                                <Typography variant="body2" color="text.secondary">
-                                  Utilize este painel para revisar os principais
-                                  metadados e indicadores da análise selecionada.
-                                </Typography>
-                              </Box>
-
-                              <Stack
-                                direction="row"
-                                spacing={1}
-                                flexWrap="wrap"
-                                useFlexGap
-                                alignItems="flex-start"
-                              >
-                                <Chip
-                                  label={formatLabel(analysisDetail.analysisType)}
-                                  variant="outlined"
-                                />
-                                <Chip
-                                  label={formatLabel(
-                                    analysisDetail.executabilityStatus ||
-                                      analysisDetail.finalStatus
-                                  )}
-                                  color={getStatusChipColor(
-                                    analysisDetail.executabilityStatus ||
-                                      analysisDetail.finalStatus
-                                  )}
-                                />
-                                <Chip
-                                  label={`Risco: ${formatLabel(analysisDetail.riskLevel)}`}
-                                  color={getRiskChipColor(analysisDetail.riskLevel)}
-                                  variant="outlined"
-                                />
-                              </Stack>
-                            </Stack>
-
-                            <Divider />
-
-                            <Box
-                              sx={{
-                                display: "grid",
-                                gridTemplateColumns: {
-                                  xs: "1fr",
-                                  sm: "repeat(2, minmax(0, 1fr))",
-                                  xl: "repeat(4, minmax(0, 1fr))",
-                                },
-                                gap: 2,
-                              }}
-                            >
-                              <MetricCard
-                                title="Score global"
-                                value={
-                                  analysisDetail.scoreGlobal !== null &&
-                                  analysisDetail.scoreGlobal !== undefined
-                                    ? String(analysisDetail.scoreGlobal)
-                                    : "—"
-                                }
-                                icon={<CheckCircleOutlineIcon fontSize="small" />}
-                              />
-
-                              <MetricCard
-                                title="Valor proposto"
-                                value={formatCurrency(analysisDetail.proposedTotalValue)}
-                                icon={<SummarizeRoundedIcon fontSize="small" />}
-                              />
-
-                              <MetricCard
-                                title="Custo obrigatório"
-                                value={formatCurrency(analysisDetail.mandatoryCostTotal)}
-                                icon={<GavelRoundedIcon fontSize="small" />}
-                              />
-
-                              <MetricCard
-                                title="Saldo de exequibilidade"
-                                value={formatCurrency(analysisDetail.executabilityBalance)}
-                                icon={<WarningAmberRoundedIcon fontSize="small" />}
-                              />
-                            </Box>
-
-                            <Box
-                              sx={{
-                                display: "grid",
-                                gridTemplateColumns: {
-                                  xs: "1fr",
-                                  md: "repeat(2, minmax(0, 1fr))",
-                                },
-                                gap: 2,
-                              }}
-                            >
-                              <Card variant="outlined">
-                                <CardContent>
-                                  <Typography variant="subtitle2" color="text.secondary" mb={1}>
-                                    Metadados da análise
-                                  </Typography>
-
-                                  <Stack spacing={0.75}>
-                                    <Typography variant="body2">
-                                      <strong>Analysis ID:</strong> {analysisDetail.analysisId}
-                                    </Typography>
-                                    <Typography variant="body2">
-                                      <strong>Versão da planilha:</strong>{" "}
-                                      {analysisDetail.spreadsheetVersionId ?? "—"}
-                                    </Typography>
-                                    <Typography variant="body2">
-                                      <strong>Tipo:</strong>{" "}
-                                      {formatLabel(analysisDetail.analysisType)}
-                                    </Typography>
-                                    <Typography variant="body2">
-                                      <strong>Processamento:</strong>{" "}
-                                      {formatLabel(analysisDetail.processingStatus)}
-                                    </Typography>
-                                    <Typography variant="body2">
-                                      <strong>Criada em:</strong>{" "}
-                                      {formatDateTime(analysisDetail.createdAt)}
-                                    </Typography>
-                                    <Typography variant="body2">
-                                      <strong>Atualizada em:</strong>{" "}
-                                      {formatDateTime(analysisDetail.updatedAt)}
-                                    </Typography>
-                                  </Stack>
-                                </CardContent>
-                              </Card>
-
-                              <Card variant="outlined">
-                                <CardContent>
-                                  <Typography variant="subtitle2" color="text.secondary" mb={1}>
-                                    Totais auxiliares
-                                  </Typography>
-
-                                  <Stack spacing={0.75}>
-                                    <Typography variant="body2">
-                                      <strong>Custo evidenciário:</strong>{" "}
-                                      {formatCurrency(analysisDetail.evidentiaryCostTotal)}
-                                    </Typography>
-                                    <Typography variant="body2">
-                                      <strong>Retenções:</strong>{" "}
-                                      {formatCurrency(analysisDetail.retentionTotal)}
-                                    </Typography>
-                                    <Typography variant="body2">
-                                      <strong>Status final:</strong>{" "}
-                                      {formatLabel(
-                                        analysisDetail.executabilityStatus ||
-                                          analysisDetail.finalStatus
-                                      )}
-                                    </Typography>
-                                    <Typography variant="body2">
-                                      <strong>Risco:</strong>{" "}
-                                      {formatLabel(analysisDetail.riskLevel)}
-                                    </Typography>
-                                  </Stack>
-                                </CardContent>
-                              </Card>
-                            </Box>
-                          </Stack>
-                        </CardContent>
-                      </Card>
-
-                      {selectedHistoryItem ? (
-                        <Card variant="outlined">
-                          <CardContent>
-                            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-                              Resumo da seleção atual
-                            </Typography>
-
-                            <Typography variant="body2" color="text.secondary">
-                              Você está visualizando a análise{" "}
-                              <strong>{selectedHistoryItem.analysisId}</strong>, vinculada à
-                              versão{" "}
-                              <strong>
-                                {selectedHistoryItem.spreadsheetVersionId ?? "—"}
-                              </strong>{" "}
-                              da planilha, criada em{" "}
-                              <strong>{formatDateTime(selectedHistoryItem.createdAt)}</strong>.
-                            </Typography>
-                          </CardContent>
-                        </Card>
-                      ) : null}
-                    </>
-                  ) : null}
-
-                  {detailViewTab === "comparison" ? (
-                    previousHistoryItem ? (
-                      <>
-                        <Card variant="outlined">
-                          <CardContent>
-                            <Stack spacing={2}>
-                              <Stack direction="row" spacing={1} alignItems="center">
-                                <CompareArrowsRoundedIcon />
-                                <Typography variant="h6" fontWeight={800}>
-                                  Comparação com a análise anterior
-                                </Typography>
-                              </Stack>
-
-                              <Typography variant="body2" color="text.secondary">
-                                Comparativo entre a análise selecionada e a versão
-                                imediatamente anterior do histórico.
-                              </Typography>
-
-                              <Divider />
-
-                              <ComparisonRow
-                                label="Score global"
-                                current={
-                                  analysisDetail.scoreGlobal !== null &&
-                                  analysisDetail.scoreGlobal !== undefined
-                                    ? String(analysisDetail.scoreGlobal)
-                                    : "—"
-                                }
-                                previous={
-                                  previousHistoryItem.scoreGlobal !== null &&
-                                  previousHistoryItem.scoreGlobal !== undefined
-                                    ? String(previousHistoryItem.scoreGlobal)
-                                    : "—"
-                                }
-                                direction={comparisonSummary?.scoreDirection || "same"}
-                              />
-
-                              <Divider />
-
-                              <ComparisonRow
-                                label="Saldo de exequibilidade"
-                                current={formatCurrency(
-                                  analysisDetail.executabilityBalance
-                                )}
-                                previous={formatCurrency(
-                                  previousDetail?.executabilityBalance
-                                )}
-                                direction={comparisonSummary?.balanceDirection || "same"}
-                              />
-
-                              <Divider />
-
-                              <ComparisonRow
-                                label="Risco"
-                                current={formatLabel(analysisDetail.riskLevel)}
-                                previous={formatLabel(previousHistoryItem.riskLevel)}
-                                direction={comparisonSummary?.riskDirection || "same"}
-                              />
-
-                              <Divider />
-
-                              <ComparisonRow
-                                label="Status final"
-                                current={formatLabel(
-                                  analysisDetail.executabilityStatus ||
-                                    analysisDetail.finalStatus
-                                )}
-                                previous={formatLabel(
-                                  previousHistoryItem.executabilityStatus ||
-                                    previousHistoryItem.finalStatus
-                                )}
-                                direction={comparisonSummary?.statusDirection || "same"}
-                              />
-                            </Stack>
-                          </CardContent>
-                        </Card>
-
-                        <Card variant="outlined">
-                          <CardContent>
-                            <Stack spacing={2}>
-                              <Stack direction="row" spacing={1} alignItems="center">
-                                <DifferenceRoundedIcon />
-                                <Typography variant="h6" fontWeight={800}>
-                                  Diferenças textuais do parecer
-                                </Typography>
-                              </Stack>
-
-                              <Typography variant="body2" color="text.secondary">
-                                Comparação textual simples entre os principais trechos
-                                do parecer consolidado atual e do parecer anterior.
-                              </Typography>
-                            </Stack>
-                          </CardContent>
-                        </Card>
-
-                        <TextDiffSection
-                          title="Ementa"
-                          current={currentOpinion?.ementa}
-                          previous={previousOpinion?.ementa}
-                        />
-
-                        <TextDiffSection
-                          title="Conclusão"
-                          current={currentOpinion?.conclusao}
-                          previous={previousOpinion?.conclusao}
-                        />
-
-                        <TextDiffSection
-                          title="Recomendação final"
-                          current={currentOpinion?.recomendacaoFinal}
-                          previous={previousOpinion?.recomendacaoFinal}
-                        />
-                      </>
-                    ) : (
-                      <Alert severity="info">
-                        Não existe análise anterior suficiente para comparação.
-                      </Alert>
-                    )
-                  ) : null}
-
-                  {detailViewTab === "opinion" ? (
-                    <>
-                      <Card variant="outlined">
-                        <CardContent>
-                          <Stack spacing={2}>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <ArticleRoundedIcon />
-                              <Typography variant="h6" fontWeight={800}>
-                                Parecer consolidado
-                              </Typography>
-                            </Stack>
-
-                            <Typography variant="body2" color="text.secondary">
-                              Estrutura consolidada da manifestação analítica da versão
-                              selecionada, já organizada em linguagem técnica e executiva.
-                            </Typography>
-                          </Stack>
-                        </CardContent>
-                      </Card>
-
-                      <OpinionSection
-                        title="Ementa"
-                        content={analysisDetail.consolidatedOpinion?.ementa}
-                      />
-
-                      <OpinionSection
-                        title="Conclusão"
-                        content={analysisDetail.consolidatedOpinion?.conclusao}
-                      />
-
-                      <OpinionSection
-                        title="Fundamentação técnica"
-                        content={
-                          analysisDetail.consolidatedOpinion?.fundamentacaoTecnica
-                        }
-                      />
-
-                      <OpinionSection
-                        title="Fundamentação técnico-jurídica"
-                        content={
-                          analysisDetail.consolidatedOpinion
-                            ?.fundamentacaoTecnicoJuridica
-                        }
-                      />
-
-                      <OpinionSection
-                        title="Versão para gestor leigo"
-                        content={
-                          analysisDetail.consolidatedOpinion?.versaoGestorLeigo
-                        }
-                      />
-
-                      <OpinionSection
-                        title="Recomendação final"
-                        content={analysisDetail.consolidatedOpinion?.recomendacaoFinal}
-                      />
-                    </>
-                  ) : null}
-
-                  {detailViewTab === "explanations" ? (
-                    <Stack spacing={2}>
-                      <Card variant="outlined">
-                        <CardContent>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <NotesRoundedIcon />
-                            <Typography variant="h6" fontWeight={800}>
-                              Explicações vinculadas à análise
-                            </Typography>
-                          </Stack>
-                        </CardContent>
-                      </Card>
-
-                      {analysisDetail.explanations &&
-                      analysisDetail.explanations.length > 0 ? (
-                        analysisDetail.explanations.map((explanation, index) => (
-                          <ExplanationBlock
-                            key={`${explanation.explanationType}-${index}`}
-                            explanation={explanation}
-                          />
-                        ))
-                      ) : (
-                        <Alert severity="info">
-                          Esta análise não possui explicações detalhadas disponíveis.
-                        </Alert>
-                      )}
-                    </Stack>
-                  ) : null}
-
-                  {detailViewTab === "timeline" ? (
-                    <Stack spacing={2}>
-                      <Card variant="outlined">
-                        <CardContent>
-                          <Stack spacing={2}>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <TimelineRoundedIcon />
-                              <Typography variant="h6" fontWeight={800}>
-                                Linha do tempo da análise
-                              </Typography>
-                            </Stack>
-
-                            <Typography variant="body2" color="text.secondary">
-                              Sequência cronológica das análises da planilha, com status
-                              técnico, versão, decisão interna e indicação da análise
-                              atualmente selecionada.
-                            </Typography>
-                          </Stack>
-                        </CardContent>
-                      </Card>
-
-                      {history.map((item, index) => (
-                        <TimelineEventCard
-                          key={`timeline-${item.analysisId}`}
-                          item={item}
-                          isSelected={item.analysisId === selectedAnalysisId}
-                          isMostRecent={index === 0}
-                          decisionState={decisionByAnalysis[item.analysisId]}
-                        />
+                          </TableCell>
+                        </TableRow>
                       ))}
+
+                      {spreadsheet.rows.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6}>
+                            <Typography variant="body2" color="text.secondary">
+                              Nenhum item encontrado nesta planilha.
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </TableBody>
+                  </Table>
+                </Box>
+              </CardContent>
+            </Card>
+
+            <Stack spacing={3}>
+              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+                <CardContent>
+                  <Stack spacing={2}>
+                    <Typography variant="h6" fontWeight={700}>
+                      Resumo executivo
+                    </Typography>
+
+                    <Typography variant="body2" color="text.secondary">
+                      <strong>Tipo do modelo:</strong>{" "}
+                      {getModelLabel(spreadsheet.modelType)}
+                    </Typography>
+
+                    <Typography variant="body2" color="text.secondary">
+                      <strong>Status:</strong> {spreadsheet.status}
+                    </Typography>
+
+                    <Typography variant="body2" color="text.secondary">
+                      <strong>Categoria:</strong> {spreadsheet.category}
+                    </Typography>
+
+                    <Stack direction="row" spacing={0.75} alignItems="center">
+                      <AccessTimeIcon sx={{ fontSize: 16, color: "#7A708D" }} />
+                      <Typography variant="body2" color="text.secondary">
+                        Atualizado em {spreadsheet.updatedAt}
+                      </Typography>
                     </Stack>
-                  ) : null}
-                </>
-              ) : (
-                <Alert severity="info">
-                  Nenhuma análise foi selecionada ou encontrada para esta planilha.
-                </Alert>
-              )}
+                  </Stack>
+                </CardContent>
+              </Card>
+
+              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+                <CardContent>
+                  <Stack spacing={1.5}>
+                    <Typography variant="h6" fontWeight={700}>
+                      Próximo passo
+                    </Typography>
+
+                    <Typography variant="body2" color="text.secondary">
+                      A próxima evolução dessa tela será transformar esta estrutura
+                      inicial em editor real por modelo, com blocos específicos,
+                      memória de cálculo, validações e análise automática.
+                    </Typography>
+                  </Stack>
+                </CardContent>
+              </Card>
             </Stack>
           </Box>
         </Stack>
