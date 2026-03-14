@@ -43,6 +43,7 @@ import PrecisionManufacturingOutlinedIcon from "@mui/icons-material/PrecisionMan
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import SummarizeOutlinedIcon from "@mui/icons-material/SummarizeOutlined";
 import { Link as RouterLink, useParams } from "react-router-dom";
+import SpreadsheetEditor from "../modules/spreadsheet-editor/SpreadsheetEditor";
 import {
   getSpreadsheetById,
   SpreadsheetRecord,
@@ -1672,6 +1673,16 @@ export default function SpreadsheetDetail() {
                   </Stack>
                 </CardContent>
               </Card>
+
+              <SpreadsheetEditor
+                spreadsheet={spreadsheet}
+                onSpreadsheetUpdated={(updated) => {
+                  const next = updated as SpreadsheetDetailRecord;
+                  setSpreadsheet(next);
+                  setEditor(buildInitialEditorState(next));
+                  setDataSource("local");
+                }}
+              />
 
               <Card variant="outlined" sx={{ borderRadius: 4 }}>
                 <CardContent sx={{ p: 0 }}>
