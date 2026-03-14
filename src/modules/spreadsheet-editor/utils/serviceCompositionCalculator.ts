@@ -14,18 +14,31 @@ export type ServiceCompositionPeriodicity =
   | "anual"
   | "sob_demanda";
 
+export type ServiceCompositionRecurrenceType =
+  | "recorrente"
+  | "eventual"
+  | "sob_demanda";
+
+export type ServiceCompositionDepreciationMethod =
+  | "nao_aplica"
+  | "rateio_linear";
+
 export type ServiceCompositionDraftRow = {
   id: string;
   item: string;
   category: ServiceCompositionCategory;
+  recurrenceType: ServiceCompositionRecurrenceType;
   serviceUnit: string;
   periodicity: ServiceCompositionPeriodicity;
   quantity: number;
   unitCost: number;
   productivityFactor: number;
   allocationFactor: number;
+  depreciationMethod: ServiceCompositionDepreciationMethod;
+  usefulLifeMonths: number;
   status: string;
-  notes: string;
+  consumptionBasis: string;
+  technicalJustification: string;
 };
 
 export type ServiceCompositionSummary = {
@@ -36,7 +49,11 @@ export type ServiceCompositionSummary = {
   equipmentTotal: number;
   logisticsTotal: number;
   supportTotal: number;
+  recurringTotal: number;
+  eventualTotal: number;
+  onDemandTotal: number;
   totalsByCategory: Record<ServiceCompositionCategory, number>;
+  totalsByRecurrence: Record<ServiceCompositionRecurrenceType, number>;
 };
 
 export const SERVICE_COMPOSITION_CATEGORY_OPTIONS: Array<{
@@ -76,6 +93,23 @@ export const SERVICE_COMPOSITION_PERIODICITY_OPTIONS: Array<{
   { value: "semestral", label: "Semestral" },
   { value: "anual", label: "Anual" },
   { value: "sob_demanda", label: "Sob demanda" },
+];
+
+export const SERVICE_COMPOSITION_RECURRENCE_OPTIONS: Array<{
+  value: ServiceCompositionRecurrenceType;
+  label: string;
+}> = [
+  { value: "recorrente", label: "Recorrente" },
+  { value: "eventual", label: "Eventual" },
+  { value: "sob_demanda", label: "Sob demanda" },
+];
+
+export const SERVICE_COMPOSITION_DEPRECIATION_OPTIONS: Array<{
+  value: ServiceCompositionDepreciationMethod;
+  label: string;
+}> = [
+  { value: "nao_aplica", label: "Não se aplica" },
+  { value: "rateio_linear", label: "Rateio linear" },
 ];
 
 export const SERVICE_COMPOSITION_STATUS_OPTIONS: Array<{
@@ -118,6 +152,17 @@ const VALID_PERIODICITIES = new Set<ServiceCompositionPeriodicity>([
   "semestral",
   "anual",
   "sob_demanda",
+]);
+
+const VALID_RECURRENCES = new Set<ServiceCompositionRecurrenceType>([
+  "recorrente",
+  "eventual",
+  "sob_demanda",
+]);
+
+const VALID_DEPRECIATION_METHODS = new Set<ServiceCompositionDepreciationMethod>([
+  "nao_aplica",
+  "rateio_linear",
 ]);
 
 export function inferServiceCompositionCategory(
@@ -165,6 +210,39 @@ export function inferServiceCompositionCategory(
   return "Materiais e insumos";
 }
 
+export function inferRecurrenceTypeFromPeriodicity(
+  periodicity?: string
+): ServiceCompositionRecurrenceType {
+  if (periodicity === "sob_demanda") {
+    return "sob_demanda";
+  }
+
+  return "recorrente";
+}
+
+export function getMonthlyizationFactor(
+  periodicity: ServiceCompositionPeriodicity
+) {
+  switch (periodicity) {
+    case "mensal":
+      return 1;
+    case "bimestral":
+      return 1 / 2;
+    case "trimestral":
+      return 1 / 3;
+    case "quadrimestral":
+      return 1 / 4;
+    case "semestral":
+      return 1 / 6;
+    case "anual":
+      return 1 / 12;
+    case "sob_demanda":
+      return 1;
+    default:
+      return 1;
+  }
+}
+
 export function sanitizeServiceCompositionDraftRow(
   input?: Partial<ServiceCompositionDraftRow>
 ): ServiceCompositionDraftRow {
@@ -175,33 +253,73 @@ export function sanitizeServiceCompositionDraftRow(
     ? (rawPeriodicity as ServiceCompositionPeriodicity)
     : "mensal";
 
+  const rawRecurrence = safeString(
+    input?.recurrenceType,
+    inferRecurrenceTypeFromPeriodicity(periodicity)
+  );
+  const recurrenceType = VALID_RECURRENCES.has(
+    rawRecurrence as ServiceCompositionRecurrenceType
+  )
+    ? (rawRecurrence as ServiceCompositionRecurrenceType)
+    : "recorrente";
+
+  const rawDepreciationMethod = safeString(
+    input?.depreciationMethod,
+    "nao_aplica"
+  );
+  const depreciationMethod = VALID_DEPRECIATION_METHODS.has(
+    rawDepreciationMethod as ServiceCompositionDepreciationMethod
+  )
+    ? (rawDepreciationMethod as ServiceCompositionDepreciationMethod)
+    : "nao_aplica";
+
+  const category = inferServiceCompositionCategory(
+    safeString(input?.category) || "Materiais e insumos"
+  );
+
+  const usefulLifeMonths =
+    depreciationMethod === "rateio_linear"
+      ? Math.max(1, safeNumber(input?.usefulLifeMonths, 12))
+      : 0;
+
   return {
     id:
       safeString(input?.id) ||
       `svc_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     item: safeString(input?.item) || "Novo componente",
-    category: inferServiceCompositionCategory(
-      safeString(input?.category) || "Materiais e insumos"
-    ),
+    category,
+    recurrenceType,
     serviceUnit: safeString(input?.serviceUnit) || "unidade",
     periodicity,
     quantity: Math.max(0, safeNumber(input?.quantity, 1)),
     unitCost: Math.max(0, safeNumber(input?.unitCost, 0)),
     productivityFactor: Math.max(0, safeNumber(input?.productivityFactor, 1)),
     allocationFactor: Math.max(0, safeNumber(input?.allocationFactor, 1)),
+    depreciationMethod,
+    usefulLifeMonths,
     status: safeString(input?.status) || "Pendente",
-    notes: safeString(input?.notes),
+    consumptionBasis: safeString(input?.consumptionBasis),
+    technicalJustification: safeString(input?.technicalJustification),
   };
 }
 
 export function calculateServiceCompositionItemSubtotal(
   row: ServiceCompositionDraftRow
 ) {
+  const monthlyizationFactor = getMonthlyizationFactor(row.periodicity);
+
+  const depreciationFactor =
+    row.depreciationMethod === "rateio_linear" && row.usefulLifeMonths > 0
+      ? 1 / row.usefulLifeMonths
+      : 1;
+
   const subtotal =
     row.quantity *
     row.unitCost *
     row.productivityFactor *
-    row.allocationFactor;
+    monthlyizationFactor *
+    row.allocationFactor *
+    depreciationFactor;
 
   return round2(subtotal);
 }
@@ -209,25 +327,40 @@ export function calculateServiceCompositionItemSubtotal(
 export function calculateServiceCompositionEffectiveUnitCost(
   row: ServiceCompositionDraftRow
 ) {
-  return round2(
-    row.unitCost * row.productivityFactor * row.allocationFactor
-  );
+  if (row.quantity <= 0) {
+    return 0;
+  }
+
+  return round2(calculateServiceCompositionItemSubtotal(row) / row.quantity);
 }
 
 export function buildServiceCompositionRowMemory(
   row: ServiceCompositionDraftRow
 ) {
+  const monthlyizationFactor = getMonthlyizationFactor(row.periodicity);
+
+  const depreciationFragment =
+    row.depreciationMethod === "rateio_linear" && row.usefulLifeMonths > 0
+      ? `Depreciação/rateio linear em ${row.usefulLifeMonths} mês(es)`
+      : "Sem depreciação/rateio linear";
+
   const fragments = [
+    `Recorrência: ${row.recurrenceType}`,
     `Unidade de serviço: ${row.serviceUnit}`,
-    `Periodicidade: ${row.periodicity}`,
+    `Periodicidade: ${row.periodicity} (fator mensal ${round2(monthlyizationFactor)})`,
     `Custo unitário base: ${round2(row.unitCost)}`,
     `Fator de produtividade: ${round2(row.productivityFactor)}`,
-    `Fator de rateio/depreciação: ${round2(row.allocationFactor)}`,
-    `Fórmula: quantidade x custo unitário x produtividade x rateio`,
+    `Fator de rateio contratual: ${round2(row.allocationFactor)}`,
+    depreciationFragment,
+    `Fórmula: quantidade x custo unitário x produtividade x fator mensal x rateio x depreciação`,
   ];
 
-  if (row.notes.trim()) {
-    fragments.push(`Observações: ${row.notes.trim()}`);
+  if (row.consumptionBasis.trim()) {
+    fragments.push(`Base de consumo: ${row.consumptionBasis.trim()}`);
+  }
+
+  if (row.technicalJustification.trim()) {
+    fragments.push(`Justificativa técnica: ${row.technicalJustification.trim()}`);
   }
 
   return fragments.join(" | ");
@@ -244,8 +377,16 @@ export function buildServiceCompositionSummary(
     "Apoio operacional": 0,
   };
 
+  const totalsByRecurrence: Record<ServiceCompositionRecurrenceType, number> = {
+    recorrente: 0,
+    eventual: 0,
+    sob_demanda: 0,
+  };
+
   rows.forEach((row) => {
-    totalsByCategory[row.category] += calculateServiceCompositionItemSubtotal(row);
+    const subtotal = calculateServiceCompositionItemSubtotal(row);
+    totalsByCategory[row.category] += subtotal;
+    totalsByRecurrence[row.recurrenceType] += subtotal;
   });
 
   const workforceTotal = round2(totalsByCategory["Equipe técnica / operacional"]);
@@ -253,6 +394,10 @@ export function buildServiceCompositionSummary(
   const equipmentTotal = round2(totalsByCategory["Equipamentos"]);
   const logisticsTotal = round2(totalsByCategory["Logística operacional"]);
   const supportTotal = round2(totalsByCategory["Apoio operacional"]);
+
+  const recurringTotal = round2(totalsByRecurrence.recorrente);
+  const eventualTotal = round2(totalsByRecurrence.eventual);
+  const onDemandTotal = round2(totalsByRecurrence.sob_demanda);
 
   const total = round2(
     workforceTotal +
@@ -270,12 +415,20 @@ export function buildServiceCompositionSummary(
     equipmentTotal,
     logisticsTotal,
     supportTotal,
+    recurringTotal,
+    eventualTotal,
+    onDemandTotal,
     totalsByCategory: {
       "Equipe técnica / operacional": workforceTotal,
       "Materiais e insumos": materialsTotal,
       Equipamentos: equipmentTotal,
       "Logística operacional": logisticsTotal,
       "Apoio operacional": supportTotal,
+    },
+    totalsByRecurrence: {
+      recorrente: recurringTotal,
+      eventual: eventualTotal,
+      sob_demanda: onDemandTotal,
     },
   };
 }
