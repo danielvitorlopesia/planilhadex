@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   ThemeProvider,
   CssBaseline,
@@ -16,6 +16,10 @@ import { AuthProvider } from "./auth/AuthContext";
 import ProtectedRoute from "./auth/ProtectedRoute";
 
 function SpreadsheetCreatePlaceholder() {
+  useEffect(() => {
+    document.title = "CustoPúblico — Gestão de Planilhas de Custos Públicas";
+  }, []);
+
   return (
     <Box
       sx={{
@@ -28,7 +32,11 @@ function SpreadsheetCreatePlaceholder() {
     >
       <Container maxWidth="md">
         <Typography variant="h4" fontWeight={700} gutterBottom>
-          Criação de planilha em preparação
+          CustoPúblico
+        </Typography>
+
+        <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
+          Gestão de Planilhas de Custos Públicas
         </Typography>
 
         <Typography variant="body1" color="text.secondary">
