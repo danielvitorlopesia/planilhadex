@@ -21,8 +21,14 @@ import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 
 import EditableCell from "../components/EditableCell";
 import LaborCostBreakdown from "../components/LaborCostBreakdown";
+import LaborChargesConfigCard from "../components/LaborChargesConfigCard";
 
-import { calculateLaborCost } from "../utils/laborCostCalculator";
+import {
+  calculateLaborCost,
+  DEFAULT_LABOR_CHARGES_CONFIG,
+  LaborChargesConfig,
+  sanitizeLaborChargesConfig,
+} from "../utils/laborCostCalculator";
 
 import {
   SpreadsheetRecord,
@@ -41,6 +47,7 @@ const STATUS_OPTIONS = [
   { value: "Conferido", label: "Conferido" },
   { value: "Exemplo do domínio", label: "Exemplo do domínio" },
   { value: "Em elaboração", label: "Em elaboração" },
+  { value: "Calculado", label: "Calculado" },
 ];
 
 function isLaborRow(row: EditorRow) {
@@ -50,6 +57,19 @@ function isLaborRow(row: EditorRow) {
     category.includes("mão de obra") ||
     category.includes("mao de obra") ||
     category.includes("equipe operacional")
+  );
+}
+
+function isDerivedChargeOrBenefitRow(row: EditorRow) {
+  const category = String(row.categoria || "").toLowerCase();
+  const tags = Array.isArray(row.trainingTags) ? row.trainingTags : [];
+
+  return (
+    category.includes("encargos") ||
+    category.includes("benefícios") ||
+    category.includes("beneficios") ||
+    tags.includes("generated_labor_charge") ||
+    tags.includes("generated_labor_benefit")
   );
 }
 
@@ -80,31 +100,142 @@ function extractLaborRows(rows: EditorRow[]) {
   return rows.filter(isLaborRow).map(recalcSubtotal);
 }
 
-function mergeRowsPreservingOrder(
-  originalRows: EditorRow[],
-  editedLaborRows: EditorRow[]
-) {
-  let laborCursor = 0;
+function extractStoredChargesConfig(
+  spreadsheet: SpreadsheetRecord
+): LaborChargesConfig {
+  const raw =
+    spreadsheet.metadata &&
+    typeof spreadsheet.metadata === "object" &&
+    spreadsheet.metadata.laborChargesConfig &&
+    typeof spreadsheet.metadata.laborChargesConfig === "object"
+      ? (spreadsheet.metadata.laborChargesConfig as Partial<LaborChargesConfig>)
+      : undefined;
 
-  const rebuilt: EditorRow[] = [];
+  return sanitizeLaborChargesConfig(raw || DEFAULT_LABOR_CHARGES_CONFIG);
+}
 
-  for (const row of originalRows) {
-    if (isLaborRow(row)) {
-      if (laborCursor < editedLaborRows.length) {
-        rebuilt.push(editedLaborRows[laborCursor]);
-        laborCursor += 1;
-      }
-    } else {
-      rebuilt.push(row);
-    }
-  }
+function buildDerivedRows(result: ReturnType<typeof calculateLaborCost>): EditorRow[] {
+  const generatedStatus = "Calculado";
 
-  while (laborCursor < editedLaborRows.length) {
-    rebuilt.push(editedLaborRows[laborCursor]);
-    laborCursor += 1;
-  }
-
-  return rebuilt;
+  return [
+    {
+      id: "derived_inss_patronal",
+      item: "INSS patronal",
+      categoria: "Encargos",
+      quantidade: 1,
+      valorUnitario: Number(result.employerInss.toFixed(2)),
+      subtotal: Number(result.employerInss.toFixed(2)),
+      status: generatedStatus,
+      memoriaCalculo: `Base salarial x ${result.config.employerInssRate}%`,
+      origem: "motor de encargos",
+      automatico: true,
+      trainingTags: ["generated_labor_charge"],
+    },
+    {
+      id: "derived_fgts",
+      item: "FGTS",
+      categoria: "Encargos",
+      quantidade: 1,
+      valorUnitario: Number(result.fgts.toFixed(2)),
+      subtotal: Number(result.fgts.toFixed(2)),
+      status: generatedStatus,
+      memoriaCalculo: `Base salarial x ${result.config.fgtsRate}%`,
+      origem: "motor de encargos",
+      automatico: true,
+      trainingTags: ["generated_labor_charge"],
+    },
+    {
+      id: "derived_rat",
+      item: "RAT / GILRAT",
+      categoria: "Encargos",
+      quantidade: 1,
+      valorUnitario: Number(result.rat.toFixed(2)),
+      subtotal: Number(result.rat.toFixed(2)),
+      status: generatedStatus,
+      memoriaCalculo: `Base salarial x ${result.config.ratRate}%`,
+      origem: "motor de encargos",
+      automatico: true,
+      trainingTags: ["generated_labor_charge"],
+    },
+    {
+      id: "derived_terceiros",
+      item: "Terceiros",
+      categoria: "Encargos",
+      quantidade: 1,
+      valorUnitario: Number(result.thirdPartyCharges.toFixed(2)),
+      subtotal: Number(result.thirdPartyCharges.toFixed(2)),
+      status: generatedStatus,
+      memoriaCalculo: `Base salarial x ${result.config.thirdPartyRate}%`,
+      origem: "motor de encargos",
+      automatico: true,
+      trainingTags: ["generated_labor_charge"],
+    },
+    {
+      id: "derived_ferias",
+      item: "Provisão de férias",
+      categoria: "Encargos",
+      quantidade: 1,
+      valorUnitario: Number(result.feriasProvision.toFixed(2)),
+      subtotal: Number(result.feriasProvision.toFixed(2)),
+      status: generatedStatus,
+      memoriaCalculo: `Base salarial x ${result.config.vacationProvisionRate}%`,
+      origem: "motor de encargos",
+      automatico: true,
+      trainingTags: ["generated_labor_charge"],
+    },
+    {
+      id: "derived_decimo_terceiro",
+      item: "Provisão de 13º salário",
+      categoria: "Encargos",
+      quantidade: 1,
+      valorUnitario: Number(result.thirteenthProvision.toFixed(2)),
+      subtotal: Number(result.thirteenthProvision.toFixed(2)),
+      status: generatedStatus,
+      memoriaCalculo: `Base salarial x ${result.config.thirteenthProvisionRate}%`,
+      origem: "motor de encargos",
+      automatico: true,
+      trainingTags: ["generated_labor_charge"],
+    },
+    {
+      id: "derived_vale_transporte",
+      item: "Vale-transporte",
+      categoria: "Benefícios",
+      quantidade: result.quantity,
+      valorUnitario: Number(result.config.valeTransportePerEmployee.toFixed(2)),
+      subtotal: Number(result.valeTransporte.toFixed(2)),
+      status: generatedStatus,
+      memoriaCalculo: `Quantidade x benefício por empregado`,
+      origem: "motor de benefícios",
+      automatico: true,
+      trainingTags: ["generated_labor_benefit"],
+    },
+    {
+      id: "derived_vale_alimentacao",
+      item: "Vale-alimentação",
+      categoria: "Benefícios",
+      quantidade: result.quantity,
+      valorUnitario: Number(result.config.valeAlimentacaoPerEmployee.toFixed(2)),
+      subtotal: Number(result.valeAlimentacao.toFixed(2)),
+      status: generatedStatus,
+      memoriaCalculo: `Quantidade x benefício por empregado`,
+      origem: "motor de benefícios",
+      automatico: true,
+      trainingTags: ["generated_labor_benefit"],
+    },
+    {
+      id: "derived_outros_beneficios",
+      item: "Outros benefícios",
+      categoria: "Benefícios",
+      quantidade: result.quantity,
+      valorUnitario: Number(result.config.otherBenefitsPerEmployee.toFixed(2)),
+      subtotal: Number(result.otherBenefits.toFixed(2)),
+      status: generatedStatus,
+      memoriaCalculo: `Quantidade x benefício por empregado`,
+      origem: "motor de benefícios",
+      automatico: true,
+      trainingTags: ["generated_labor_benefit"],
+    },
+  ].filter((row) => row.subtotal > 0);
 }
 
 function formatCurrency(value: number) {
@@ -119,6 +250,9 @@ export default function DedicatedLaborEditor({
   onSpreadsheetUpdated,
 }: Props) {
   const [rows, setRows] = useState<EditorRow[]>([]);
+  const [chargesConfig, setChargesConfig] = useState<LaborChargesConfig>(
+    DEFAULT_LABOR_CHARGES_CONFIG
+  );
 
   const [feedback, setFeedback] = useState<{
     type: "success" | "error" | null;
@@ -130,18 +264,24 @@ export default function DedicatedLaborEditor({
 
   useEffect(() => {
     setRows(extractLaborRows(spreadsheet.rows));
+    setChargesConfig(extractStoredChargesConfig(spreadsheet));
   }, [spreadsheet]);
 
   const totalLabor = useMemo(() => {
     return rows.reduce((sum, row) => sum + (row.subtotal || 0), 0);
   }, [rows]);
 
+  const totalHeadcount = useMemo(() => {
+    return rows.reduce((sum, row) => sum + Number(row.quantidade || 0), 0);
+  }, [rows]);
+
   const laborCost = useMemo(() => {
     return calculateLaborCost({
-      salarioBase: totalLabor,
-      quantidade: 1,
+      salaryBaseTotal: totalLabor,
+      quantity: totalHeadcount,
+      config: chargesConfig,
     });
-  }, [totalLabor]);
+  }, [totalLabor, totalHeadcount, chargesConfig]);
 
   function updateRow(
     index: number,
@@ -203,10 +343,12 @@ export default function DedicatedLaborEditor({
         })
       );
 
-      const rebuiltRows = mergeRowsPreservingOrder(
-        spreadsheet.rows,
-        sanitizedLaborRows
+      const preservedRows = spreadsheet.rows.filter(
+        (row) => !isLaborRow(row) && !isDerivedChargeOrBenefitRow(row)
       );
+
+      const derivedRows = buildDerivedRows(laborCost);
+      const rebuiltRows = [...sanitizedLaborRows, ...derivedRows, ...preservedRows];
 
       const monthlyBaseValue = rebuiltRows.reduce(
         (sum, row) => sum + (row.subtotal || 0),
@@ -225,7 +367,9 @@ export default function DedicatedLaborEditor({
         metadata: {
           ...(spreadsheet.metadata ?? {}),
           editorModule: "dedicated_labor",
-          lastEditedSection: "labor_rows",
+          lastEditedSection: "labor_rows_and_charges",
+          laborChargesConfig: chargesConfig,
+          laborCostBreakdown: laborCost,
         },
       });
 
@@ -235,7 +379,7 @@ export default function DedicatedLaborEditor({
 
       setFeedback({
         type: "success",
-        message: "Linhas de mão de obra salvas com sucesso.",
+        message: "Mão de obra, encargos e benefícios salvos com sucesso.",
       });
 
       onSpreadsheetUpdated?.(updated);
@@ -253,9 +397,7 @@ export default function DedicatedLaborEditor({
   return (
     <Card variant="outlined" sx={{ borderRadius: 4 }}>
       <CardContent>
-
         <Stack spacing={2.5}>
-
           <Stack
             direction={{ xs: "column", md: "row" }}
             justifyContent="space-between"
@@ -268,13 +410,13 @@ export default function DedicatedLaborEditor({
               </Typography>
 
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-                Este bloco permite editar a estrutura de mão de obra da planilha
-                e calcular automaticamente os encargos trabalhistas.
+                Este bloco permite editar a estrutura de mão de obra da planilha e
+                gerar automaticamente encargos e benefícios a partir de parâmetros
+                configuráveis.
               </Typography>
             </Box>
 
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
-
               <Button
                 variant="outlined"
                 startIcon={<AddIcon />}
@@ -290,7 +432,6 @@ export default function DedicatedLaborEditor({
               >
                 Salvar módulo
               </Button>
-
             </Stack>
           </Stack>
 
@@ -304,25 +445,23 @@ export default function DedicatedLaborEditor({
           ) : null}
 
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-
             <Chip label={`Linhas: ${rows.length}`} variant="outlined" />
-
             <Chip
               label={`Total de salários: ${formatCurrency(totalLabor)}`}
               variant="outlined"
             />
-
+            <Chip
+              label={`Quantidade total: ${totalHeadcount}`}
+              variant="outlined"
+            />
           </Stack>
 
           <Divider />
 
           <Box sx={{ overflowX: "auto" }}>
-
             <Table size="small">
-
               <TableHead>
                 <TableRow>
-
                   <TableCell sx={{ minWidth: 240 }}>
                     <strong>Posto / função</strong>
                   </TableCell>
@@ -350,18 +489,13 @@ export default function DedicatedLaborEditor({
                   <TableCell align="center" sx={{ minWidth: 90 }}>
                     <strong>Ação</strong>
                   </TableCell>
-
                 </TableRow>
               </TableHead>
 
               <TableBody>
-
                 {rows.length > 0 ? (
-
                   rows.map((row, index) => (
-
                     <TableRow key={row.id || `${row.item}-${index}`}>
-
                       <TableCell>
                         <EditableCell
                           value={row.item}
@@ -420,7 +554,6 @@ export default function DedicatedLaborEditor({
                       </TableCell>
 
                       <TableCell align="center">
-
                         <Button
                           color="error"
                           variant="text"
@@ -429,39 +562,30 @@ export default function DedicatedLaborEditor({
                         >
                           Remover
                         </Button>
-
                       </TableCell>
-
                     </TableRow>
-
                   ))
-
                 ) : (
-
                   <TableRow>
                     <TableCell colSpan={7}>
-
                       <Typography variant="body2" color="text.secondary">
                         Nenhuma linha de mão de obra encontrada.
                         Adicione a primeira linha para começar.
                       </Typography>
-
                     </TableCell>
                   </TableRow>
-
                 )}
-
               </TableBody>
             </Table>
-
           </Box>
 
-          <Divider sx={{ mt: 3 }} />
+          <LaborChargesConfigCard
+            config={chargesConfig}
+            onChange={setChargesConfig}
+          />
 
           <LaborCostBreakdown result={laborCost} />
-
         </Stack>
-
       </CardContent>
     </Card>
   );
