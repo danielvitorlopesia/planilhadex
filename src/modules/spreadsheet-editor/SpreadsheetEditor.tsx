@@ -10,9 +10,7 @@ type Props = {
 };
 
 export default function SpreadsheetEditor({ spreadsheet }: Props) {
-
   switch (spreadsheet.modelType) {
-
     case "dedicated_labor":
       return <DedicatedLaborEditor spreadsheet={spreadsheet} />;
 
@@ -28,5 +26,4 @@ export default function SpreadsheetEditor({ spreadsheet }: Props) {
     default:
       return <div>Modelo de planilha não reconhecido.</div>;
   }
-
 }
