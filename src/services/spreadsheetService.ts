@@ -11,6 +11,37 @@ import {
 } from "../mocks/domainScenarioCatalog";
 import { getModelTemplateByType } from "../mocks/modelTemplatesMocks";
 
+export type SpreadsheetRecord = LocalSpreadsheet;
+
+export type SpreadsheetEditorDraft = {
+  contractingAgency?: string;
+  contractReference?: string;
+  unitName?: string;
+  lotName?: string;
+  referenceDate?: string;
+  municipality?: string;
+  state?: string;
+  cboCode?: string;
+  professionalCategory?: string;
+  cctReference?: string;
+  taxRegime?: string;
+  objectDescription?: string;
+  domainScenario?: string;
+  headcount?: string | number;
+  monthlyBaseValue?: string | number;
+  mainShift?: string;
+  workScale?: string;
+  weeklyHours?: string;
+  monthlyHours?: string;
+  salaryBase?: string | number;
+  nightAdditional?: string | number;
+  hazardAdditional?: string | number;
+  mealAllowance?: string | number;
+  transportAllowance?: string | number;
+  mandatoryBenefitsNotes?: string;
+  notes?: string;
+};
+
 export const STORAGE_KEY = "custopublico_spreadsheets";
 const SEEDED_FLAG_KEY = "custopublico_spreadsheets_seeded_v2";
 
@@ -18,7 +49,7 @@ function hasBrowserStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
-function safeReadStorage(): LocalSpreadsheet[] {
+function safeReadStorage(): SpreadsheetRecord[] {
   if (!hasBrowserStorage()) {
     return [];
   }
@@ -36,7 +67,7 @@ function safeReadStorage(): LocalSpreadsheet[] {
   }
 }
 
-function safeWriteStorage(spreadsheets: LocalSpreadsheet[]) {
+function safeWriteStorage(spreadsheets: SpreadsheetRecord[]) {
   if (!hasBrowserStorage()) {
     return;
   }
@@ -62,6 +93,20 @@ function humanDateTime() {
 
 function buildSortTimestamp() {
   return Date.now();
+}
+
+function parseNumericInput(value: string | number | undefined | null) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (value === undefined || value === null || value === "") {
+    return 0;
+  }
+
+  const normalized = String(value).replace(/\./g, "").replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function cloneRows(rows: SpreadsheetRow[]): SpreadsheetRow[] {
@@ -152,7 +197,18 @@ function buildRowsForDraft(draft: SpreadsheetCreationDraft): SpreadsheetRow[] {
   );
 }
 
-function buildSeedExample(domainScenarioKey: DomainScenarioKey): LocalSpreadsheet {
+function withUpdatedTimestamp(spreadsheet: SpreadsheetRecord): SpreadsheetRecord {
+  return {
+    ...spreadsheet,
+    updatedAt: humanDateTime(),
+    metadata: {
+      ...(spreadsheet.metadata ?? {}),
+      sortTimestamp: buildSortTimestamp(),
+    },
+  };
+}
+
+function buildSeedExample(domainScenarioKey: DomainScenarioKey): SpreadsheetRecord {
   const scenario = DOMAIN_SCENARIOS[domainScenarioKey];
   const rows = cloneRows(scenario.seedRows);
 
@@ -183,11 +239,12 @@ function buildSeedExample(domainScenarioKey: DomainScenarioKey): LocalSpreadshee
       serviceFamily: scenario.serviceFamily,
       recommendedModels: [...scenario.recommendedModels],
       sortTimestamp: buildSortTimestamp(),
+      localDraftOverride: false,
     },
   };
 }
 
-export function ensureSeedExamples(): LocalSpreadsheet[] {
+export function ensureSeedExamples(): SpreadsheetRecord[] {
   const existing = safeReadStorage();
 
   if (!hasBrowserStorage()) {
@@ -218,12 +275,12 @@ export function ensureSeedExamples(): LocalSpreadsheet[] {
   return existing;
 }
 
-function getSortTimestamp(spreadsheet: LocalSpreadsheet) {
+function getSortTimestamp(spreadsheet: SpreadsheetRecord) {
   const raw = spreadsheet.metadata?.sortTimestamp;
   return typeof raw === "number" ? raw : 0;
 }
 
-export function getStoredSpreadsheets(): LocalSpreadsheet[] {
+export function getStoredSpreadsheets(): SpreadsheetRecord[] {
   return ensureSeedExamples().sort((left, right) => {
     const leftWeight = left.isSeedExample ? 1 : 0;
     const rightWeight = right.isSeedExample ? 1 : 0;
@@ -239,24 +296,24 @@ export function getStoredSpreadsheets(): LocalSpreadsheet[] {
 export const getAllSpreadsheets = getStoredSpreadsheets;
 export const listLocalSpreadsheets = getStoredSpreadsheets;
 
-export function getSpreadsheetById(id: string): LocalSpreadsheet | undefined {
+export function getSpreadsheetById(id: string): SpreadsheetRecord | undefined {
   return getStoredSpreadsheets().find((spreadsheet) => spreadsheet.id === id);
 }
 
 export function saveSpreadsheet(
-  spreadsheet: LocalSpreadsheet
-): LocalSpreadsheet {
+  spreadsheet: SpreadsheetRecord
+): SpreadsheetRecord {
   const current = getStoredSpreadsheets().filter(
     (item) => item.id !== spreadsheet.id
   );
-  const next = [spreadsheet, ...current];
+  const next = [withUpdatedTimestamp(spreadsheet), ...current];
   safeWriteStorage(next);
-  return spreadsheet;
+  return withUpdatedTimestamp(spreadsheet);
 }
 
 export function createSpreadsheetFromModel(
   draft: SpreadsheetCreationDraft
-): LocalSpreadsheet {
+): SpreadsheetRecord {
   const template = getModelTemplateByType(draft.modelType);
 
   if (!template) {
@@ -269,7 +326,7 @@ export function createSpreadsheetFromModel(
     ...draft,
   });
 
-  const spreadsheet: LocalSpreadsheet = {
+  const spreadsheet: SpreadsheetRecord = {
     id: buildId("sheet"),
     title: buildTitleFromDraft({ ...scenario?.defaultDraftValues, ...draft }),
     description: buildDescriptionFromDraft({
@@ -305,10 +362,100 @@ export function createSpreadsheetFromModel(
       useCases: template.useCases,
       domainScenarioSummary: scenario?.summary,
       sortTimestamp: buildSortTimestamp(),
+      localDraftOverride: false,
     },
   };
 
   return saveSpreadsheet(spreadsheet);
+}
+
+export function updateSpreadsheet(
+  id: string,
+  patch: Partial<SpreadsheetRecord>
+): SpreadsheetRecord | null {
+  const current = getSpreadsheetById(id);
+
+  if (!current) {
+    return null;
+  }
+
+  const next: SpreadsheetRecord = {
+    ...current,
+    ...patch,
+    metadata: {
+      ...(current.metadata ?? {}),
+      ...(patch.metadata ?? {}),
+    },
+  };
+
+  return saveSpreadsheet(next);
+}
+
+export function updateSpreadsheetEditorDraft(
+  id: string,
+  draft: SpreadsheetEditorDraft
+): SpreadsheetRecord | null {
+  const current = getSpreadsheetById(id);
+
+  if (!current) {
+    return null;
+  }
+
+  const parsedHeadcount = parseNumericInput(draft.headcount);
+  const parsedMonthlyBaseValue = parseNumericInput(draft.monthlyBaseValue);
+
+  const next: SpreadsheetRecord = {
+    ...current,
+    contractingAgency:
+      draft.contractingAgency !== undefined
+        ? String(draft.contractingAgency)
+        : current.contractingAgency,
+    contractReference:
+      draft.contractReference !== undefined
+        ? String(draft.contractReference)
+        : current.contractReference,
+    unitName:
+      draft.unitName !== undefined ? String(draft.unitName) : current.unitName,
+    lotName:
+      draft.lotName !== undefined ? String(draft.lotName) : current.lotName,
+    referenceDate:
+      draft.referenceDate !== undefined
+        ? String(draft.referenceDate)
+        : current.referenceDate,
+    domainScenario:
+      draft.domainScenario !== undefined
+        ? (draft.domainScenario as DomainScenarioKey)
+        : current.domainScenario,
+    headcount:
+      draft.headcount !== undefined ? parsedHeadcount : current.headcount,
+    monthlyBaseValue:
+      draft.monthlyBaseValue !== undefined
+        ? parsedMonthlyBaseValue
+        : current.monthlyBaseValue,
+    notes: draft.notes !== undefined ? String(draft.notes) : current.notes,
+    description:
+      draft.objectDescription !== undefined
+        ? String(draft.objectDescription)
+        : current.description,
+    trainingProfile:
+      draft.domainScenario &&
+      draft.domainScenario in DOMAIN_SCENARIOS
+        ? buildTrainingProfile(draft.domainScenario as DomainScenarioKey)
+        : current.trainingProfile,
+    metadata: {
+      ...(current.metadata ?? {}),
+      localDraftOverride: true,
+      editorDraft: {
+        ...(typeof current.metadata?.editorDraft === "object" &&
+        current.metadata?.editorDraft !== null
+          ? (current.metadata.editorDraft as Record<string, unknown>)
+          : {}),
+        ...draft,
+      },
+    },
+  };
+
+  return saveSpreadsheet(next);
 }
 
 export function deleteSpreadsheet(id: string) {
