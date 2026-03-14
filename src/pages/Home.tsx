@@ -484,16 +484,16 @@ export default function Home() {
                               color: "#6B3E90",
                             }}
                           >
-                            Usar modelo
+                            Ver estrutura
                           </Button>
 
                           <Button
                             component={RouterLink}
-                            to={`/spreadsheet/${item.id}`}
+                            to={`/models/new/create?model=${item.modelType}`}
                             variant="contained"
                             endIcon={<ArrowForwardIosRoundedIcon sx={{ fontSize: 14 }} />}
                             sx={{
-                              minWidth: 120,
+                              minWidth: 140,
                               borderRadius: 2.5,
                               px: 2.5,
                               py: 1.1,
@@ -506,7 +506,7 @@ export default function Home() {
                               },
                             }}
                           >
-                            Abrir
+                            Usar modelo
                           </Button>
                         </Stack>
                       </Stack>
