@@ -36,6 +36,12 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import PlaylistAddCheckCircleOutlinedIcon from "@mui/icons-material/PlaylistAddCheckCircleOutlined";
 import AttachMoneyOutlinedIcon from "@mui/icons-material/AttachMoneyOutlined";
 import ManageSearchOutlinedIcon from "@mui/icons-material/ManageSearchOutlined";
+import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
+import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import PrecisionManufacturingOutlinedIcon from "@mui/icons-material/PrecisionManufacturingOutlined";
+import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
+import SummarizeOutlinedIcon from "@mui/icons-material/SummarizeOutlined";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import {
   getSpreadsheetById,
@@ -110,12 +116,98 @@ type EditorState = {
   notes: string;
 };
 
+type PcfpModuleKey =
+  | "module_1"
+  | "module_2"
+  | "module_3"
+  | "module_4"
+  | "module_5"
+  | "module_6";
+
+type PcfpModuleDefinition = {
+  key: PcfpModuleKey;
+  title: string;
+  shortTitle: string;
+  description: string;
+  icon: React.ReactNode;
+  borderColor: string;
+  backgroundColor: string;
+};
+
+type PcfpModuleGroup = PcfpModuleDefinition & {
+  rows: SpreadsheetDetailRow[];
+  total: number;
+};
+
 const DOMAIN_SCENARIO_LABELS: Record<string, string> = {
   reception_administrative_support: "Recepção e apoio administrativo",
   cleaning_conservation: "Limpeza e conservação",
   concierge_access_control: "Portaria e controle de acesso",
   property_security: "Vigilância patrimonial",
 };
+
+const PCFP_MODULES: PcfpModuleDefinition[] = [
+  {
+    key: "module_1",
+    title: "Módulo 1 — Remuneração",
+    shortTitle: "Remuneração",
+    description:
+      "Postos de trabalho, salários-base, funções operacionais e parcelas diretamente relacionadas à remuneração principal.",
+    icon: <Groups2OutlinedIcon sx={{ fontSize: 18 }} />,
+    borderColor: "rgba(94, 53, 177, 0.16)",
+    backgroundColor: "#F4EEFB",
+  },
+  {
+    key: "module_2",
+    title: "Módulo 2 — Encargos e provisões",
+    shortTitle: "Encargos e provisões",
+    description:
+      "Encargos sociais, reflexos, provisões e demais incidências sobre a folha e a estrutura remuneratória.",
+    icon: <ReceiptLongOutlinedIcon sx={{ fontSize: 18 }} />,
+    borderColor: "rgba(21, 101, 192, 0.16)",
+    backgroundColor: "#EEF6FD",
+  },
+  {
+    key: "module_3",
+    title: "Módulo 3 — Benefícios",
+    shortTitle: "Benefícios",
+    description:
+      "Vale-transporte, auxílio-alimentação e demais benefícios relevantes associados à categoria e ao contrato.",
+    icon: <AttachMoneyOutlinedIcon sx={{ fontSize: 18 }} />,
+    borderColor: "rgba(46, 125, 50, 0.16)",
+    backgroundColor: "#EEF8F0",
+  },
+  {
+    key: "module_4",
+    title: "Módulo 4 — Insumos, uniformes e EPIs",
+    shortTitle: "Insumos e EPIs",
+    description:
+      "Materiais de consumo, uniformização mínima, saneantes e equipamentos de proteção individual.",
+    icon: <Inventory2OutlinedIcon sx={{ fontSize: 18 }} />,
+    borderColor: "rgba(239, 108, 0, 0.16)",
+    backgroundColor: "#FFF4EA",
+  },
+  {
+    key: "module_5",
+    title: "Módulo 5 — Equipamentos e apoio operacional",
+    shortTitle: "Equipamentos",
+    description:
+      "Equipamentos operacionais, utensílios, comunicação básica, apoio mecânico e suporte de execução.",
+    icon: <PrecisionManufacturingOutlinedIcon sx={{ fontSize: 18 }} />,
+    borderColor: "rgba(0, 121, 107, 0.16)",
+    backgroundColor: "#ECF8F6",
+  },
+  {
+    key: "module_6",
+    title: "Módulo 6 — Síntese preliminar",
+    shortTitle: "Síntese",
+    description:
+      "Consolidação preliminar dos blocos anteriores para leitura executiva, exequibilidade e preparação do parecer técnico.",
+    icon: <SummarizeOutlinedIcon sx={{ fontSize: 18 }} />,
+    borderColor: "rgba(123, 31, 162, 0.16)",
+    backgroundColor: "#F8ECFB",
+  },
+];
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -389,6 +481,229 @@ function getExequibilityRisk(
   };
 }
 
+function classifyRowToModule(row: SpreadsheetDetailRow): PcfpModuleKey {
+  const category = row.categoria.toLowerCase();
+  const item = row.item.toLowerCase();
+
+  if (
+    category.includes("encargos") ||
+    item.includes("encargos") ||
+    item.includes("fgts") ||
+    item.includes("inss") ||
+    item.includes("férias") ||
+    item.includes("ferias") ||
+    item.includes("13º") ||
+    item.includes("13o")
+  ) {
+    return "module_2";
+  }
+
+  if (
+    category.includes("benefícios") ||
+    category.includes("beneficios") ||
+    item.includes("vale") ||
+    item.includes("alimentação") ||
+    item.includes("alimentacao") ||
+    item.includes("transporte")
+  ) {
+    return "module_3";
+  }
+
+  if (
+    category.includes("insumos") ||
+    category.includes("materiais") ||
+    item.includes("uniforme") ||
+    item.includes("epi") ||
+    item.includes("saneante")
+  ) {
+    return "module_4";
+  }
+
+  if (
+    category.includes("equipamentos") ||
+    item.includes("equipamento") ||
+    item.includes("aspirador") ||
+    item.includes("enceradeira") ||
+    item.includes("rádio") ||
+    item.includes("radio") ||
+    item.includes("lanterna")
+  ) {
+    return "module_5";
+  }
+
+  if (
+    category.includes("mão de obra") ||
+    category.includes("mao de obra") ||
+    category.includes("equipe operacional")
+  ) {
+    return "module_1";
+  }
+
+  return "module_5";
+}
+
+function buildPcfpModuleGroups(rows: SpreadsheetDetailRow[]): PcfpModuleGroup[] {
+  const groups = PCFP_MODULES.map((moduleDef) => ({
+    ...moduleDef,
+    rows: [] as SpreadsheetDetailRow[],
+    total: 0,
+  }));
+
+  rows.forEach((row) => {
+    const moduleKey = classifyRowToModule(row);
+    const target = groups.find((group) => group.key === moduleKey);
+
+    if (target) {
+      target.rows.push(row);
+      target.total += row.subtotal || 0;
+    }
+  });
+
+  return groups;
+}
+
+function ModuleSummaryCard({
+  module,
+}: {
+  module: PcfpModuleGroup;
+}) {
+  return (
+    <Card
+      variant="outlined"
+      sx={{
+        borderRadius: 4,
+        borderColor: module.borderColor,
+        backgroundColor: module.backgroundColor,
+      }}
+    >
+      <CardContent>
+        <Stack spacing={1.2}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            {module.icon}
+            <Typography variant="subtitle1" fontWeight={800}>
+              {module.shortTitle}
+            </Typography>
+          </Stack>
+
+          <Typography variant="body2" color="text.secondary">
+            {module.rows.length} item(ns)
+          </Typography>
+
+          <Typography variant="h6" fontWeight={800} color="#241B3A">
+            {formatCurrency(module.total)}
+          </Typography>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ModuleDetailCard({
+  module,
+}: {
+  module: PcfpModuleGroup;
+}) {
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 4 }}>
+      <CardContent sx={{ p: 0 }}>
+        <Box
+          sx={{
+            px: 3,
+            py: 2.5,
+            backgroundColor: module.backgroundColor,
+            borderBottom: `1px solid ${module.borderColor}`,
+          }}
+        >
+          <Stack spacing={0.8}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              {module.icon}
+              <Typography variant="h6" fontWeight={800}>
+                {module.title}
+              </Typography>
+            </Stack>
+
+            <Typography variant="body2" color="text.secondary">
+              {module.description}
+            </Typography>
+
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Chip
+                size="small"
+                label={`${module.rows.length} item(ns)`}
+                variant="outlined"
+              />
+              <Chip
+                size="small"
+                label={formatCurrency(module.total)}
+                variant="outlined"
+              />
+            </Stack>
+          </Stack>
+        </Box>
+
+        <Box sx={{ overflowX: "auto" }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>
+                  <strong>Item</strong>
+                </TableCell>
+                <TableCell>
+                  <strong>Categoria</strong>
+                </TableCell>
+                <TableCell align="right">
+                  <strong>Quantidade</strong>
+                </TableCell>
+                <TableCell align="right">
+                  <strong>Valor unitário</strong>
+                </TableCell>
+                <TableCell align="right">
+                  <strong>Subtotal</strong>
+                </TableCell>
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {module.rows.length > 0 ? (
+                module.rows.map((row, index) => (
+                  <TableRow key={`${module.key}-${row.item}-${index}`}>
+                    <TableCell>
+                      <Stack spacing={0.35}>
+                        <Typography variant="body2">{row.item}</Typography>
+                        {row.memoriaCalculo ? (
+                          <Typography variant="caption" color="text.secondary">
+                            {row.memoriaCalculo}
+                          </Typography>
+                        ) : null}
+                      </Stack>
+                    </TableCell>
+                    <TableCell>{row.categoria}</TableCell>
+                    <TableCell align="right">{row.quantidade}</TableCell>
+                    <TableCell align="right">
+                      {formatCurrency(row.valorUnitario)}
+                    </TableCell>
+                    <TableCell align="right">
+                      {formatCurrency(row.subtotal)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <Typography variant="body2" color="text.secondary">
+                      Nenhum item ainda identificado neste módulo preliminar.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SpreadsheetDetail() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<LoadState>("loading");
@@ -517,6 +832,7 @@ export default function SpreadsheetDetail() {
       "equipe operacional",
       "encargos",
       "benefícios",
+      "beneficios",
     ]);
   }, [spreadsheet]);
 
@@ -543,6 +859,11 @@ export default function SpreadsheetDetail() {
   const exequibilityRisk = useMemo(() => {
     return getExequibilityRisk(mandatoryCostTotal, analysisReferenceValue, totalValue);
   }, [mandatoryCostTotal, analysisReferenceValue, totalValue]);
+
+  const pcfpModules = useMemo(() => {
+    if (!spreadsheet) return [];
+    return buildPcfpModuleGroups(spreadsheet.rows);
+  }, [spreadsheet]);
 
   function updateEditorField(field: keyof EditorState, value: string) {
     setEditor((current) => {
@@ -812,10 +1133,9 @@ export default function SpreadsheetDetail() {
             severity="info"
             sx={{ borderRadius: 3 }}
           >
-            Esta tela já foi convertida para a primeira etapa do editor orientado por
-            domínio. Nesta fase, os campos abaixo funcionam como estrutura preparatória
-            para futura persistência, memória de cálculo, validação normativa e análise
-            automática.
+            Esta tela já está na etapa de editor orientado por domínio e agora passa
+            a exibir uma estrutura modular preliminar da PCFP, preparando a próxima
+            fase do motor de cálculo e da análise técnica automatizada.
           </Alert>
 
           <Box
@@ -1240,6 +1560,120 @@ export default function SpreadsheetDetail() {
               </Card>
 
               <Card variant="outlined" sx={{ borderRadius: 4 }}>
+                <CardContent>
+                  <Stack spacing={2.5}>
+                    <Stack direction="row" spacing={1.25} alignItems="center">
+                      <ViewAgendaOutlinedIcon sx={{ color: "#7B1FA2" }} />
+                      <Typography variant="h6" fontWeight={700}>
+                        Estrutura modular preliminar da PCFP
+                      </Typography>
+                    </Stack>
+
+                    <Typography variant="body2" color="text.secondary">
+                      Esta leitura reorganiza os itens atuais da planilha em módulos
+                      técnicos preliminares, aproximando a interface da lógica real da
+                      PCFP e preparando a futura camada de cálculo por módulo.
+                    </Typography>
+
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: {
+                          xs: "1fr",
+                          md: "repeat(2, 1fr)",
+                          xl: "repeat(3, 1fr)",
+                        },
+                        gap: 2,
+                      }}
+                    >
+                      {pcfpModules.map((module) => (
+                        <ModuleSummaryCard key={module.key} module={module} />
+                      ))}
+                    </Box>
+
+                    <Stack spacing={2}>
+                      {pcfpModules
+                        .filter((module) => module.key !== "module_6")
+                        .map((module) => (
+                          <ModuleDetailCard key={module.key} module={module} />
+                        ))}
+
+                      <Card
+                        variant="outlined"
+                        sx={{
+                          borderRadius: 4,
+                          borderColor: "rgba(123, 31, 162, 0.16)",
+                          backgroundColor: "#F8ECFB",
+                        }}
+                      >
+                        <CardContent>
+                          <Stack spacing={1.5}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <SummarizeOutlinedIcon sx={{ fontSize: 18 }} />
+                              <Typography variant="h6" fontWeight={800}>
+                                Módulo 6 — Síntese preliminar
+                              </Typography>
+                            </Stack>
+
+                            <Typography variant="body2" color="text.secondary">
+                              Consolidação preparatória do conjunto da planilha para
+                              leitura gerencial, análise de exequibilidade e futura
+                              emissão de parecer automatizado.
+                            </Typography>
+
+                            <Box
+                              sx={{
+                                display: "grid",
+                                gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" },
+                                gap: 2,
+                              }}
+                            >
+                              <Card variant="outlined" sx={{ borderRadius: 3 }}>
+                                <CardContent>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Total dos módulos 1 a 5
+                                  </Typography>
+                                  <Typography variant="h6" fontWeight={800}>
+                                    {formatCurrency(
+                                      pcfpModules
+                                        .filter((module) => module.key !== "module_6")
+                                        .reduce((sum, module) => sum + module.total, 0)
+                                    )}
+                                  </Typography>
+                                </CardContent>
+                              </Card>
+
+                              <Card variant="outlined" sx={{ borderRadius: 3 }}>
+                                <CardContent>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Base mensal declarada
+                                  </Typography>
+                                  <Typography variant="h6" fontWeight={800}>
+                                    {formatCurrency(parseNumber(editor.monthlyBaseValue))}
+                                  </Typography>
+                                </CardContent>
+                              </Card>
+
+                              <Card variant="outlined" sx={{ borderRadius: 3 }}>
+                                <CardContent>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Saldo preliminar
+                                  </Typography>
+                                  <Typography variant="h6" fontWeight={800}>
+                                    {formatCurrency(executabilityBalance)}
+                                  </Typography>
+                                </CardContent>
+                              </Card>
+                            </Box>
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    </Stack>
+                  </Stack>
+                </CardContent>
+              </Card>
+
+              <Card variant="outlined" sx={{ borderRadius: 4 }}>
                 <CardContent sx={{ p: 0 }}>
                   <Box sx={{ px: 3, py: 2.5 }}>
                     <Typography variant="h6" fontWeight={700}>
@@ -1427,6 +1861,45 @@ export default function SpreadsheetDetail() {
                       segregação formal entre custo obrigatório, custo comprobatório,
                       risco material e diligência recomendada.
                     </Typography>
+                  </Stack>
+                </CardContent>
+              </Card>
+
+              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+                <CardContent>
+                  <Stack spacing={1.5}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <InsightsOutlinedIcon sx={{ fontSize: 18 }} />
+                      <Typography variant="h6" fontWeight={700}>
+                        Painel modular
+                      </Typography>
+                    </Stack>
+
+                    {pcfpModules.map((module) => (
+                      <Box
+                        key={module.key}
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 3,
+                          border: `1px solid ${module.borderColor}`,
+                          backgroundColor: module.backgroundColor,
+                        }}
+                      >
+                        <Stack
+                          direction="row"
+                          justifyContent="space-between"
+                          alignItems="center"
+                          spacing={1}
+                        >
+                          <Typography variant="body2" fontWeight={700}>
+                            {module.shortTitle}
+                          </Typography>
+                          <Typography variant="body2" fontWeight={800}>
+                            {formatCurrency(module.total)}
+                          </Typography>
+                        </Stack>
+                      </Box>
+                    ))}
                   </Stack>
                 </CardContent>
               </Card>
