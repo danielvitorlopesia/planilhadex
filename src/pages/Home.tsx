@@ -21,7 +21,12 @@ import Groups2OutlinedIcon from "@mui/icons-material/Groups2Outlined";
 import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import CompareArrowsOutlinedIcon from "@mui/icons-material/CompareArrowsOutlined";
+import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import { Link as RouterLink } from "react-router-dom";
+import {
+  getStoredSpreadsheets,
+  SpreadsheetRecord,
+} from "../services/spreadsheetService";
 
 type SpreadsheetStatus = "Em elaboração" | "Concluída" | "Em revisão";
 
@@ -40,11 +45,12 @@ interface SpreadsheetCardItem {
   updatedAt: string;
   modelType: SpreadsheetModelType;
   modelLabel: string;
+  isExample?: boolean;
 }
 
-const spreadsheetCards: SpreadsheetCardItem[] = [
+const exampleSpreadsheetCards: SpreadsheetCardItem[] = [
   {
-    id: "101",
+    id: "example-101",
     title: "Exemplo — Dedicação Exclusiva",
     description:
       "Planilha-modelo para contratos com postos fixos, jornada definida, encargos, benefícios, insumos e consolidação global de custos.",
@@ -53,9 +59,10 @@ const spreadsheetCards: SpreadsheetCardItem[] = [
     updatedAt: "14/03/2026",
     modelType: "dedicated_labor",
     modelLabel: "Terceirização com dedicação exclusiva",
+    isExample: true,
   },
   {
-    id: "102",
+    id: "example-102",
     title: "Exemplo — Sem Dedicação Exclusiva",
     description:
       "Planilha-modelo para serviços executados por demanda, produtividade ou escopo, sem alocação contínua de postos fixos.",
@@ -64,9 +71,10 @@ const spreadsheetCards: SpreadsheetCardItem[] = [
     updatedAt: "14/03/2026",
     modelType: "non_dedicated_labor",
     modelLabel: "Terceirização sem dedicação exclusiva",
+    isExample: true,
   },
   {
-    id: "103",
+    id: "example-103",
     title: "Exemplo — Composição de Serviços",
     description:
       "Planilha-modelo para orçamentos estruturados por itens, subitens, equipes, materiais, equipamentos, logística e consolidação por etapas.",
@@ -75,9 +83,10 @@ const spreadsheetCards: SpreadsheetCardItem[] = [
     updatedAt: "14/03/2026",
     modelType: "service_composition",
     modelLabel: "Serviços por composição",
+    isExample: true,
   },
   {
-    id: "104",
+    id: "example-104",
     title: "Exemplo — Repactuação e Revisão",
     description:
       "Planilha-modelo para repactuação, reajuste, revisão e reequilíbrio econômico-financeiro, com base em versão anterior vinculada.",
@@ -86,8 +95,38 @@ const spreadsheetCards: SpreadsheetCardItem[] = [
     updatedAt: "14/03/2026",
     modelType: "economic_rebalance",
     modelLabel: "Repactuação / revisão",
+    isExample: true,
   },
 ];
+
+function getModelLabel(modelType: SpreadsheetModelType) {
+  switch (modelType) {
+    case "dedicated_labor":
+      return "Terceirização com dedicação exclusiva";
+    case "non_dedicated_labor":
+      return "Terceirização sem dedicação exclusiva";
+    case "service_composition":
+      return "Serviços por composição";
+    case "economic_rebalance":
+      return "Repactuação / revisão";
+    default:
+      return "Planilha";
+  }
+}
+
+function mapStoredSpreadsheetToCard(item: SpreadsheetRecord): SpreadsheetCardItem {
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    status: (item.status as SpreadsheetStatus) || "Em elaboração",
+    category: item.category,
+    updatedAt: item.updatedAt,
+    modelType: item.modelType,
+    modelLabel: getModelLabel(item.modelType),
+    isExample: false,
+  };
+}
 
 function getStatusChipStyles(status: SpreadsheetStatus) {
   switch (status) {
@@ -161,17 +200,29 @@ function getModelIcon(modelType: SpreadsheetModelType) {
 
 export default function Home() {
   const [search, setSearch] = useState("");
+  const [storedCards, setStoredCards] = useState<SpreadsheetCardItem[]>([]);
 
   useEffect(() => {
     document.title = "CustoPúblico — Gestão de Planilhas de Custos Públicas";
+    refreshLocalSpreadsheets();
   }, []);
+
+  const refreshLocalSpreadsheets = () => {
+    const items = getStoredSpreadsheets().map(mapStoredSpreadsheetToCard);
+    setStoredCards(items);
+  };
+
+  const allCards = useMemo(
+    () => [...storedCards, ...exampleSpreadsheetCards],
+    [storedCards]
+  );
 
   const filteredCards = useMemo(() => {
     const normalized = search.trim().toLowerCase();
 
-    if (!normalized) return spreadsheetCards;
+    if (!normalized) return allCards;
 
-    return spreadsheetCards.filter((item) =>
+    return allCards.filter((item) =>
       [
         item.title,
         item.description,
@@ -183,7 +234,7 @@ export default function Home() {
         .toLowerCase()
         .includes(normalized)
     );
-  }, [search]);
+  }, [search, allCards]);
 
   return (
     <Box
@@ -310,26 +361,58 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <TextField
-            fullWidth
-            placeholder="Pesquisar por título, modelo, categoria, descrição ou status..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            variant="outlined"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ color: "#7A708D" }} />
-                </InputAdornment>
-              ),
-            }}
-            sx={{
-              "& .MuiOutlinedInput-root": {
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={2}
+            alignItems={{ xs: "stretch", md: "center" }}
+          >
+            <TextField
+              fullWidth
+              placeholder="Pesquisar por título, modelo, categoria, descrição ou status..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              variant="outlined"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: "#7A708D" }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 999,
+                  backgroundColor: "#FFFFFF",
+                },
+              }}
+            />
+
+            <Button
+              variant="outlined"
+              startIcon={<RefreshOutlinedIcon />}
+              onClick={refreshLocalSpreadsheets}
+              sx={{
+                minWidth: 170,
                 borderRadius: 999,
-                backgroundColor: "#FFFFFF",
-              },
-            }}
-          />
+                textTransform: "none",
+                fontWeight: 700,
+              }}
+            >
+              Atualizar painel
+            </Button>
+          </Stack>
+
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", md: "center" }}
+          >
+            <Typography variant="body2" color="#6D6186">
+              {storedCards.length} planilha(s) criada(s) localmente e{" "}
+              {exampleSpreadsheetCards.length} modelo(s) de exemplo no painel.
+            </Typography>
+          </Stack>
 
           <Box
             sx={{
@@ -399,6 +482,23 @@ export default function Home() {
                                 borderRadius: 2,
                               }}
                             />
+
+                            {item.isExample ? (
+                              <Chip
+                                label="Exemplo"
+                                size="small"
+                                variant="outlined"
+                                sx={{ fontWeight: 700 }}
+                              />
+                            ) : (
+                              <Chip
+                                label="Criada"
+                                size="small"
+                                color="success"
+                                variant="outlined"
+                                sx={{ fontWeight: 700 }}
+                              />
+                            )}
                           </Stack>
 
                           <Typography
@@ -470,44 +570,74 @@ export default function Home() {
                           direction={{ xs: "column", sm: "row" }}
                           spacing={1.25}
                         >
-                          <Button
-                            component={RouterLink}
-                            to={`/models/new/create?model=${item.modelType}`}
-                            variant="outlined"
-                            sx={{
-                              borderRadius: 2.5,
-                              px: 2.25,
-                              py: 1.1,
-                              textTransform: "none",
-                              fontWeight: 700,
-                              borderColor: "rgba(142, 90, 181, 0.35)",
-                              color: "#6B3E90",
-                            }}
-                          >
-                            Ver estrutura
-                          </Button>
+                          {item.isExample ? (
+                            <>
+                              <Button
+                                component={RouterLink}
+                                to={`/models/new/create?model=${item.modelType}`}
+                                variant="outlined"
+                                sx={{
+                                  borderRadius: 2.5,
+                                  px: 2.25,
+                                  py: 1.1,
+                                  textTransform: "none",
+                                  fontWeight: 700,
+                                  borderColor: "rgba(142, 90, 181, 0.35)",
+                                  color: "#6B3E90",
+                                }}
+                              >
+                                Ver estrutura
+                              </Button>
 
-                          <Button
-                            component={RouterLink}
-                            to={`/models/new/create?model=${item.modelType}`}
-                            variant="contained"
-                            endIcon={<ArrowForwardIosRoundedIcon sx={{ fontSize: 14 }} />}
-                            sx={{
-                              minWidth: 140,
-                              borderRadius: 2.5,
-                              px: 2.5,
-                              py: 1.1,
-                              textTransform: "none",
-                              fontWeight: 700,
-                              backgroundColor: "#8E5AB5",
-                              boxShadow: "0 6px 16px rgba(142, 90, 181, 0.24)",
-                              "&:hover": {
-                                backgroundColor: "#7B4CA1",
-                              },
-                            }}
-                          >
-                            Usar modelo
-                          </Button>
+                              <Button
+                                component={RouterLink}
+                                to={`/models/new/create?model=${item.modelType}`}
+                                variant="contained"
+                                endIcon={
+                                  <ArrowForwardIosRoundedIcon sx={{ fontSize: 14 }} />
+                                }
+                                sx={{
+                                  minWidth: 140,
+                                  borderRadius: 2.5,
+                                  px: 2.5,
+                                  py: 1.1,
+                                  textTransform: "none",
+                                  fontWeight: 700,
+                                  backgroundColor: "#8E5AB5",
+                                  boxShadow: "0 6px 16px rgba(142, 90, 181, 0.24)",
+                                  "&:hover": {
+                                    backgroundColor: "#7B4CA1",
+                                  },
+                                }}
+                              >
+                                Usar modelo
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              component={RouterLink}
+                              to={`/spreadsheet/${item.id}`}
+                              variant="contained"
+                              endIcon={
+                                <ArrowForwardIosRoundedIcon sx={{ fontSize: 14 }} />
+                              }
+                              sx={{
+                                minWidth: 120,
+                                borderRadius: 2.5,
+                                px: 2.5,
+                                py: 1.1,
+                                textTransform: "none",
+                                fontWeight: 700,
+                                backgroundColor: "#8E5AB5",
+                                boxShadow: "0 6px 16px rgba(142, 90, 181, 0.24)",
+                                "&:hover": {
+                                  backgroundColor: "#7B4CA1",
+                                },
+                              }}
+                            >
+                              Abrir
+                            </Button>
+                          )}
                         </Stack>
                       </Stack>
                     </Stack>
