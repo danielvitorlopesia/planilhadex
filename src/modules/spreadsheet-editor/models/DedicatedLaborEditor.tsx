@@ -18,7 +18,12 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
+
 import EditableCell from "../components/EditableCell";
+import LaborCostBreakdown from "../components/LaborCostBreakdown";
+
+import { calculateLaborCost } from "../utils/laborCostCalculator";
+
 import {
   SpreadsheetRecord,
   updateSpreadsheet,
@@ -40,6 +45,7 @@ const STATUS_OPTIONS = [
 
 function isLaborRow(row: EditorRow) {
   const category = String(row.categoria || "").toLowerCase();
+
   return (
     category.includes("mão de obra") ||
     category.includes("mao de obra") ||
@@ -113,6 +119,7 @@ export default function DedicatedLaborEditor({
   onSpreadsheetUpdated,
 }: Props) {
   const [rows, setRows] = useState<EditorRow[]>([]);
+
   const [feedback, setFeedback] = useState<{
     type: "success" | "error" | null;
     message: string;
@@ -128,6 +135,13 @@ export default function DedicatedLaborEditor({
   const totalLabor = useMemo(() => {
     return rows.reduce((sum, row) => sum + (row.subtotal || 0), 0);
   }, [rows]);
+
+  const laborCost = useMemo(() => {
+    return calculateLaborCost({
+      salarioBase: totalLabor,
+      quantidade: 1,
+    });
+  }, [totalLabor]);
 
   function updateRow(
     index: number,
@@ -239,7 +253,9 @@ export default function DedicatedLaborEditor({
   return (
     <Card variant="outlined" sx={{ borderRadius: 4 }}>
       <CardContent>
+
         <Stack spacing={2.5}>
+
           <Stack
             direction={{ xs: "column", md: "row" }}
             justifyContent="space-between"
@@ -252,12 +268,13 @@ export default function DedicatedLaborEditor({
               </Typography>
 
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-                Este bloco já permite editar a estrutura de mão de obra da planilha,
-                recalculando subtotal por linha e persistindo a alteração localmente.
+                Este bloco permite editar a estrutura de mão de obra da planilha
+                e calcular automaticamente os encargos trabalhistas.
               </Typography>
             </Box>
 
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
+
               <Button
                 variant="outlined"
                 startIcon={<AddIcon />}
@@ -273,6 +290,7 @@ export default function DedicatedLaborEditor({
               >
                 Salvar módulo
               </Button>
+
             </Stack>
           </Stack>
 
@@ -286,47 +304,64 @@ export default function DedicatedLaborEditor({
           ) : null}
 
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+
             <Chip label={`Linhas: ${rows.length}`} variant="outlined" />
+
             <Chip
-              label={`Total do módulo: ${formatCurrency(totalLabor)}`}
+              label={`Total de salários: ${formatCurrency(totalLabor)}`}
               variant="outlined"
             />
+
           </Stack>
 
           <Divider />
 
           <Box sx={{ overflowX: "auto" }}>
+
             <Table size="small">
+
               <TableHead>
                 <TableRow>
+
                   <TableCell sx={{ minWidth: 240 }}>
                     <strong>Posto / função</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 180 }}>
                     <strong>Categoria</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 120 }}>
                     <strong>Quantidade</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 140 }}>
                     <strong>Valor unitário</strong>
                   </TableCell>
+
                   <TableCell align="right" sx={{ minWidth: 130 }}>
                     <strong>Subtotal</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 160 }}>
                     <strong>Status</strong>
                   </TableCell>
+
                   <TableCell align="center" sx={{ minWidth: 90 }}>
                     <strong>Ação</strong>
                   </TableCell>
+
                 </TableRow>
               </TableHead>
 
               <TableBody>
+
                 {rows.length > 0 ? (
+
                   rows.map((row, index) => (
+
                     <TableRow key={row.id || `${row.item}-${index}`}>
+
                       <TableCell>
                         <EditableCell
                           value={row.item}
@@ -337,7 +372,9 @@ export default function DedicatedLaborEditor({
                       <TableCell>
                         <EditableCell
                           value={row.categoria}
-                          onChange={(value) => updateRow(index, "categoria", value)}
+                          onChange={(value) =>
+                            updateRow(index, "categoria", value)
+                          }
                         />
                       </TableCell>
 
@@ -345,7 +382,9 @@ export default function DedicatedLaborEditor({
                         <EditableCell
                           type="number"
                           value={row.quantidade}
-                          onChange={(value) => updateRow(index, "quantidade", value)}
+                          onChange={(value) =>
+                            updateRow(index, "quantidade", value)
+                          }
                           min={0}
                           step={1}
                         />
@@ -374,11 +413,14 @@ export default function DedicatedLaborEditor({
                           type="select"
                           value={row.status}
                           options={STATUS_OPTIONS}
-                          onChange={(value) => updateRow(index, "status", value)}
+                          onChange={(value) =>
+                            updateRow(index, "status", value)
+                          }
                         />
                       </TableCell>
 
                       <TableCell align="center">
+
                         <Button
                           color="error"
                           variant="text"
@@ -387,23 +429,39 @@ export default function DedicatedLaborEditor({
                         >
                           Remover
                         </Button>
+
                       </TableCell>
+
                     </TableRow>
+
                   ))
+
                 ) : (
+
                   <TableRow>
                     <TableCell colSpan={7}>
+
                       <Typography variant="body2" color="text.secondary">
-                        Nenhuma linha de mão de obra encontrada. Adicione a primeira
-                        linha para começar a montar o módulo.
+                        Nenhuma linha de mão de obra encontrada.
+                        Adicione a primeira linha para começar.
                       </Typography>
+
                     </TableCell>
                   </TableRow>
+
                 )}
+
               </TableBody>
             </Table>
+
           </Box>
+
+          <Divider sx={{ mt: 3 }} />
+
+          <LaborCostBreakdown result={laborCost} />
+
         </Stack>
+
       </CardContent>
     </Card>
   );
