@@ -4,6 +4,7 @@ import { SpreadsheetRecord } from "../../../services/spreadsheetService";
 
 type Props = {
   spreadsheet: SpreadsheetRecord;
+  onSpreadsheetUpdated?: (spreadsheet: SpreadsheetRecord) => void;
 };
 
 export default function NonDedicatedLaborEditor({ spreadsheet }: Props) {
@@ -16,9 +17,8 @@ export default function NonDedicatedLaborEditor({ spreadsheet }: Props) {
           </Typography>
 
           <Typography variant="body2" color="text.secondary">
-            Este editor será usado para serviços sem posto exclusivo permanente,
-            com foco em unidades de serviço, parâmetros técnicos, composição
-            agregada de custos e futura validação material.
+            Este editor será a base para serviços sem posto exclusivo permanente,
+            com foco em unidades de serviço, parâmetros técnicos e composição agregada.
           </Typography>
 
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -26,7 +26,6 @@ export default function NonDedicatedLaborEditor({ spreadsheet }: Props) {
             <Chip label="Equipe não exclusiva" />
             <Chip label="Materiais" />
             <Chip label="Equipamentos" />
-            <Chip label="Parâmetros de medição" />
           </Stack>
 
           <Typography variant="body2" color="text.secondary">
