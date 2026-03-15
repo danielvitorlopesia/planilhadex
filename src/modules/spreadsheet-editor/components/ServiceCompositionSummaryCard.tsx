@@ -94,10 +94,7 @@ export default function ServiceCompositionSummaryCard({ summary }: Props) {
             label="Materiais e insumos"
             value={summary.materialsTotal}
           />
-          <SummaryLine
-            label="Equipamentos"
-            value={summary.equipmentTotal}
-          />
+          <SummaryLine label="Equipamentos" value={summary.equipmentTotal} />
           <SummaryLine
             label="Logística operacional"
             value={summary.logisticsTotal}
