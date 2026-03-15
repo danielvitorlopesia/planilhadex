@@ -30,7 +30,7 @@ import {
   SpreadsheetRecord,
 } from "../services/spreadsheetService";
 import {
-  getSpreadsheetModelTemplate,
+  getModelTemplateByType,
   spreadsheetModelTemplates,
 } from "../mocks/modelTemplatesMocks";
 import { DOMAIN_SCENARIOS } from "../mocks/domainScenarioCatalog";
@@ -218,10 +218,7 @@ export default function SpreadsheetCreatePage() {
     );
   }, [requestedModel, requestedScenario, initialModel, setSearchParams]);
 
-  const template = useMemo(
-    () => getSpreadsheetModelTemplate(modelType),
-    [modelType]
-  );
+  const template = useMemo(() => getModelTemplateByType(modelType), [modelType]);
 
   const compatibleScenarios = useMemo(() => {
     return Object.values(DOMAIN_SCENARIOS).filter((scenario) =>
@@ -529,11 +526,17 @@ export default function SpreadsheetCreatePage() {
                         select
                         fullWidth
                       >
-                        {compatibleScenarios.map((scenario) => (
-                          <MenuItem key={scenario.key} value={scenario.key}>
-                            {scenario.label}
+                        {compatibleScenarios.length > 0 ? (
+                          compatibleScenarios.map((scenario) => (
+                            <MenuItem key={scenario.key} value={scenario.key}>
+                              {scenario.label}
+                            </MenuItem>
+                          ))
+                        ) : (
+                          <MenuItem value="">
+                            Nenhum cenário compatível
                           </MenuItem>
-                        ))}
+                        )}
                       </TextField>
 
                       <TextField
