@@ -46,11 +46,16 @@ import MemoryOutlinedIcon from "@mui/icons-material/MemoryOutlined";
 import FunctionsOutlinedIcon from "@mui/icons-material/FunctionsOutlined";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import SpreadsheetEditor from "../modules/spreadsheet-editor/SpreadsheetEditor";
+import ServiceCompositionComparisonPanel from "../components/service-composition/ServiceCompositionComparisonPanel";
 import {
-  getSpreadsheetById,
   SpreadsheetRecord,
+  getSpreadsheetById,
   updateSpreadsheetEditorDraft,
 } from "../services/spreadsheetService";
+import {
+  buildServiceCompositionComparisonContext,
+  compareServiceCompositionSpreadsheets,
+} from "../modules/spreadsheet-editor/adapters/serviceCompositionVersionAdapter";
 
 type LoadState = "loading" | "success" | "error";
 type SaveState = "idle" | "saving" | "success" | "error";
@@ -1083,6 +1088,34 @@ function PersistedCompositionCard({
   );
 }
 
+function readPreviousSpreadsheetCandidate(
+  spreadsheet: SpreadsheetDetailRecord | null
+): SpreadsheetRecord | null {
+  if (!spreadsheet || !isRecord(spreadsheet.metadata)) {
+    return null;
+  }
+
+  const previousSpreadsheetId = safeString(spreadsheet.metadata["previousSpreadsheetId"]);
+  if (previousSpreadsheetId) {
+    const previous = getSpreadsheetById(previousSpreadsheetId);
+    if (previous) {
+      return previous;
+    }
+  }
+
+  const previousVersionRows = spreadsheet.metadata["previousVersionRows"];
+  if (Array.isArray(previousVersionRows)) {
+    return {
+      ...spreadsheet,
+      id: `${spreadsheet.id}_previous_snapshot`,
+      title: `${spreadsheet.title} — versão anterior`,
+      rows: previousVersionRows as SpreadsheetDetailRow[],
+    };
+  }
+
+  return null;
+}
+
 export default function SpreadsheetDetail() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<LoadState>("loading");
@@ -1216,6 +1249,28 @@ export default function SpreadsheetDetail() {
     () => readServiceCompositionEngineSnapshot(spreadsheet),
     [spreadsheet]
   );
+
+  const previousSpreadsheetCandidate = useMemo(
+    () => readPreviousSpreadsheetCandidate(spreadsheet),
+    [spreadsheet]
+  );
+
+  const serviceCompositionComparisonContext = useMemo(() => {
+    if (!spreadsheet) {
+      return null;
+    }
+
+    const context = buildServiceCompositionComparisonContext({
+      previousSpreadsheet: previousSpreadsheetCandidate,
+      currentSpreadsheet: spreadsheet,
+    });
+
+    if (!context.hasComparableData || !context.hasPreviousRows) {
+      return null;
+    }
+
+    return context;
+  }, [previousSpreadsheetCandidate, spreadsheet]);
 
   const mandatoryCostTotal = useMemo(() => {
     if (!spreadsheet) return 0;
@@ -1595,9 +1650,8 @@ export default function SpreadsheetDetail() {
             severity="info"
             sx={{ borderRadius: 3 }}
           >
-            Esta tela já consome o resumo, a memória técnica e o snapshot do motor de
-            composição quando disponíveis, reduzindo inferência e preparando a base
-            para comparação entre versões, repactuação e parecer automatizado.
+            Esta tela já consome o resumo, a memória técnica, o snapshot do motor e,
+            quando existir uma base anterior, o comparativo entre versões da composição.
           </Alert>
 
           <Box
@@ -1640,6 +1694,14 @@ export default function SpreadsheetDetail() {
                 />
               ) : null}
 
+              {serviceCompositionComparisonContext &&
+              spreadsheet.modelType === "service_composition" ? (
+                <ServiceCompositionComparisonPanel
+                  comparison={serviceCompositionComparisonContext.comparison}
+                  title="Comparação entre versões da composição"
+                />
+              ) : null}
+
               <CompactInfoCard title="Leitura persistida de cálculo">
                 <Typography variant="body2" color="text.secondary">
                   <strong>Labor breakdown persistido:</strong>{" "}
@@ -1664,6 +1726,11 @@ export default function SpreadsheetDetail() {
                 <Typography variant="body2" color="text.secondary">
                   <strong>Snapshot do motor:</strong>{" "}
                   {serviceCompositionEngineSnapshot ? "Sim" : "Não"}
+                </Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Base comparativa anterior:</strong>{" "}
+                  {serviceCompositionComparisonContext ? "Sim" : "Não"}
                 </Typography>
               </CompactInfoCard>
 
@@ -2370,6 +2437,40 @@ export default function SpreadsheetDetail() {
                           serviceCompositionEngineSnapshot.generatedAt
                         ).toLocaleString("pt-BR")
                       : "Não informado"}
+                  </Typography>
+                </CompactInfoCard>
+              ) : null}
+
+              {serviceCompositionComparisonContext &&
+              spreadsheet.modelType === "service_composition" ? (
+                <CompactInfoCard title="Comparativo resumido">
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <CompareArrowsOutlinedIcon sx={{ fontSize: 18 }} />
+                    <Typography variant="body2" fontWeight={700}>
+                      Versão atual x versão anterior
+                    </Typography>
+                  </Stack>
+
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Incluídos:</strong>{" "}
+                    {serviceCompositionComparisonContext.comparison.summary.addedCount}
+                  </Typography>
+
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Removidos:</strong>{" "}
+                    {serviceCompositionComparisonContext.comparison.summary.removedCount}
+                  </Typography>
+
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Alterados:</strong>{" "}
+                    {serviceCompositionComparisonContext.comparison.summary.changedCount}
+                  </Typography>
+
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Impacto total:</strong>{" "}
+                    {formatCurrency(
+                      serviceCompositionComparisonContext.comparison.summary.totalDelta
+                    )}
                   </Typography>
                 </CompactInfoCard>
               ) : null}
