@@ -42,7 +42,6 @@ import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import PrecisionManufacturingOutlinedIcon from "@mui/icons-material/PrecisionManufacturingOutlined";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import SummarizeOutlinedIcon from "@mui/icons-material/SummarizeOutlined";
-import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
 import MemoryOutlinedIcon from "@mui/icons-material/MemoryOutlined";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import SpreadsheetEditor from "../modules/spreadsheet-editor/SpreadsheetEditor";
@@ -231,7 +230,7 @@ const PCFP_MODULES: PcfpModuleDefinition[] = [
   {
     key: "module_2",
     title: "Módulo 2 — Encargos e provisões",
-    shortTitle: "Encargos e provisões",
+    shortTitle: "Encargos",
     description:
       "Encargos sociais, reflexos, provisões e demais incidências sobre a folha e a estrutura remuneratória.",
     icon: <ReceiptLongOutlinedIcon sx={{ fontSize: 18 }} />,
@@ -243,7 +242,7 @@ const PCFP_MODULES: PcfpModuleDefinition[] = [
     title: "Módulo 3 — Benefícios",
     shortTitle: "Benefícios",
     description:
-      "Vale-transporte, auxílio-alimentação e demais benefícios relevantes associados à categoria e ao contrato.",
+      "Vale-transporte, auxílio-alimentação e demais benefícios associados à categoria e ao contrato.",
     icon: <AttachMoneyOutlinedIcon sx={{ fontSize: 18 }} />,
     borderColor: "rgba(46, 125, 50, 0.16)",
     backgroundColor: "#EEF8F0",
@@ -253,7 +252,7 @@ const PCFP_MODULES: PcfpModuleDefinition[] = [
     title: "Módulo 4 — Insumos, uniformes e EPIs",
     shortTitle: "Insumos e EPIs",
     description:
-      "Materiais de consumo, uniformização mínima, saneantes e equipamentos de proteção individual.",
+      "Materiais de consumo, saneantes, uniformização mínima e equipamentos de proteção individual.",
     icon: <Inventory2OutlinedIcon sx={{ fontSize: 18 }} />,
     borderColor: "rgba(239, 108, 0, 0.16)",
     backgroundColor: "#FFF4EA",
@@ -263,7 +262,7 @@ const PCFP_MODULES: PcfpModuleDefinition[] = [
     title: "Módulo 5 — Equipamentos e apoio operacional",
     shortTitle: "Equipamentos",
     description:
-      "Equipamentos operacionais, utensílios, comunicação básica, apoio mecânico e suporte de execução.",
+      "Equipamentos operacionais, utensílios, logística e apoio de execução.",
     icon: <PrecisionManufacturingOutlinedIcon sx={{ fontSize: 18 }} />,
     borderColor: "rgba(0, 121, 107, 0.16)",
     backgroundColor: "#ECF8F6",
@@ -273,7 +272,7 @@ const PCFP_MODULES: PcfpModuleDefinition[] = [
     title: "Módulo 6 — Síntese preliminar",
     shortTitle: "Síntese",
     description:
-      "Consolidação preliminar dos blocos anteriores para leitura executiva, exequibilidade e preparação do parecer técnico.",
+      "Consolidação preliminar dos blocos anteriores para leitura executiva e preparação do parecer técnico.",
     icon: <SummarizeOutlinedIcon sx={{ fontSize: 18 }} />,
     borderColor: "rgba(123, 31, 162, 0.16)",
     backgroundColor: "#F8ECFB",
@@ -295,11 +294,9 @@ function parseNumber(value: string | number | undefined | null) {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : 0;
   }
-
   if (!value) {
     return 0;
   }
-
   const normalized = String(value).trim().replace(/\./g, "").replace(",", ".");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -309,7 +306,6 @@ function stringifyNumber(value: number | undefined | null) {
   if (value === undefined || value === null || Number.isNaN(value)) {
     return "";
   }
-
   return String(value);
 }
 
@@ -321,7 +317,6 @@ function safeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
-
   return value
     .map((item) => (typeof item === "string" ? item : ""))
     .filter(Boolean);
@@ -445,11 +440,9 @@ function getDomainScenarioLabel(record?: SpreadsheetDetailRecord | null) {
   if (key && DOMAIN_SCENARIO_LABELS[key]) {
     return DOMAIN_SCENARIO_LABELS[key];
   }
-
   if (record?.trainingProfile?.domainScenarioLabel) {
     return record.trainingProfile.domainScenarioLabel;
   }
-
   return "Não classificado";
 }
 
@@ -458,12 +451,10 @@ function extractStoredEditorDraft(record: SpreadsheetDetailRecord) {
   if (!isRecord(metadata)) {
     return {};
   }
-
   const raw = metadata["editorDraft"];
   if (!isRecord(raw)) {
     return {};
   }
-
   return raw as Partial<EditorState>;
 }
 
@@ -474,7 +465,6 @@ function readMetadataRecord(
   if (!record || !isRecord(record.metadata)) {
     return null;
   }
-
   const raw = record.metadata[key];
   return isRecord(raw) ? raw : null;
 }
@@ -720,12 +710,17 @@ function ExecutiveMetricCard({
   value: string | number;
 }) {
   return (
-    <Card variant="outlined" sx={{ borderRadius: 4, height: "100%" }}>
+    <Card variant="outlined" sx={{ borderRadius: 4, height: "100%", minWidth: 0 }}>
       <CardContent>
         <Typography variant="body2" color="text.secondary">
           {label}
         </Typography>
-        <Typography variant="h4" fontWeight={800} color="#241B3A">
+        <Typography
+          variant="h4"
+          fontWeight={800}
+          color="#241B3A"
+          sx={{ wordBreak: "break-word" }}
+        >
           {value}
         </Typography>
       </CardContent>
@@ -741,9 +736,9 @@ function CompactInfoCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card variant="outlined" sx={{ borderRadius: 4, height: "100%" }}>
+    <Card variant="outlined" sx={{ borderRadius: 4, height: "100%", minWidth: 0 }}>
       <CardContent>
-        <Stack spacing={1.25}>
+        <Stack spacing={1.25} sx={{ minWidth: 0 }}>
           <Typography variant="h6" fontWeight={700}>
             {title}
           </Typography>
@@ -762,13 +757,14 @@ function ModuleSummaryCard({ module }: { module: PcfpModuleGroup }) {
         borderRadius: 4,
         borderColor: module.borderColor,
         backgroundColor: module.backgroundColor,
+        minWidth: 0,
       }}
     >
       <CardContent>
-        <Stack spacing={1.2}>
-          <Stack direction="row" spacing={1} alignItems="center">
+        <Stack spacing={1.2} sx={{ minWidth: 0 }}>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
             {module.icon}
-            <Typography variant="subtitle1" fontWeight={800}>
+            <Typography variant="subtitle1" fontWeight={800} noWrap>
               {module.shortTitle}
             </Typography>
           </Stack>
@@ -788,18 +784,19 @@ function ModuleSummaryCard({ module }: { module: PcfpModuleGroup }) {
 
 function ModuleDetailCard({ module }: { module: PcfpModuleGroup }) {
   return (
-    <Card variant="outlined" sx={{ borderRadius: 4 }}>
+    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
       <CardContent sx={{ p: 0 }}>
         <Box
           sx={{
-            px: 3,
-            py: 2.5,
+            px: 2.25,
+            py: 2,
             backgroundColor: module.backgroundColor,
             borderBottom: `1px solid ${module.borderColor}`,
+            minWidth: 0,
           }}
         >
-          <Stack spacing={0.8}>
-            <Stack direction="row" spacing={1} alignItems="center">
+          <Stack spacing={0.8} sx={{ minWidth: 0 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
               {module.icon}
               <Typography variant="h6" fontWeight={800}>
                 {module.title}
@@ -817,8 +814,8 @@ function ModuleDetailCard({ module }: { module: PcfpModuleGroup }) {
           </Stack>
         </Box>
 
-        <Box sx={{ overflowX: "auto" }}>
-          <Table size="small">
+        <Box sx={{ overflowX: "auto", width: "100%" }}>
+          <Table size="small" sx={{ minWidth: 680 }}>
             <TableHead>
               <TableRow>
                 <TableCell>
@@ -843,7 +840,7 @@ function ModuleDetailCard({ module }: { module: PcfpModuleGroup }) {
               {module.rows.length > 0 ? (
                 module.rows.map((row, index) => (
                   <TableRow key={`${module.key}-${String(row.item)}-${index}`}>
-                    <TableCell>
+                    <TableCell sx={{ minWidth: 220 }}>
                       <Stack spacing={0.35}>
                         <Typography variant="body2">{String(row.item || "")}</Typography>
                         {row.memoriaCalculo ? (
@@ -887,7 +884,7 @@ function PersistedCompositionCard({
   summary: ServiceCompositionSummary | null;
   memoryBundle: ServiceCompositionMemoryBundle | null;
 }) {
-  const items = Array.isArray(memoryBundle?.items) ? memoryBundle?.items ?? [] : [];
+  const items = Array.isArray(memoryBundle?.items) ? memoryBundle.items : [];
   const totals = memoryBundle?.totals;
   const demandBreakdown = memoryBundle?.demandBreakdown;
 
@@ -903,11 +900,12 @@ function PersistedCompositionCard({
         borderColor: "rgba(46, 125, 50, 0.18)",
         background:
           "linear-gradient(180deg, rgba(239,248,240,1) 0%, rgba(255,255,255,1) 100%)",
+        minWidth: 0,
       }}
     >
       <CardContent>
-        <Stack spacing={2.5}>
-          <Stack direction="row" spacing={1.25} alignItems="center">
+        <Stack spacing={2.25} sx={{ minWidth: 0 }}>
+          <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
             <MemoryOutlinedIcon sx={{ color: "#2E7D32" }} />
             <Typography variant="h6" fontWeight={700}>
               Composição de serviços persistida
@@ -915,9 +913,7 @@ function PersistedCompositionCard({
           </Stack>
 
           <Typography variant="body2" color="text.secondary">
-            Esta seção lê diretamente os blocos técnicos persistidos em metadata,
-            reduzindo inferência e preparando auditoria, comparação entre versões
-            e parecer automatizado.
+            Esta seção lê diretamente os blocos técnicos persistidos em metadata.
           </Typography>
 
           <Box
@@ -925,57 +921,33 @@ function PersistedCompositionCard({
               display: "grid",
               gridTemplateColumns: {
                 xs: "1fr",
-                md: "repeat(2, 1fr)",
-                xl: "repeat(4, 1fr)",
+                sm: "repeat(2, minmax(0, 1fr))",
+                xl: "repeat(4, minmax(0, 1fr))",
               },
               gap: 2,
+              minWidth: 0,
             }}
           >
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  Itens persistidos
-                </Typography>
-                <Typography variant="h6" fontWeight={800}>
-                  {summary?.itemCount ?? memoryBundle?.itemCount ?? 0}
-                </Typography>
-              </CardContent>
-            </Card>
-
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  Total persistido
-                </Typography>
-                <Typography variant="h6" fontWeight={800}>
-                  {formatCurrency(Number(summary?.total ?? totals?.grandTotal ?? 0))}
-                </Typography>
-              </CardContent>
-            </Card>
-
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  Gerado em
-                </Typography>
-                <Typography variant="body2" fontWeight={700} sx={{ mt: 1 }}>
-                  {memoryBundle?.generatedAt
-                    ? new Date(memoryBundle.generatedAt).toLocaleString("pt-BR")
-                    : "Não informado"}
-                </Typography>
-              </CardContent>
-            </Card>
-
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  Tipo de bloco
-                </Typography>
-                <Typography variant="body2" fontWeight={700} sx={{ mt: 1 }}>
-                  {safeString(memoryBundle?.editorModule) || "service_composition"}
-                </Typography>
-              </CardContent>
-            </Card>
+            <ExecutiveMetricCard
+              label="Itens persistidos"
+              value={summary?.itemCount ?? memoryBundle?.itemCount ?? 0}
+            />
+            <ExecutiveMetricCard
+              label="Total persistido"
+              value={formatCurrency(Number(summary?.total ?? totals?.grandTotal ?? 0))}
+            />
+            <CompactInfoCard title="Gerado em">
+              <Typography variant="body2" fontWeight={700}>
+                {memoryBundle?.generatedAt
+                  ? new Date(memoryBundle.generatedAt).toLocaleString("pt-BR")
+                  : "Não informado"}
+              </Typography>
+            </CompactInfoCard>
+            <CompactInfoCard title="Tipo de bloco">
+              <Typography variant="body2" fontWeight={700}>
+                {safeString(memoryBundle?.editorModule) || "service_composition"}
+              </Typography>
+            </CompactInfoCard>
           </Box>
 
           <Box
@@ -983,136 +955,33 @@ function PersistedCompositionCard({
               display: "grid",
               gridTemplateColumns: {
                 xs: "1fr",
-                md: "repeat(2, 1fr)",
-                xl: "repeat(4, 1fr)",
+                sm: "repeat(2, minmax(0, 1fr))",
+                xl: "repeat(4, minmax(0, 1fr))",
               },
               gap: 2,
+              minWidth: 0,
             }}
           >
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  Materiais e insumos
-                </Typography>
-                <Typography variant="h6" fontWeight={800}>
-                  {formatCurrency(Number(summary?.materialsTotal ?? totals?.materials ?? 0))}
-                </Typography>
-              </CardContent>
-            </Card>
-
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  Equipamentos
-                </Typography>
-                <Typography variant="h6" fontWeight={800}>
-                  {formatCurrency(Number(summary?.equipmentTotal ?? totals?.equipment ?? 0))}
-                </Typography>
-              </CardContent>
-            </Card>
-
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  Logística
-                </Typography>
-                <Typography variant="h6" fontWeight={800}>
-                  {formatCurrency(Number(summary?.logisticsTotal ?? totals?.logistics ?? 0))}
-                </Typography>
-              </CardContent>
-            </Card>
-
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  Apoio operacional
-                </Typography>
-                <Typography variant="h6" fontWeight={800}>
-                  {formatCurrency(
-                    Number(summary?.supportTotal ?? totals?.operationalSupport ?? 0)
-                  )}
-                </Typography>
-              </CardContent>
-            </Card>
+            <ExecutiveMetricCard
+              label="Materiais e insumos"
+              value={formatCurrency(Number(summary?.materialsTotal ?? totals?.materials ?? 0))}
+            />
+            <ExecutiveMetricCard
+              label="Equipamentos"
+              value={formatCurrency(Number(summary?.equipmentTotal ?? totals?.equipment ?? 0))}
+            />
+            <ExecutiveMetricCard
+              label="Logística"
+              value={formatCurrency(Number(summary?.logisticsTotal ?? totals?.logistics ?? 0))}
+            />
+            <ExecutiveMetricCard
+              label="Apoio operacional"
+              value={formatCurrency(Number(summary?.supportTotal ?? totals?.operationalSupport ?? 0))}
+            />
           </Box>
 
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                md: "repeat(2, 1fr)",
-                xl: "repeat(4, 1fr)",
-              },
-              gap: 2,
-            }}
-          >
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  EPIs e uniformes
-                </Typography>
-                <Typography variant="h6" fontWeight={800}>
-                  {formatCurrency(
-                    Number(summary?.episAndUniformsTotal ?? totals?.episAndUniforms ?? 0)
-                  )}
-                </Typography>
-              </CardContent>
-            </Card>
-
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  Materiais de consumo
-                </Typography>
-                <Typography variant="h6" fontWeight={800}>
-                  {formatCurrency(
-                    Number(summary?.consumablesTotal ?? totals?.consumables ?? 0)
-                  )}
-                </Typography>
-              </CardContent>
-            </Card>
-
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  Recorrente
-                </Typography>
-                <Typography variant="h6" fontWeight={800}>
-                  {formatCurrency(
-                    Number(summary?.recurringTotal ?? demandBreakdown?.recurring ?? 0)
-                  )}
-                </Typography>
-              </CardContent>
-            </Card>
-
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  Eventual / sob demanda
-                </Typography>
-                <Typography variant="body2" sx={{ mt: 0.5 }}>
-                  Eventual:{" "}
-                  <strong>
-                    {formatCurrency(
-                      Number(summary?.eventualTotal ?? demandBreakdown?.eventual ?? 0)
-                    )}
-                  </strong>
-                </Typography>
-                <Typography variant="body2">
-                  Sob demanda:{" "}
-                  <strong>
-                    {formatCurrency(
-                      Number(summary?.onDemandTotal ?? demandBreakdown?.onDemand ?? 0)
-                    )}
-                  </strong>
-                </Typography>
-              </CardContent>
-            </Card>
-          </Box>
-
-          <Box sx={{ overflowX: "auto" }}>
-            <Table size="small">
+          <Box sx={{ overflowX: "auto", width: "100%" }}>
+            <Table size="small" sx={{ minWidth: 960 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>
@@ -1146,7 +1015,7 @@ function PersistedCompositionCard({
                 {items.length > 0 ? (
                   items.map((item, index) => (
                     <TableRow key={`${String(item.rowId ?? item.item)}-${index}`}>
-                      <TableCell>
+                      <TableCell sx={{ minWidth: 220 }}>
                         <Stack spacing={0.35}>
                           <Typography variant="body2">
                             {safeString(item.item) || "Item sem nome"}
@@ -1205,6 +1074,30 @@ function PersistedCompositionCard({
               </TableBody>
             </Table>
           </Box>
+
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Chip
+              label={`Recorrente: ${formatCurrency(
+                Number(summary?.recurringTotal ?? demandBreakdown?.recurring ?? 0)
+              )}`}
+              size="small"
+              variant="outlined"
+            />
+            <Chip
+              label={`Eventual: ${formatCurrency(
+                Number(summary?.eventualTotal ?? demandBreakdown?.eventual ?? 0)
+              )}`}
+              size="small"
+              variant="outlined"
+            />
+            <Chip
+              label={`Sob demanda: ${formatCurrency(
+                Number(summary?.onDemandTotal ?? demandBreakdown?.onDemand ?? 0)
+              )}`}
+              size="small"
+              variant="outlined"
+            />
+          </Stack>
         </Stack>
       </CardContent>
     </Card>
@@ -1330,21 +1223,16 @@ export default function SpreadsheetDetail() {
     );
   }, [spreadsheet]);
 
-  const laborCostBreakdown = useMemo(() => {
-    return readLaborCostBreakdown(spreadsheet);
-  }, [spreadsheet]);
-
-  const laborChargesConfig = useMemo(() => {
-    return readLaborChargesConfig(spreadsheet);
-  }, [spreadsheet]);
-
-  const serviceCompositionSummary = useMemo(() => {
-    return readServiceCompositionSummary(spreadsheet);
-  }, [spreadsheet]);
-
-  const serviceCompositionMemoryBundle = useMemo(() => {
-    return readServiceCompositionMemoryBundle(spreadsheet);
-  }, [spreadsheet]);
+  const laborCostBreakdown = useMemo(() => readLaborCostBreakdown(spreadsheet), [spreadsheet]);
+  const laborChargesConfig = useMemo(() => readLaborChargesConfig(spreadsheet), [spreadsheet]);
+  const serviceCompositionSummary = useMemo(
+    () => readServiceCompositionSummary(spreadsheet),
+    [spreadsheet]
+  );
+  const serviceCompositionMemoryBundle = useMemo(
+    () => readServiceCompositionMemoryBundle(spreadsheet),
+    [spreadsheet]
+  );
 
   const mandatoryCostTotal = useMemo(() => {
     if (!spreadsheet) return 0;
@@ -1505,7 +1393,7 @@ export default function SpreadsheetDetail() {
           bgcolor: "#F7F3F8",
           display: "grid",
           placeItems: "center",
-          px: 3,
+          px: 2,
         }}
       >
         <Stack spacing={2} alignItems="center">
@@ -1520,9 +1408,9 @@ export default function SpreadsheetDetail() {
 
   if (state === "error" || !spreadsheet || !editor) {
     return (
-      <Box sx={{ minHeight: "100vh", bgcolor: "#F7F3F8", py: 4 }}>
-        <Container maxWidth="lg">
-          <Stack spacing={3}>
+      <Box sx={{ minHeight: "100vh", bgcolor: "#F7F3F8", py: 2 }}>
+        <Container maxWidth={false} disableGutters sx={{ width: "100%", minWidth: 0 }}>
+          <Stack spacing={3} sx={{ minWidth: 0 }}>
             <Breadcrumbs separator={<ChevronRightIcon fontSize="small" />}>
               <Link component={RouterLink} underline="hover" color="inherit" to="/">
                 Início
@@ -1559,9 +1447,17 @@ export default function SpreadsheetDetail() {
   const readingHints = safeStringArray(spreadsheet.trainingProfile?.readingHints);
 
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "#F7F3F8", py: 4 }}>
-      <Container maxWidth="xl">
-        <Stack spacing={3}>
+    <Box sx={{ minHeight: "100vh", bgcolor: "#F7F3F8", py: 1 }}>
+      <Container
+        maxWidth={false}
+        disableGutters
+        sx={{
+          width: "100%",
+          minWidth: 0,
+          maxWidth: "100%",
+        }}
+      >
+        <Stack spacing={2} sx={{ minWidth: 0 }}>
           <Breadcrumbs separator={<ChevronRightIcon fontSize="small" />}>
             <Link component={RouterLink} underline="hover" color="inherit" to="/">
               Início
@@ -1572,21 +1468,23 @@ export default function SpreadsheetDetail() {
           <Card
             elevation={0}
             sx={{
-              borderRadius: 5,
+              borderRadius: 4,
               background:
                 "linear-gradient(180deg, rgba(238,229,243,1) 0%, rgba(235,226,240,1) 100%)",
               border: "1px solid rgba(142, 90, 181, 0.12)",
+              minWidth: 0,
             }}
           >
-            <CardContent sx={{ p: { xs: 3, md: 4 } }}>
-              <Stack spacing={2.5}>
+            <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+              <Stack spacing={2} sx={{ minWidth: 0 }}>
                 <Stack
                   direction={{ xs: "column", md: "row" }}
                   justifyContent="space-between"
                   alignItems={{ xs: "flex-start", md: "center" }}
                   spacing={2}
+                  sx={{ minWidth: 0 }}
                 >
-                  <Box>
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                       <AutoAwesomeOutlinedIcon
                         sx={{ fontSize: 16, color: "#9C6BC0" }}
@@ -1610,6 +1508,7 @@ export default function SpreadsheetDetail() {
                         fontWeight: 800,
                         color: "#2B2340",
                         lineHeight: 1.15,
+                        wordBreak: "break-word",
                       }}
                     >
                       {spreadsheet.title}
@@ -1619,16 +1518,16 @@ export default function SpreadsheetDetail() {
                       variant="body1"
                       sx={{
                         color: "#6D6186",
-                        mt: 1.5,
-                        lineHeight: 1.8,
-                        maxWidth: 980,
+                        mt: 1.25,
+                        lineHeight: 1.65,
+                        maxWidth: "100%",
                       }}
                     >
                       {spreadsheet.description}
                     </Typography>
                   </Box>
 
-                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
                     <Button
                       component={RouterLink}
                       to="/"
@@ -1703,17 +1602,15 @@ export default function SpreadsheetDetail() {
             severity="info"
             sx={{ borderRadius: 3 }}
           >
-            Esta tela já consome metadata estruturada quando disponível, priorizando
-            leitura persistida de composição de serviços e de blocos laborais para
-            reduzir inferência e preparar o terreno para comparação entre versões,
-            exequibilidade explicável e parecer automatizado.
+            Esta tela já consome metadata estruturada quando disponível.
           </Alert>
 
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" },
+              gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" },
               gap: 2,
+              minWidth: 0,
             }}
           >
             <ExecutiveMetricCard label="Itens da planilha" value={totalItems} />
@@ -1729,13 +1626,14 @@ export default function SpreadsheetDetail() {
               display: "grid",
               gridTemplateColumns: {
                 xs: "1fr",
-                xl: "minmax(0, 1.65fr) minmax(360px, 0.95fr)",
+                xl: "minmax(0, 1.55fr) minmax(320px, 0.95fr)",
               },
-              gap: 3,
+              gap: 2,
               alignItems: "start",
+              minWidth: 0,
             }}
           >
-            <Stack spacing={3}>
+            <Stack spacing={2} sx={{ minWidth: 0 }}>
               {(serviceCompositionSummary || serviceCompositionMemoryBundle) &&
               spreadsheet.modelType === "service_composition" ? (
                 <PersistedCompositionCard
@@ -1745,11 +1643,6 @@ export default function SpreadsheetDetail() {
               ) : null}
 
               <CompactInfoCard title="Leitura persistida de cálculo">
-                <Typography variant="body2" color="text.secondary">
-                  Este quadro privilegia o que já foi persistido em metadata pelos
-                  módulos especializados.
-                </Typography>
-
                 <Typography variant="body2" color="text.secondary">
                   <strong>Labor breakdown persistido:</strong>{" "}
                   {laborCostBreakdown ? "Sim" : "Não"}
@@ -1771,9 +1664,9 @@ export default function SpreadsheetDetail() {
                 </Typography>
               </CompactInfoCard>
 
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+              <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
                 <CardContent>
-                  <Stack spacing={2.5}>
+                  <Stack spacing={2} sx={{ minWidth: 0 }}>
                     <Stack direction="row" spacing={1.25} alignItems="center">
                       <PlaylistAddCheckCircleOutlinedIcon sx={{ color: "#5E35B1" }} />
                       <Typography variant="h6" fontWeight={700}>
@@ -1784,8 +1677,9 @@ export default function SpreadsheetDetail() {
                     <Box
                       sx={{
                         display: "grid",
-                        gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
+                        gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" },
                         gap: 2,
+                        minWidth: 0,
                       }}
                     >
                       <TextField
@@ -1932,9 +1826,9 @@ export default function SpreadsheetDetail() {
                 </CardContent>
               </Card>
 
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+              <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
                 <CardContent>
-                  <Stack spacing={2.5}>
+                  <Stack spacing={2} sx={{ minWidth: 0 }}>
                     <Stack direction="row" spacing={1.25} alignItems="center">
                       <ManageSearchOutlinedIcon sx={{ color: "#1565C0" }} />
                       <Typography variant="h6" fontWeight={700}>
@@ -1945,8 +1839,9 @@ export default function SpreadsheetDetail() {
                     <Box
                       sx={{
                         display: "grid",
-                        gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
+                        gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" },
                         gap: 2,
+                        minWidth: 0,
                       }}
                     >
                       <TextField
@@ -2008,7 +1903,7 @@ export default function SpreadsheetDetail() {
                     </Box>
 
                     <Box sx={{ overflowX: "auto", borderRadius: 3, border: "1px solid #ECE7F1" }}>
-                      <Table size="small">
+                      <Table size="small" sx={{ minWidth: 680 }}>
                         <TableHead>
                           <TableRow>
                             <TableCell>
@@ -2031,7 +1926,7 @@ export default function SpreadsheetDetail() {
                         <TableBody>
                           {laborRows.map((row, index) => (
                             <TableRow key={`${String(row.item)}-${index}`}>
-                              <TableCell>{String(row.item || "")}</TableCell>
+                              <TableCell sx={{ minWidth: 200 }}>{String(row.item || "")}</TableCell>
                               <TableCell>{String(row.categoria || "")}</TableCell>
                               <TableCell align="right">{Number(row.quantidade || 0)}</TableCell>
                               <TableCell align="right">
@@ -2060,9 +1955,9 @@ export default function SpreadsheetDetail() {
                 </CardContent>
               </Card>
 
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+              <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
                 <CardContent>
-                  <Stack spacing={2.5}>
+                  <Stack spacing={2} sx={{ minWidth: 0 }}>
                     <Stack direction="row" spacing={1.25} alignItems="center">
                       <AttachMoneyOutlinedIcon sx={{ color: "#2E7D32" }} />
                       <Typography variant="h6" fontWeight={700}>
@@ -2070,16 +1965,12 @@ export default function SpreadsheetDetail() {
                       </Typography>
                     </Stack>
 
-                    <Typography variant="body2" color="text.secondary">
-                      Este bloco já prioriza leitura de dados persistidos quando o
-                      módulo laboral tiver gerado breakdown estruturado em metadata.
-                    </Typography>
-
                     <Box
                       sx={{
                         display: "grid",
-                        gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
+                        gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" },
                         gap: 2,
+                        minWidth: 0,
                       }}
                     >
                       <TextField
@@ -2152,9 +2043,9 @@ export default function SpreadsheetDetail() {
                 }}
               />
 
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+              <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
                 <CardContent>
-                  <Stack spacing={2.5}>
+                  <Stack spacing={2} sx={{ minWidth: 0 }}>
                     <Stack direction="row" spacing={1.25} alignItems="center">
                       <ViewAgendaOutlinedIcon sx={{ color: "#7B1FA2" }} />
                       <Typography variant="h6" fontWeight={700}>
@@ -2162,21 +2053,16 @@ export default function SpreadsheetDetail() {
                       </Typography>
                     </Stack>
 
-                    <Typography variant="body2" color="text.secondary">
-                      Esta leitura reorganiza os itens atuais da planilha em módulos
-                      técnicos preliminares, aproximando a interface da lógica real da
-                      PCFP e preparando a futura camada de cálculo por módulo.
-                    </Typography>
-
                     <Box
                       sx={{
                         display: "grid",
                         gridTemplateColumns: {
                           xs: "1fr",
-                          md: "repeat(2, 1fr)",
-                          xl: "repeat(3, 1fr)",
+                          sm: "repeat(2, minmax(0, 1fr))",
+                          xl: "repeat(3, minmax(0, 1fr))",
                         },
                         gap: 2,
+                        minWidth: 0,
                       }}
                     >
                       {pcfpModules.map((module) => (
@@ -2184,7 +2070,7 @@ export default function SpreadsheetDetail() {
                       ))}
                     </Box>
 
-                    <Stack spacing={2}>
+                    <Stack spacing={2} sx={{ minWidth: 0 }}>
                       {pcfpModules
                         .filter((module) => module.key !== "module_6")
                         .map((module) => (
@@ -2197,10 +2083,11 @@ export default function SpreadsheetDetail() {
                           borderRadius: 4,
                           borderColor: "rgba(123, 31, 162, 0.16)",
                           backgroundColor: "#F8ECFB",
+                          minWidth: 0,
                         }}
                       >
                         <CardContent>
-                          <Stack spacing={1.5}>
+                          <Stack spacing={1.5} sx={{ minWidth: 0 }}>
                             <Stack direction="row" spacing={1} alignItems="center">
                               <SummarizeOutlinedIcon sx={{ fontSize: 18 }} />
                               <Typography variant="h6" fontWeight={800}>
@@ -2208,55 +2095,33 @@ export default function SpreadsheetDetail() {
                               </Typography>
                             </Stack>
 
-                            <Typography variant="body2" color="text.secondary">
-                              Consolidação preparatória do conjunto da planilha para
-                              leitura gerencial, análise de exequibilidade e futura
-                              emissão de parecer automatizado.
-                            </Typography>
-
                             <Box
                               sx={{
                                 display: "grid",
-                                gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" },
+                                gridTemplateColumns: {
+                                  xs: "1fr",
+                                  md: "repeat(3, minmax(0, 1fr))",
+                                },
                                 gap: 2,
+                                minWidth: 0,
                               }}
                             >
-                              <Card variant="outlined" sx={{ borderRadius: 3 }}>
-                                <CardContent>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Total dos módulos 1 a 5
-                                  </Typography>
-                                  <Typography variant="h6" fontWeight={800}>
-                                    {formatCurrency(
-                                      pcfpModules
-                                        .filter((module) => module.key !== "module_6")
-                                        .reduce((sum, module) => sum + module.total, 0)
-                                    )}
-                                  </Typography>
-                                </CardContent>
-                              </Card>
-
-                              <Card variant="outlined" sx={{ borderRadius: 3 }}>
-                                <CardContent>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Base mensal declarada
-                                  </Typography>
-                                  <Typography variant="h6" fontWeight={800}>
-                                    {formatCurrency(effectiveMonthlyReference)}
-                                  </Typography>
-                                </CardContent>
-                              </Card>
-
-                              <Card variant="outlined" sx={{ borderRadius: 3 }}>
-                                <CardContent>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Saldo preliminar
-                                  </Typography>
-                                  <Typography variant="h6" fontWeight={800}>
-                                    {formatCurrency(executabilityBalance)}
-                                  </Typography>
-                                </CardContent>
-                              </Card>
+                              <ExecutiveMetricCard
+                                label="Total dos módulos 1 a 5"
+                                value={formatCurrency(
+                                  pcfpModules
+                                    .filter((module) => module.key !== "module_6")
+                                    .reduce((sum, module) => sum + module.total, 0)
+                                )}
+                              />
+                              <ExecutiveMetricCard
+                                label="Base mensal declarada"
+                                value={formatCurrency(effectiveMonthlyReference)}
+                              />
+                              <ExecutiveMetricCard
+                                label="Saldo preliminar"
+                                value={formatCurrency(executabilityBalance)}
+                              />
                             </Box>
                           </Stack>
                         </CardContent>
@@ -2266,9 +2131,9 @@ export default function SpreadsheetDetail() {
                 </CardContent>
               </Card>
 
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+              <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
                 <CardContent sx={{ p: 0 }}>
-                  <Box sx={{ px: 3, py: 2.5 }}>
+                  <Box sx={{ px: 2.25, py: 2 }}>
                     <Typography variant="h6" fontWeight={700}>
                       Estrutura inicial da planilha
                     </Typography>
@@ -2279,8 +2144,8 @@ export default function SpreadsheetDetail() {
 
                   <Divider />
 
-                  <Box sx={{ overflowX: "auto" }}>
-                    <Table>
+                  <Box sx={{ overflowX: "auto", width: "100%" }}>
+                    <Table sx={{ minWidth: 820 }}>
                       <TableHead>
                         <TableRow>
                           <TableCell>
@@ -2307,7 +2172,7 @@ export default function SpreadsheetDetail() {
                       <TableBody>
                         {spreadsheet.rows.map((row, index) => (
                           <TableRow key={`${String(row.item)}-${index}`}>
-                            <TableCell>
+                            <TableCell sx={{ minWidth: 240 }}>
                               <Stack spacing={0.4}>
                                 <Typography variant="body2">{String(row.item || "")}</Typography>
                                 {row.memoriaCalculo ? (
@@ -2365,7 +2230,14 @@ export default function SpreadsheetDetail() {
               </Card>
             </Stack>
 
-            <Stack spacing={3} sx={{ position: { xl: "sticky" }, top: { xl: 24 } }}>
+            <Stack
+              spacing={2}
+              sx={{
+                minWidth: 0,
+                position: { xl: "sticky" },
+                top: { xl: 20 },
+              }}
+            >
               <CompactInfoCard title="Resumo executivo">
                 <Typography variant="body2" color="text.secondary">
                   <strong>Tipo do modelo:</strong>{" "}
@@ -2432,13 +2304,6 @@ export default function SpreadsheetDetail() {
                   <strong>Saldo preliminar de exequibilidade:</strong>{" "}
                   {formatCurrency(executabilityBalance)}
                 </Typography>
-
-                <Typography variant="caption" color="text.secondary">
-                  Esta leitura ainda é preparatória. A próxima camada deverá
-                  transformar este quadro em parecer técnico automatizado, com
-                  segregação formal entre custo obrigatório, custo comprobatório,
-                  risco material e diligência recomendada.
-                </Typography>
               </CompactInfoCard>
 
               {laborCostBreakdown || laborChargesConfig ? (
@@ -2468,43 +2333,6 @@ export default function SpreadsheetDetail() {
                   <Typography variant="body2" color="text.secondary">
                     <strong>Total laboral mensal:</strong>{" "}
                     {formatCurrency(Number(laborCostBreakdown?.monthlyLaborTotal || 0))}
-                  </Typography>
-
-                  <Divider />
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>FGTS:</strong>{" "}
-                    {Number(
-                      laborChargesConfig?.fgtsRate ??
-                        laborChargesConfig?.totalChargesPercentage ??
-                        0
-                    ).toFixed(2)}
-                    %
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>INSS:</strong>{" "}
-                    {Number(laborChargesConfig?.inssRate ?? 0).toFixed(2)}%
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Férias:</strong>{" "}
-                    {Number(laborChargesConfig?.vacationProvisionRate ?? 0).toFixed(2)}%
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>13º salário:</strong>{" "}
-                    {Number(laborChargesConfig?.thirteenthSalaryRate ?? 0).toFixed(2)}%
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Encargos efetivos:</strong>{" "}
-                    {Number(
-                      laborChargesConfig?.effectiveChargesRate ??
-                        laborChargesConfig?.totalChargesPercentage ??
-                        0
-                    ).toFixed(2)}
-                    %
                   </Typography>
                 </CompactInfoCard>
               ) : null}
@@ -2614,8 +2442,7 @@ export default function SpreadsheetDetail() {
                 />
 
                 <Typography variant="caption" color="text.secondary">
-                  Este campo já prepara a futura integração com histórico analítico,
-                  decisão interna, parecer consolidado e trilha de auditoria.
+                  Este campo já prepara a futura integração com histórico analítico.
                 </Typography>
               </CompactInfoCard>
             </Stack>
