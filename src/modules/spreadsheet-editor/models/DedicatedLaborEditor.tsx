@@ -26,8 +26,8 @@ import LaborChargesConfigCard from "../components/LaborChargesConfigCard";
 import {
   calculateLaborCost,
   DEFAULT_LABOR_CHARGES_CONFIG,
+  extractLaborChargesConfigMetadata,
   LaborChargesConfig,
-  sanitizeLaborChargesConfig,
 } from "../utils/laborCostCalculator";
 
 import {
@@ -49,6 +49,10 @@ const STATUS_OPTIONS = [
   { value: "Em elaboração", label: "Em elaboração" },
   { value: "Calculado", label: "Calculado" },
 ];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
 function isLaborRow(row: EditorRow) {
   const category = String(row.categoria || "").toLowerCase();
@@ -78,7 +82,7 @@ function normalizeNumberInput(value: string | number) {
     return Number.isFinite(value) ? value : 0;
   }
 
-  const normalized = String(value).replace(/\./g, "").replace(",", ".");
+  const normalized = String(value).trim().replace(/\./g, "").replace(",", ".");
   const parsed = Number(normalized);
 
   return Number.isFinite(parsed) ? parsed : 0;
@@ -103,18 +107,17 @@ function extractLaborRows(rows: EditorRow[]) {
 function extractStoredChargesConfig(
   spreadsheet: SpreadsheetRecord
 ): LaborChargesConfig {
-  const raw =
-    spreadsheet.metadata &&
-    typeof spreadsheet.metadata === "object" &&
-    spreadsheet.metadata.laborChargesConfig &&
-    typeof spreadsheet.metadata.laborChargesConfig === "object"
-      ? (spreadsheet.metadata.laborChargesConfig as Partial<LaborChargesConfig>)
-      : undefined;
+  const metadata = spreadsheet.metadata;
+  if (!isRecord(metadata)) {
+    return { ...DEFAULT_LABOR_CHARGES_CONFIG };
+  }
 
-  return sanitizeLaborChargesConfig(raw || DEFAULT_LABOR_CHARGES_CONFIG);
+  return extractLaborChargesConfigMetadata(metadata["laborChargesConfig"]);
 }
 
-function buildDerivedRows(result: ReturnType<typeof calculateLaborCost>): EditorRow[] {
+function buildDerivedRows(
+  result: ReturnType<typeof calculateLaborCost>
+): EditorRow[] {
   const generatedStatus = "Calculado";
 
   return [
@@ -204,7 +207,7 @@ function buildDerivedRows(result: ReturnType<typeof calculateLaborCost>): Editor
       valorUnitario: Number(result.config.valeTransportePerEmployee.toFixed(2)),
       subtotal: Number(result.valeTransporte.toFixed(2)),
       status: generatedStatus,
-      memoriaCalculo: `Quantidade x benefício por empregado`,
+      memoriaCalculo: "Quantidade x benefício por empregado",
       origem: "motor de benefícios",
       automatico: true,
       trainingTags: ["generated_labor_benefit"],
@@ -217,7 +220,7 @@ function buildDerivedRows(result: ReturnType<typeof calculateLaborCost>): Editor
       valorUnitario: Number(result.config.valeAlimentacaoPerEmployee.toFixed(2)),
       subtotal: Number(result.valeAlimentacao.toFixed(2)),
       status: generatedStatus,
-      memoriaCalculo: `Quantidade x benefício por empregado`,
+      memoriaCalculo: "Quantidade x benefício por empregado",
       origem: "motor de benefícios",
       automatico: true,
       trainingTags: ["generated_labor_benefit"],
@@ -230,7 +233,7 @@ function buildDerivedRows(result: ReturnType<typeof calculateLaborCost>): Editor
       valorUnitario: Number(result.config.otherBenefitsPerEmployee.toFixed(2)),
       subtotal: Number(result.otherBenefits.toFixed(2)),
       status: generatedStatus,
-      memoriaCalculo: `Quantidade x benefício por empregado`,
+      memoriaCalculo: "Quantidade x benefício por empregado",
       origem: "motor de benefícios",
       automatico: true,
       trainingTags: ["generated_labor_benefit"],
@@ -253,7 +256,6 @@ export default function DedicatedLaborEditor({
   const [chargesConfig, setChargesConfig] = useState<LaborChargesConfig>(
     DEFAULT_LABOR_CHARGES_CONFIG
   );
-
   const [feedback, setFeedback] = useState<{
     type: "success" | "error" | null;
     message: string;
@@ -283,11 +285,7 @@ export default function DedicatedLaborEditor({
     });
   }, [totalLabor, totalHeadcount, chargesConfig]);
 
-  function updateRow(
-    index: number,
-    field: keyof EditorRow,
-    value: string
-  ) {
+  function updateRow(index: number, field: keyof EditorRow, value: string) {
     setRows((current) =>
       current.map((row, rowIndex) => {
         if (rowIndex !== index) {
@@ -347,7 +345,19 @@ export default function DedicatedLaborEditor({
         (row) => !isLaborRow(row) && !isDerivedChargeOrBenefitRow(row)
       );
 
-      const derivedRows = buildDerivedRows(laborCost);
+      const recalculatedLaborCost = calculateLaborCost({
+        salaryBaseTotal: sanitizedLaborRows.reduce(
+          (sum, row) => sum + (row.subtotal || 0),
+          0
+        ),
+        quantity: sanitizedLaborRows.reduce(
+          (sum, row) => sum + Number(row.quantidade || 0),
+          0
+        ),
+        config: chargesConfig,
+      });
+
+      const derivedRows = buildDerivedRows(recalculatedLaborCost);
       const rebuiltRows = [...sanitizedLaborRows, ...derivedRows, ...preservedRows];
 
       const monthlyBaseValue = rebuiltRows.reduce(
@@ -369,7 +379,7 @@ export default function DedicatedLaborEditor({
           editorModule: "dedicated_labor",
           lastEditedSection: "labor_rows_and_charges",
           laborChargesConfig: chargesConfig,
-          laborCostBreakdown: laborCost,
+          laborCostBreakdown: recalculatedLaborCost,
         },
       });
 
@@ -506,9 +516,7 @@ export default function DedicatedLaborEditor({
                       <TableCell>
                         <EditableCell
                           value={row.categoria}
-                          onChange={(value) =>
-                            updateRow(index, "categoria", value)
-                          }
+                          onChange={(value) => updateRow(index, "categoria", value)}
                         />
                       </TableCell>
 
@@ -516,9 +524,7 @@ export default function DedicatedLaborEditor({
                         <EditableCell
                           type="number"
                           value={row.quantidade}
-                          onChange={(value) =>
-                            updateRow(index, "quantidade", value)
-                          }
+                          onChange={(value) => updateRow(index, "quantidade", value)}
                           min={0}
                           step={1}
                         />
@@ -528,9 +534,7 @@ export default function DedicatedLaborEditor({
                         <EditableCell
                           type="number"
                           value={row.valorUnitario}
-                          onChange={(value) =>
-                            updateRow(index, "valorUnitario", value)
-                          }
+                          onChange={(value) => updateRow(index, "valorUnitario", value)}
                           min={0}
                           step={0.01}
                         />
@@ -547,9 +551,7 @@ export default function DedicatedLaborEditor({
                           type="select"
                           value={row.status}
                           options={STATUS_OPTIONS}
-                          onChange={(value) =>
-                            updateRow(index, "status", value)
-                          }
+                          onChange={(value) => updateRow(index, "status", value)}
                         />
                       </TableCell>
 
@@ -569,8 +571,8 @@ export default function DedicatedLaborEditor({
                   <TableRow>
                     <TableCell colSpan={7}>
                       <Typography variant="body2" color="text.secondary">
-                        Nenhuma linha de mão de obra encontrada.
-                        Adicione a primeira linha para começar.
+                        Nenhuma linha de mão de obra encontrada. Adicione a primeira
+                        linha para começar.
                       </Typography>
                     </TableCell>
                   </TableRow>
