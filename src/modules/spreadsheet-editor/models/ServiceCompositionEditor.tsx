@@ -20,9 +20,11 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 
 import EditableCell from "../components/EditableCell";
+import ServiceCompositionMemoryCard from "../components/ServiceCompositionMemoryCard";
 import ServiceCompositionSummaryCard from "../components/ServiceCompositionSummaryCard";
 
 import {
+  buildServiceCompositionMemoryBundle,
   buildServiceCompositionRowMemory,
   buildServiceCompositionSummary,
   calculateServiceCompositionItemSubtotal,
@@ -104,14 +106,16 @@ function extractDraftRowsFromSpreadsheetRows(
 ): ServiceCompositionDraftRow[] {
   return rows
     .filter(isManagedServiceCompositionRow)
-    .map((row) =>
-      sanitizeServiceCompositionDraftRow({
+    .map((row) => {
+      const category = inferServiceCompositionCategory(String(row.categoria || ""));
+
+      return sanitizeServiceCompositionDraftRow({
         id:
           typeof row.id === "string"
             ? row.id
             : `svc_${Date.now()}_${Math.random().toString(36).slice(2)}`,
         item: String(row.item || ""),
-        category: inferServiceCompositionCategory(String(row.categoria || "")),
+        category,
         recurrenceType: inferRecurrenceTypeFromPeriodicity("mensal"),
         serviceUnit: "unidade",
         periodicity: "mensal",
@@ -119,21 +123,13 @@ function extractDraftRowsFromSpreadsheetRows(
         unitCost: Number(row.valorUnitario || 0),
         productivityFactor: 1,
         allocationFactor: 1,
-        depreciationMethod:
-          inferServiceCompositionCategory(String(row.categoria || "")) ===
-          "Equipamentos"
-            ? "rateio_linear"
-            : "nao_aplica",
-        usefulLifeMonths:
-          inferServiceCompositionCategory(String(row.categoria || "")) ===
-          "Equipamentos"
-            ? 12
-            : 0,
+        depreciationMethod: category === "Equipamentos" ? "rateio_linear" : "nao_aplica",
+        usefulLifeMonths: category === "Equipamentos" ? 12 : 0,
         status: String(row.status || "Pendente"),
         consumptionBasis: "",
         technicalJustification: row.memoriaCalculo || "",
-      })
-    );
+      });
+    });
 }
 
 function convertDraftRowToSpreadsheetRow(
@@ -190,6 +186,10 @@ export default function ServiceCompositionEditor({
     return buildServiceCompositionSummary(rows);
   }, [rows]);
 
+  const memoryBundle = useMemo(() => {
+    return buildServiceCompositionMemoryBundle(rows);
+  }, [rows]);
+
   const totalHeadcount = useMemo(() => {
     return rows
       .filter((row) => row.category === "Equipe técnica / operacional")
@@ -226,6 +226,11 @@ export default function ServiceCompositionEditor({
           if (!next.usefulLifeMonths || next.usefulLifeMonths <= 0) {
             next.usefulLifeMonths = 12;
           }
+        }
+
+        if (field === "category" && value !== "Equipamentos") {
+          next.depreciationMethod = "nao_aplica";
+          next.usefulLifeMonths = 0;
         }
 
         if (field === "periodicity") {
@@ -299,6 +304,9 @@ export default function ServiceCompositionEditor({
         0
       );
 
+      const nextSummary = buildServiceCompositionSummary(sanitizedRows);
+      const nextMemoryBundle = buildServiceCompositionMemoryBundle(sanitizedRows);
+
       const updated = updateSpreadsheet(spreadsheet.id, {
         rows: rebuiltRows,
         monthlyBaseValue,
@@ -308,7 +316,8 @@ export default function ServiceCompositionEditor({
           editorModule: "service_composition",
           lastEditedSection: "service_composition_rows",
           serviceCompositionDraftRows: sanitizedRows,
-          serviceCompositionSummary: summary,
+          serviceCompositionSummary: nextSummary,
+          serviceCompositionMemoryBundle: nextMemoryBundle,
         },
       });
 
@@ -351,7 +360,7 @@ export default function ServiceCompositionEditor({
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
                 Este bloco permite montar a composição material e operacional do
                 serviço, com recorrência, periodicidade, produtividade,
-                rateio/depreciação, base de consumo e memória técnica por item.
+                rateio/depreciação, base de consumo e justificativa técnica.
               </Typography>
             </Box>
 
@@ -654,6 +663,8 @@ export default function ServiceCompositionEditor({
           </Box>
 
           <ServiceCompositionSummaryCard summary={summary} />
+
+          <ServiceCompositionMemoryCard items={memoryBundle} />
         </Stack>
       </CardContent>
     </Card>
