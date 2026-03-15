@@ -42,6 +42,9 @@ import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import PrecisionManufacturingOutlinedIcon from "@mui/icons-material/PrecisionManufacturingOutlined";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import SummarizeOutlinedIcon from "@mui/icons-material/SummarizeOutlined";
+import CalculateOutlinedIcon from "@mui/icons-material/CalculateOutlined";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
+import SchemaOutlinedIcon from "@mui/icons-material/SchemaOutlined";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import SpreadsheetEditor from "../modules/spreadsheet-editor/SpreadsheetEditor";
 import {
@@ -54,6 +57,7 @@ type LoadState = "loading" | "success" | "error";
 type SaveState = "idle" | "saving" | "success" | "error";
 
 type SpreadsheetDetailRow = {
+  id?: string;
   item: string;
   categoria: string;
   quantidade: number;
@@ -138,6 +142,70 @@ type PcfpModuleDefinition = {
 type PcfpModuleGroup = PcfpModuleDefinition & {
   rows: SpreadsheetDetailRow[];
   total: number;
+};
+
+type LaborChargesConfigMetadata = {
+  employerInssRate: number;
+  fgtsRate: number;
+  ratRate: number;
+  thirdPartyRate: number;
+  vacationProvisionRate: number;
+  thirteenthProvisionRate: number;
+  valeTransportePerEmployee: number;
+  valeAlimentacaoPerEmployee: number;
+  otherBenefitsPerEmployee: number;
+};
+
+type LaborCostBreakdownMetadata = {
+  salaryBaseTotal: number;
+  quantity: number;
+  employerInss: number;
+  fgts: number;
+  rat: number;
+  thirdPartyCharges: number;
+  feriasProvision: number;
+  thirteenthProvision: number;
+  valeTransporte: number;
+  valeAlimentacao: number;
+  otherBenefits: number;
+  totalEncargos: number;
+  totalBenefits: number;
+  custoTotal: number;
+  config?: LaborChargesConfigMetadata;
+};
+
+type ServiceCompositionSummaryMetadata = {
+  itemCount: number;
+  total: number;
+  workforceTotal: number;
+  materialsTotal: number;
+  equipmentTotal: number;
+  logisticsTotal: number;
+  supportTotal: number;
+  recurringTotal: number;
+  eventualTotal: number;
+  onDemandTotal: number;
+};
+
+type ServiceCompositionMemoryItemMetadata = {
+  id: string;
+  item: string;
+  category: string;
+  recurrenceType: string;
+  serviceUnit: string;
+  periodicity: string;
+  quantity: number;
+  unitCost: number;
+  productivityFactor: number;
+  monthlyizationFactor: number;
+  allocationFactor: number;
+  depreciationMethod: string;
+  depreciationFactor: number;
+  usefulLifeMonths: number;
+  subtotal: number;
+  formula: string;
+  consumptionBasis: string;
+  technicalJustification: string;
 };
 
 const DOMAIN_SCENARIO_LABELS: Record<string, string> = {
@@ -241,6 +309,10 @@ function stringifyNumber(value: number | undefined | null) {
 
 function safeString(value: unknown) {
   return typeof value === "string" ? value : "";
+}
+
+function safeObject(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
 }
 
 function getModelLabel(modelType?: string) {
@@ -563,6 +635,128 @@ function buildPcfpModuleGroups(rows: SpreadsheetDetailRow[]): PcfpModuleGroup[] 
   return groups;
 }
 
+function extractLaborChargesConfigMetadata(
+  spreadsheet: SpreadsheetDetailRecord
+): LaborChargesConfigMetadata | null {
+  const metadata = safeObject(spreadsheet.metadata);
+  const config = safeObject(metadata?.laborChargesConfig);
+
+  if (!config) {
+    return null;
+  }
+
+  return {
+    employerInssRate: parseNumber(config.employerInssRate),
+    fgtsRate: parseNumber(config.fgtsRate),
+    ratRate: parseNumber(config.ratRate),
+    thirdPartyRate: parseNumber(config.thirdPartyRate),
+    vacationProvisionRate: parseNumber(config.vacationProvisionRate),
+    thirteenthProvisionRate: parseNumber(config.thirteenthProvisionRate),
+    valeTransportePerEmployee: parseNumber(config.valeTransportePerEmployee),
+    valeAlimentacaoPerEmployee: parseNumber(config.valeAlimentacaoPerEmployee),
+    otherBenefitsPerEmployee: parseNumber(config.otherBenefitsPerEmployee),
+  };
+}
+
+function extractLaborCostBreakdownMetadata(
+  spreadsheet: SpreadsheetDetailRecord
+): LaborCostBreakdownMetadata | null {
+  const metadata = safeObject(spreadsheet.metadata);
+  const breakdown = safeObject(metadata?.laborCostBreakdown);
+
+  if (!breakdown) {
+    return null;
+  }
+
+  return {
+    salaryBaseTotal: parseNumber(breakdown.salaryBaseTotal),
+    quantity: parseNumber(breakdown.quantity),
+    employerInss: parseNumber(breakdown.employerInss),
+    fgts: parseNumber(breakdown.fgts),
+    rat: parseNumber(breakdown.rat),
+    thirdPartyCharges: parseNumber(breakdown.thirdPartyCharges),
+    feriasProvision: parseNumber(breakdown.feriasProvision),
+    thirteenthProvision: parseNumber(breakdown.thirteenthProvision),
+    valeTransporte: parseNumber(breakdown.valeTransporte),
+    valeAlimentacao: parseNumber(breakdown.valeAlimentacao),
+    otherBenefits: parseNumber(breakdown.otherBenefits),
+    totalEncargos: parseNumber(breakdown.totalEncargos),
+    totalBenefits: parseNumber(breakdown.totalBenefits),
+    custoTotal: parseNumber(breakdown.custoTotal),
+    config: extractLaborChargesConfigMetadata(spreadsheet) ?? undefined,
+  };
+}
+
+function extractServiceCompositionSummaryMetadata(
+  spreadsheet: SpreadsheetDetailRecord
+): ServiceCompositionSummaryMetadata | null {
+  const metadata = safeObject(spreadsheet.metadata);
+  const summary = safeObject(metadata?.serviceCompositionSummary);
+
+  if (!summary) {
+    return null;
+  }
+
+  return {
+    itemCount: parseNumber(summary.itemCount),
+    total: parseNumber(summary.total),
+    workforceTotal: parseNumber(summary.workforceTotal),
+    materialsTotal: parseNumber(summary.materialsTotal),
+    equipmentTotal: parseNumber(summary.equipmentTotal),
+    logisticsTotal: parseNumber(summary.logisticsTotal),
+    supportTotal: parseNumber(summary.supportTotal),
+    recurringTotal: parseNumber(summary.recurringTotal),
+    eventualTotal: parseNumber(summary.eventualTotal),
+    onDemandTotal: parseNumber(summary.onDemandTotal),
+  };
+}
+
+function extractServiceCompositionMemoryBundleMetadata(
+  spreadsheet: SpreadsheetDetailRecord
+): ServiceCompositionMemoryItemMetadata[] {
+  const metadata = safeObject(spreadsheet.metadata);
+  const bundle = metadata?.serviceCompositionMemoryBundle;
+
+  if (!Array.isArray(bundle)) {
+    return [];
+  }
+
+  return bundle.map((item, index) => {
+    const raw = safeObject(item) ?? {};
+    return {
+      id: safeString(raw.id) || `memory_${index}`,
+      item: safeString(raw.item),
+      category: safeString(raw.category),
+      recurrenceType: safeString(raw.recurrenceType),
+      serviceUnit: safeString(raw.serviceUnit),
+      periodicity: safeString(raw.periodicity),
+      quantity: parseNumber(raw.quantity),
+      unitCost: parseNumber(raw.unitCost),
+      productivityFactor: parseNumber(raw.productivityFactor),
+      monthlyizationFactor: parseNumber(raw.monthlyizationFactor),
+      allocationFactor: parseNumber(raw.allocationFactor),
+      depreciationMethod: safeString(raw.depreciationMethod),
+      depreciationFactor: parseNumber(raw.depreciationFactor),
+      usefulLifeMonths: parseNumber(raw.usefulLifeMonths),
+      subtotal: parseNumber(raw.subtotal),
+      formula: safeString(raw.formula),
+      consumptionBasis: safeString(raw.consumptionBasis),
+      technicalJustification: safeString(raw.technicalJustification),
+    };
+  });
+}
+
+function labelDepreciationMethod(value?: string) {
+  switch (value) {
+    case "rateio_linear":
+      return "Rateio linear";
+    case "nao_aplica":
+      return "Não se aplica";
+    default:
+      return value || "Não informado";
+  }
+}
+
 function ModuleSummaryCard({
   module,
 }: {
@@ -700,6 +894,361 @@ function ModuleDetailCard({
             </TableBody>
           </Table>
         </Box>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PersistedLaborBreakdownCard({
+  breakdown,
+  config,
+}: {
+  breakdown: LaborCostBreakdownMetadata;
+  config: LaborChargesConfigMetadata | null;
+}) {
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 4 }}>
+      <CardContent>
+        <Stack spacing={2}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <CalculateOutlinedIcon sx={{ fontSize: 18 }} />
+            <Typography variant="h6" fontWeight={700}>
+              Memória técnica — encargos e benefícios
+            </Typography>
+          </Stack>
+
+          <Typography variant="body2" color="text.secondary">
+            Estrutura consolidada persistida pelo editor de dedicação exclusiva.
+          </Typography>
+
+          <Divider />
+
+          <Typography variant="body2" color="text.secondary">
+            Salários-base: <strong>{formatCurrency(breakdown.salaryBaseTotal)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            INSS patronal: <strong>{formatCurrency(breakdown.employerInss)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            FGTS: <strong>{formatCurrency(breakdown.fgts)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            RAT / GILRAT: <strong>{formatCurrency(breakdown.rat)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Terceiros: <strong>{formatCurrency(breakdown.thirdPartyCharges)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Provisão de férias: <strong>{formatCurrency(breakdown.feriasProvision)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Provisão de 13º: <strong>{formatCurrency(breakdown.thirteenthProvision)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Vale-transporte: <strong>{formatCurrency(breakdown.valeTransporte)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Vale-alimentação: <strong>{formatCurrency(breakdown.valeAlimentacao)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Outros benefícios: <strong>{formatCurrency(breakdown.otherBenefits)}</strong>
+          </Typography>
+
+          <Divider />
+
+          <Typography variant="body2" color="text.secondary">
+            Total de encargos: <strong>{formatCurrency(breakdown.totalEncargos)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Total de benefícios: <strong>{formatCurrency(breakdown.totalBenefits)}</strong>
+          </Typography>
+          <Typography variant="h6" fontWeight={800}>
+            Custo consolidado: {formatCurrency(breakdown.custoTotal)}
+          </Typography>
+
+          {config ? (
+            <>
+              <Divider />
+              <Typography variant="subtitle2" fontWeight={700}>
+                Parâmetros aplicados
+              </Typography>
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
+                  gap: 1.5,
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  INSS: <strong>{config.employerInssRate}%</strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  FGTS: <strong>{config.fgtsRate}%</strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  RAT: <strong>{config.ratRate}%</strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Terceiros: <strong>{config.thirdPartyRate}%</strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Férias: <strong>{config.vacationProvisionRate}%</strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  13º: <strong>{config.thirteenthProvisionRate}%</strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  VT por empregado: <strong>{formatCurrency(config.valeTransportePerEmployee)}</strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  VA por empregado: <strong>{formatCurrency(config.valeAlimentacaoPerEmployee)}</strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Outros benefícios por empregado:{" "}
+                  <strong>{formatCurrency(config.otherBenefitsPerEmployee)}</strong>
+                </Typography>
+              </Box>
+            </>
+          ) : null}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PersistedServiceCompositionSummaryCard({
+  summary,
+}: {
+  summary: ServiceCompositionSummaryMetadata;
+}) {
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 4 }}>
+      <CardContent>
+        <Stack spacing={2}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <SchemaOutlinedIcon sx={{ fontSize: 18 }} />
+            <Typography variant="h6" fontWeight={700}>
+              Memória técnica — síntese da composição
+            </Typography>
+          </Stack>
+
+          <Typography variant="body2" color="text.secondary">
+            Consolidação persistida do editor de composição de serviços.
+          </Typography>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
+              gap: 2,
+            }}
+          >
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  Itens gerenciados
+                </Typography>
+                <Typography variant="h5" fontWeight={800}>
+                  {summary.itemCount}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  Total consolidado
+                </Typography>
+                <Typography variant="h5" fontWeight={800}>
+                  {formatCurrency(summary.total)}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Box>
+
+          <Divider />
+
+          <Typography variant="subtitle2" fontWeight={700}>
+            Totais por bloco
+          </Typography>
+
+          <Typography variant="body2" color="text.secondary">
+            Equipe técnica / operacional:{" "}
+            <strong>{formatCurrency(summary.workforceTotal)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Materiais e insumos:{" "}
+            <strong>{formatCurrency(summary.materialsTotal)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Equipamentos: <strong>{formatCurrency(summary.equipmentTotal)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Logística operacional:{" "}
+            <strong>{formatCurrency(summary.logisticsTotal)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Apoio operacional: <strong>{formatCurrency(summary.supportTotal)}</strong>
+          </Typography>
+
+          <Divider />
+
+          <Typography variant="subtitle2" fontWeight={700}>
+            Totais por recorrência
+          </Typography>
+
+          <Typography variant="body2" color="text.secondary">
+            Recorrente: <strong>{formatCurrency(summary.recurringTotal)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Eventual: <strong>{formatCurrency(summary.eventualTotal)}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Sob demanda: <strong>{formatCurrency(summary.onDemandTotal)}</strong>
+          </Typography>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PersistedServiceCompositionMemoryCard({
+  items,
+}: {
+  items: ServiceCompositionMemoryItemMetadata[];
+}) {
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 4 }}>
+      <CardContent>
+        <Stack spacing={2}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <FactCheckOutlinedIcon sx={{ fontSize: 18 }} />
+            <Typography variant="h6" fontWeight={700}>
+              Memória auditável item a item
+            </Typography>
+          </Stack>
+
+          <Typography variant="body2" color="text.secondary">
+            Fórmula aplicada, fatores de periodicidade, rateio/depreciação,
+            base de consumo e justificativa técnica persistidos no editor.
+          </Typography>
+
+          {items.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              Nenhuma memória técnica persistida foi encontrada.
+            </Typography>
+          ) : (
+            <Stack spacing={2}>
+              {items.map((item) => (
+                <Card key={item.id} variant="outlined" sx={{ borderRadius: 3 }}>
+                  <CardContent>
+                    <Stack spacing={1.5}>
+                      <Stack
+                        direction={{ xs: "column", md: "row" }}
+                        justifyContent="space-between"
+                        alignItems={{ xs: "flex-start", md: "center" }}
+                        spacing={1}
+                      >
+                        <Box>
+                          <Typography variant="subtitle1" fontWeight={800}>
+                            {item.item}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {item.category}
+                          </Typography>
+                        </Box>
+
+                        <Typography variant="subtitle1" fontWeight={800}>
+                          {formatCurrency(item.subtotal)}
+                        </Typography>
+                      </Stack>
+
+                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Chip size="small" label={`Recorrência: ${item.recurrenceType}`} />
+                        <Chip size="small" label={`Periodicidade: ${item.periodicity}`} />
+                        <Chip size="small" label={`Unidade: ${item.serviceUnit}`} />
+                        <Chip
+                          size="small"
+                          label={`Depreciação: ${labelDepreciationMethod(item.depreciationMethod)}`}
+                        />
+                      </Stack>
+
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" },
+                          gap: 1.5,
+                        }}
+                      >
+                        <Typography variant="body2" color="text.secondary">
+                          Quantidade: <strong>{item.quantity}</strong>
+                        </Typography>
+
+                        <Typography variant="body2" color="text.secondary">
+                          Custo unitário: <strong>{formatCurrency(item.unitCost)}</strong>
+                        </Typography>
+
+                        <Typography variant="body2" color="text.secondary">
+                          Fator produtividade: <strong>{item.productivityFactor}</strong>
+                        </Typography>
+
+                        <Typography variant="body2" color="text.secondary">
+                          Fator mensal: <strong>{item.monthlyizationFactor}</strong>
+                        </Typography>
+
+                        <Typography variant="body2" color="text.secondary">
+                          Rateio contratual: <strong>{item.allocationFactor}</strong>
+                        </Typography>
+
+                        <Typography variant="body2" color="text.secondary">
+                          Fator depreciação: <strong>{item.depreciationFactor}</strong>
+                        </Typography>
+                      </Box>
+
+                      {item.usefulLifeMonths > 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          Vida útil considerada: <strong>{item.usefulLifeMonths} mês(es)</strong>
+                        </Typography>
+                      ) : null}
+
+                      <Box>
+                        <Typography variant="body2" fontWeight={700}>
+                          Fórmula aplicada
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {item.formula}
+                        </Typography>
+                      </Box>
+
+                      {item.consumptionBasis ? (
+                        <Box>
+                          <Typography variant="body2" fontWeight={700}>
+                            Base de consumo
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {item.consumptionBasis}
+                          </Typography>
+                        </Box>
+                      ) : null}
+
+                      {item.technicalJustification ? (
+                        <Box>
+                          <Typography variant="body2" fontWeight={700}>
+                            Justificativa técnica
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {item.technicalJustification}
+                          </Typography>
+                        </Box>
+                      ) : null}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ))}
+            </Stack>
+          )}
+        </Stack>
       </CardContent>
     </Card>
   );
@@ -864,6 +1413,26 @@ export default function SpreadsheetDetail() {
   const pcfpModules = useMemo(() => {
     if (!spreadsheet) return [];
     return buildPcfpModuleGroups(spreadsheet.rows);
+  }, [spreadsheet]);
+
+  const persistedLaborChargesConfig = useMemo(() => {
+    if (!spreadsheet) return null;
+    return extractLaborChargesConfigMetadata(spreadsheet);
+  }, [spreadsheet]);
+
+  const persistedLaborBreakdown = useMemo(() => {
+    if (!spreadsheet) return null;
+    return extractLaborCostBreakdownMetadata(spreadsheet);
+  }, [spreadsheet]);
+
+  const persistedServiceCompositionSummary = useMemo(() => {
+    if (!spreadsheet) return null;
+    return extractServiceCompositionSummaryMetadata(spreadsheet);
+  }, [spreadsheet]);
+
+  const persistedServiceCompositionMemoryBundle = useMemo(() => {
+    if (!spreadsheet) return [];
+    return extractServiceCompositionMemoryBundleMetadata(spreadsheet);
   }, [spreadsheet]);
 
   function updateEditorField(field: keyof EditorState, value: string) {
@@ -1134,9 +1703,9 @@ export default function SpreadsheetDetail() {
             severity="info"
             sx={{ borderRadius: 3 }}
           >
-            Esta tela já está na etapa de editor orientado por domínio e agora passa
-            a exibir uma estrutura modular preliminar da PCFP, preparando a próxima
-            fase do motor de cálculo e da análise técnica automatizada.
+            Esta tela já está na etapa de editor orientado por domínio e agora também
+            lê a memória técnica persistida no <strong>metadata</strong>, preparando a
+            próxima fase do motor de cálculo, da explicabilidade e do parecer técnico.
           </Alert>
 
           <Box
@@ -1684,6 +2253,28 @@ export default function SpreadsheetDetail() {
                 }}
               />
 
+              {spreadsheet.modelType === "service_composition" &&
+              persistedServiceCompositionSummary ? (
+                <PersistedServiceCompositionSummaryCard
+                  summary={persistedServiceCompositionSummary}
+                />
+              ) : null}
+
+              {spreadsheet.modelType === "service_composition" &&
+              persistedServiceCompositionMemoryBundle.length > 0 ? (
+                <PersistedServiceCompositionMemoryCard
+                  items={persistedServiceCompositionMemoryBundle}
+                />
+              ) : null}
+
+              {spreadsheet.modelType === "dedicated_labor" &&
+              persistedLaborBreakdown ? (
+                <PersistedLaborBreakdownCard
+                  breakdown={persistedLaborBreakdown}
+                  config={persistedLaborChargesConfig}
+                />
+              ) : null}
+
               <Card variant="outlined" sx={{ borderRadius: 4 }}>
                 <CardContent sx={{ p: 0 }}>
                   <Box sx={{ px: 3, py: 2.5 }}>
@@ -1753,12 +2344,16 @@ export default function SpreadsheetDetail() {
                                       ? "#FFF3E0"
                                       : row.status === "Exemplo do domínio"
                                       ? "#E3F2FD"
+                                      : row.status === "Calculado"
+                                      ? "#F3E5F5"
                                       : "#E7F6EC",
                                   color:
                                     row.status === "Pendente"
                                       ? "#EF6C00"
                                       : row.status === "Exemplo do domínio"
                                       ? "#1565C0"
+                                      : row.status === "Calculado"
+                                      ? "#7B1FA2"
                                       : "#2E7D32",
                                   fontWeight: 700,
                                 }}
@@ -1914,6 +2509,21 @@ export default function SpreadsheetDetail() {
                   </Stack>
                 </CardContent>
               </Card>
+
+              {spreadsheet.modelType === "service_composition" &&
+              persistedServiceCompositionSummary ? (
+                <PersistedServiceCompositionSummaryCard
+                  summary={persistedServiceCompositionSummary}
+                />
+              ) : null}
+
+              {spreadsheet.modelType === "dedicated_labor" &&
+              persistedLaborBreakdown ? (
+                <PersistedLaborBreakdownCard
+                  breakdown={persistedLaborBreakdown}
+                  config={persistedLaborChargesConfig}
+                />
+              ) : null}
 
               <Card variant="outlined" sx={{ borderRadius: 4 }}>
                 <CardContent>
