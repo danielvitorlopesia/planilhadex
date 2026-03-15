@@ -37,18 +37,131 @@ const muiTheme = createTheme({
   },
 
   shape: {
-    borderRadius: 14,
+    borderRadius: 12,
   },
 
   typography: {
     fontFamily: ["Inter", "Roboto", "Helvetica", "Arial", "sans-serif"].join(","),
+    h1: { fontSize: "28px", fontWeight: 700 },
+    h2: { fontSize: "24px", fontWeight: 700 },
+    h3: { fontSize: "20px", fontWeight: 700 },
+    h4: { fontSize: "17px", fontWeight: 700 },
+    h5: { fontSize: "15px", fontWeight: 700 },
+    h6: { fontSize: "14px", fontWeight: 700 },
+    body1: { fontSize: "14px" },
+    body2: { fontSize: "13px" },
+    subtitle1: { fontSize: "14px" },
+    subtitle2: { fontSize: "13px" },
+    caption: { fontSize: "12px" },
+    button: {
+      fontSize: "12px",
+      fontWeight: 700,
+      textTransform: "none",
+    },
+  },
 
-    h1: { fontSize: "32px", fontWeight: 700 },
-    h2: { fontSize: "26px", fontWeight: 700 },
-    h3: { fontSize: "22px", fontWeight: 700 },
-    h4: { fontSize: "18px", fontWeight: 600 },
-    body1: { fontSize: "15px" },
-    body2: { fontSize: "14px" },
+  components: {
+    MuiContainer: {
+      styleOverrides: {
+        root: {
+          paddingLeft: "12px",
+          paddingRight: "12px",
+          "@media (min-width:600px)": {
+            paddingLeft: "16px",
+            paddingRight: "16px",
+          },
+        },
+      },
+    },
+
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+        },
+      },
+    },
+
+    MuiCardContent: {
+      styleOverrides: {
+        root: {
+          padding: 18,
+          "&:last-child": {
+            paddingBottom: 18,
+          },
+        },
+      },
+    },
+
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          paddingTop: 8,
+          paddingBottom: 8,
+          paddingLeft: 14,
+          paddingRight: 14,
+          minHeight: 38,
+        },
+      },
+    },
+
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          fontSize: 12,
+          height: 28,
+        },
+      },
+    },
+
+    MuiTextField: {
+      defaultProps: {
+        size: "small",
+      },
+    },
+
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          fontSize: 14,
+        },
+        input: {
+          paddingTop: 10,
+          paddingBottom: 10,
+        },
+      },
+    },
+
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          fontSize: 13,
+        },
+      },
+    },
+
+    MuiTableCell: {
+      styleOverrides: {
+        root: {
+          fontSize: 13,
+          paddingTop: 10,
+          paddingBottom: 10,
+        },
+        head: {
+          fontWeight: 700,
+        },
+      },
+    },
+
+    MuiToolbar: {
+      styleOverrides: {
+        root: {
+          minHeight: 64,
+        },
+      },
+    },
   },
 });
 
@@ -86,7 +199,7 @@ const radius: AppTheme["radius"] = {
   sm: "8px",
   md: "12px",
   lg: "16px",
-  xl: "22px",
+  xl: "20px",
 };
 
 export const theme: AppTheme = Object.assign(muiTheme, {
@@ -95,31 +208,29 @@ export const theme: AppTheme = Object.assign(muiTheme, {
 });
 
 export const commonStyles: Record<string, CSSProperties> = {
-
   page: {
     background: "#F7F3F8",
     minHeight: "100vh",
-    padding: "28px",
+    padding: "20px",
   },
 
-  /* LARGURA GLOBAL DO SISTEMA */
   container: {
-    maxWidth: "1600px",
+    maxWidth: "100%",
     margin: "0 auto",
     width: "100%",
   },
 
   backLink: {
     display: "inline-block",
-    marginBottom: "14px",
+    marginBottom: "12px",
     color: theme.colors.primaryDark,
     textDecoration: "none",
     fontWeight: 600,
   },
 
   sectionTitle: {
-    margin: "0 0 10px 0",
-    fontSize: "18px",
+    margin: "0 0 8px 0",
+    fontSize: "17px",
     fontWeight: 700,
     color: theme.colors.textStrong,
   },
@@ -128,18 +239,18 @@ export const commonStyles: Record<string, CSSProperties> = {
     background: theme.colors.white,
     border: `1px solid ${theme.colors.primaryBorder}`,
     borderRadius: theme.radius.xl,
-    padding: "22px",
+    padding: "18px",
   },
 
   cardOverline: {
     margin: "0 0 6px 0",
-    fontSize: "13px",
+    fontSize: "12px",
     color: theme.colors.textMuted,
   },
 
   cardTitle: {
     margin: "0 0 8px 0",
-    fontSize: "20px",
+    fontSize: "18px",
     color: theme.colors.textStrong,
     fontWeight: 700,
   },
@@ -148,14 +259,14 @@ export const commonStyles: Record<string, CSSProperties> = {
     margin: 0,
     color: theme.colors.textSoft,
     fontSize: "14px",
-    lineHeight: 1.5,
+    lineHeight: 1.45,
   },
 
   buttonPrimary: {
     background: theme.palette.primary.main,
     color: "#FFFFFF",
     border: "none",
-    padding: "10px 18px",
+    padding: "9px 16px",
     borderRadius: theme.radius.md,
     fontWeight: 700,
     cursor: "pointer",
@@ -165,21 +276,21 @@ export const commonStyles: Record<string, CSSProperties> = {
     background: theme.palette.primary.main,
     color: "#FFFFFF",
     border: "none",
-    padding: "10px 18px",
+    padding: "9px 16px",
     borderRadius: theme.radius.md,
     fontWeight: 700,
     cursor: "pointer",
   },
 
   emptyState: {
-    padding: "30px",
+    padding: "24px",
     textAlign: "center",
     color: theme.colors.textMedium,
   },
 
   message: {
-    marginTop: "10px",
-    fontSize: "13px",
+    marginTop: "8px",
+    fontSize: "12px",
   },
 };
 
