@@ -2,7 +2,7 @@ import {
   DomainScenarioKey,
   LocalSpreadsheet,
   SpreadsheetCreationDraft,
-  SpreadsheetRow,
+  SpreadsheetRow as BaseSpreadsheetRow,
   SpreadsheetTrainingProfile,
 } from "../types/spreadsheetModels";
 import {
@@ -11,7 +11,14 @@ import {
 } from "../mocks/domainScenarioCatalog";
 import { getModelTemplateByType } from "../mocks/modelTemplatesMocks";
 
-export type SpreadsheetRecord = LocalSpreadsheet;
+export type SpreadsheetRow = BaseSpreadsheetRow & {
+  metadata?: Record<string, unknown>;
+};
+
+export type SpreadsheetRecord = Omit<LocalSpreadsheet, "rows" | "metadata"> & {
+  rows: SpreadsheetRow[];
+  metadata?: Record<string, unknown>;
+};
 
 export type SpreadsheetEditorDraft = {
   contractingAgency?: string;
@@ -49,6 +56,10 @@ function hasBrowserStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function safeReadStorage(): SpreadsheetRecord[] {
   if (!hasBrowserStorage()) {
     return [];
@@ -61,7 +72,7 @@ function safeReadStorage(): SpreadsheetRecord[] {
 
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? (parsed as SpreadsheetRecord[]) : [];
   } catch {
     return [];
   }
@@ -115,6 +126,7 @@ function cloneRows(rows: SpreadsheetRow[]): SpreadsheetRow[] {
     id: row.id ?? buildId("row"),
     subtotal: Number((row.quantidade * row.valorUnitario).toFixed(2)),
     trainingTags: [...(row.trainingTags ?? [])],
+    metadata: isRecord(row.metadata) ? { ...row.metadata } : undefined,
   }));
 }
 
@@ -163,7 +175,7 @@ function buildDescriptionFromDraft(draft: SpreadsheetCreationDraft) {
 
 function buildRowsForDraft(draft: SpreadsheetCreationDraft): SpreadsheetRow[] {
   const scenario = getDomainScenario(draft.domainScenario);
-  const baseRows = scenario?.seedRows ?? [];
+  const baseRows = (scenario?.seedRows ?? []) as SpreadsheetRow[];
 
   if (!baseRows.length) {
     return [];
@@ -214,7 +226,7 @@ function withUpdatedTimestamp(spreadsheet: SpreadsheetRecord): SpreadsheetRecord
 
 function buildSeedExample(domainScenarioKey: DomainScenarioKey): SpreadsheetRecord {
   const scenario = DOMAIN_SCENARIOS[domainScenarioKey];
-  const rows = cloneRows(scenario.seedRows);
+  const rows = cloneRows((scenario.seedRows ?? []) as SpreadsheetRow[]);
 
   return {
     id: `seed_${domainScenarioKey}`,
@@ -283,7 +295,9 @@ function buildInitialEditorDraftFromCreation(
       String(draft.objectDescription || "") || String(draft.description || ""),
     domainScenario: String(draft.domainScenario || ""),
     headcount:
-      draft.headcount !== undefined ? draft.headcount : rows.reduce((sum, row) => sum + row.quantidade, 0),
+      draft.headcount !== undefined
+        ? draft.headcount
+        : rows.reduce((sum, row) => sum + row.quantidade, 0),
     monthlyBaseValue:
       draft.monthlyBaseValue !== undefined
         ? draft.monthlyBaseValue
@@ -448,9 +462,19 @@ export function updateSpreadsheet(
     return null;
   }
 
+  const nextRows = Array.isArray(patch.rows) ? patch.rows : current.rows;
+  const recalculatedMonthlyBaseValue =
+    patch.monthlyBaseValue !== undefined
+      ? Number(patch.monthlyBaseValue)
+      : nextRows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
+
   const next: SpreadsheetRecord = {
     ...current,
     ...patch,
+    rows: nextRows,
+    monthlyBaseValue: Number.isFinite(recalculatedMonthlyBaseValue)
+      ? recalculatedMonthlyBaseValue
+      : current.monthlyBaseValue,
     metadata: {
       ...(current.metadata ?? {}),
       ...(patch.metadata ?? {}),
