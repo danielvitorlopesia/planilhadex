@@ -712,6 +712,48 @@ function buildPcfpModuleGroups(rows: SpreadsheetDetailRow[]): PcfpModuleGroup[] 
   return groups;
 }
 
+function ExecutiveMetricCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 4, height: "100%" }}>
+      <CardContent>
+        <Typography variant="body2" color="text.secondary">
+          {label}
+        </Typography>
+        <Typography variant="h4" fontWeight={800} color="#241B3A">
+          {value}
+        </Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CompactInfoCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 4, height: "100%" }}>
+      <CardContent>
+        <Stack spacing={1.25}>
+          <Typography variant="h6" fontWeight={700}>
+            {title}
+          </Typography>
+          {children}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ModuleSummaryCard({ module }: { module: PcfpModuleGroup }) {
   return (
     <Card
@@ -854,7 +896,15 @@ function PersistedCompositionCard({
   }
 
   return (
-    <Card variant="outlined" sx={{ borderRadius: 4 }}>
+    <Card
+      variant="outlined"
+      sx={{
+        borderRadius: 4,
+        borderColor: "rgba(46, 125, 50, 0.18)",
+        background:
+          "linear-gradient(180deg, rgba(239,248,240,1) 0%, rgba(255,255,255,1) 100%)",
+      }}
+    >
       <CardContent>
         <Stack spacing={2.5}>
           <Stack direction="row" spacing={1.25} alignItems="center">
@@ -873,7 +923,11 @@ function PersistedCompositionCard({
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" },
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(2, 1fr)",
+                xl: "repeat(4, 1fr)",
+              },
               gap: 2,
             }}
           >
@@ -894,9 +948,7 @@ function PersistedCompositionCard({
                   Total persistido
                 </Typography>
                 <Typography variant="h6" fontWeight={800}>
-                  {formatCurrency(
-                    Number(summary?.total ?? totals?.grandTotal ?? 0)
-                  )}
+                  {formatCurrency(Number(summary?.total ?? totals?.grandTotal ?? 0))}
                 </Typography>
               </CardContent>
             </Card>
@@ -913,12 +965,27 @@ function PersistedCompositionCard({
                 </Typography>
               </CardContent>
             </Card>
+
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  Tipo de bloco
+                </Typography>
+                <Typography variant="body2" fontWeight={700} sx={{ mt: 1 }}>
+                  {safeString(memoryBundle?.editorModule) || "service_composition"}
+                </Typography>
+              </CardContent>
+            </Card>
           </Box>
 
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)", xl: "repeat(4, 1fr)" },
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(2, 1fr)",
+                xl: "repeat(4, 1fr)",
+              },
               gap: 2,
             }}
           >
@@ -928,9 +995,7 @@ function PersistedCompositionCard({
                   Materiais e insumos
                 </Typography>
                 <Typography variant="h6" fontWeight={800}>
-                  {formatCurrency(
-                    Number(summary?.materialsTotal ?? totals?.materials ?? 0)
-                  )}
+                  {formatCurrency(Number(summary?.materialsTotal ?? totals?.materials ?? 0))}
                 </Typography>
               </CardContent>
             </Card>
@@ -941,9 +1006,7 @@ function PersistedCompositionCard({
                   Equipamentos
                 </Typography>
                 <Typography variant="h6" fontWeight={800}>
-                  {formatCurrency(
-                    Number(summary?.equipmentTotal ?? totals?.equipment ?? 0)
-                  )}
+                  {formatCurrency(Number(summary?.equipmentTotal ?? totals?.equipment ?? 0))}
                 </Typography>
               </CardContent>
             </Card>
@@ -954,9 +1017,7 @@ function PersistedCompositionCard({
                   Logística
                 </Typography>
                 <Typography variant="h6" fontWeight={800}>
-                  {formatCurrency(
-                    Number(summary?.logisticsTotal ?? totals?.logistics ?? 0)
-                  )}
+                  {formatCurrency(Number(summary?.logisticsTotal ?? totals?.logistics ?? 0))}
                 </Typography>
               </CardContent>
             </Card>
@@ -973,7 +1034,19 @@ function PersistedCompositionCard({
                 </Typography>
               </CardContent>
             </Card>
+          </Box>
 
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(2, 1fr)",
+                xl: "repeat(4, 1fr)",
+              },
+              gap: 2,
+            }}
+          >
             <Card variant="outlined" sx={{ borderRadius: 3 }}>
               <CardContent>
                 <Typography variant="caption" color="text.secondary">
@@ -1643,48 +1716,61 @@ export default function SpreadsheetDetail() {
               gap: 2,
             }}
           >
-            <Card variant="outlined" sx={{ borderRadius: 4 }}>
-              <CardContent>
-                <Typography variant="body2" color="text.secondary">
-                  Itens da planilha
-                </Typography>
-                <Typography variant="h4" fontWeight={800} color="#241B3A">
-                  {totalItems}
-                </Typography>
-              </CardContent>
-            </Card>
-
-            <Card variant="outlined" sx={{ borderRadius: 4 }}>
-              <CardContent>
-                <Typography variant="body2" color="text.secondary">
-                  Itens pendentes
-                </Typography>
-                <Typography variant="h4" fontWeight={800} color="#241B3A">
-                  {pendingItems}
-                </Typography>
-              </CardContent>
-            </Card>
-
-            <Card variant="outlined" sx={{ borderRadius: 4 }}>
-              <CardContent>
-                <Typography variant="body2" color="text.secondary">
-                  Valor total estimado
-                </Typography>
-                <Typography variant="h4" fontWeight={800} color="#241B3A">
-                  {formatCurrency(totalValue)}
-                </Typography>
-              </CardContent>
-            </Card>
+            <ExecutiveMetricCard label="Itens da planilha" value={totalItems} />
+            <ExecutiveMetricCard label="Itens pendentes" value={pendingItems} />
+            <ExecutiveMetricCard
+              label="Valor total estimado"
+              value={formatCurrency(totalValue)}
+            />
           </Box>
 
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 2fr) minmax(340px, 1fr)" },
+              gridTemplateColumns: {
+                xs: "1fr",
+                xl: "minmax(0, 1.65fr) minmax(360px, 0.95fr)",
+              },
               gap: 3,
+              alignItems: "start",
             }}
           >
             <Stack spacing={3}>
+              {(serviceCompositionSummary || serviceCompositionMemoryBundle) &&
+              spreadsheet.modelType === "service_composition" ? (
+                <PersistedCompositionCard
+                  summary={serviceCompositionSummary}
+                  memoryBundle={serviceCompositionMemoryBundle}
+                />
+              ) : null}
+
+              <CompactInfoCard title="Leitura persistida de cálculo">
+                <Typography variant="body2" color="text.secondary">
+                  Este quadro privilegia o que já foi persistido em metadata pelos
+                  módulos especializados.
+                </Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Labor breakdown persistido:</strong>{" "}
+                  {laborCostBreakdown ? "Sim" : "Não"}
+                </Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Configuração de encargos persistida:</strong>{" "}
+                  {laborChargesConfig ? "Sim" : "Não"}
+                </Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Resumo da composição persistido:</strong>{" "}
+                  {serviceCompositionSummary ? "Sim" : "Não"}
+                </Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Memória técnica da composição:</strong>{" "}
+                  {serviceCompositionMemoryBundle ? "Sim" : "Não"}
+                </Typography>
+              </CompactInfoCard>
+
               <Card variant="outlined" sx={{ borderRadius: 4 }}>
                 <CardContent>
                   <Stack spacing={2.5}>
@@ -2056,13 +2142,15 @@ export default function SpreadsheetDetail() {
                 </CardContent>
               </Card>
 
-              {(serviceCompositionSummary || serviceCompositionMemoryBundle) &&
-              spreadsheet.modelType === "service_composition" ? (
-                <PersistedCompositionCard
-                  summary={serviceCompositionSummary}
-                  memoryBundle={serviceCompositionMemoryBundle}
-                />
-              ) : null}
+              <SpreadsheetEditor
+                spreadsheet={spreadsheet}
+                onSpreadsheetUpdated={(updated) => {
+                  const next = updated as SpreadsheetDetailRecord;
+                  setSpreadsheet(next);
+                  setEditor(buildInitialEditorState(next));
+                  setDataSource("local");
+                }}
+              />
 
               <Card variant="outlined" sx={{ borderRadius: 4 }}>
                 <CardContent>
@@ -2178,16 +2266,6 @@ export default function SpreadsheetDetail() {
                 </CardContent>
               </Card>
 
-              <SpreadsheetEditor
-                spreadsheet={spreadsheet}
-                onSpreadsheetUpdated={(updated) => {
-                  const next = updated as SpreadsheetDetailRecord;
-                  setSpreadsheet(next);
-                  setEditor(buildInitialEditorState(next));
-                  setDataSource("local");
-                }}
-              />
-
               <Card variant="outlined" sx={{ borderRadius: 4 }}>
                 <CardContent sx={{ p: 0 }}>
                   <Box sx={{ px: 3, py: 2.5 }}>
@@ -2287,358 +2365,259 @@ export default function SpreadsheetDetail() {
               </Card>
             </Stack>
 
-            <Stack spacing={3}>
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                <CardContent>
-                  <Stack spacing={2}>
-                    <Typography variant="h6" fontWeight={700}>
-                      Resumo executivo
-                    </Typography>
+            <Stack spacing={3} sx={{ position: { xl: "sticky" }, top: { xl: 24 } }}>
+              <CompactInfoCard title="Resumo executivo">
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Tipo do modelo:</strong>{" "}
+                  {getModelLabel(spreadsheet.modelType)}
+                </Typography>
 
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Tipo do modelo:</strong>{" "}
-                      {getModelLabel(spreadsheet.modelType)}
-                    </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Status:</strong> {spreadsheet.status}
+                </Typography>
 
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Status:</strong> {spreadsheet.status}
-                    </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Categoria:</strong> {spreadsheet.category}
+                </Typography>
 
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Categoria:</strong> {spreadsheet.category}
-                    </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Domínio:</strong>{" "}
+                  {DOMAIN_SCENARIO_LABELS[editor.domainScenario] || domainScenarioLabel}
+                </Typography>
 
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Domínio:</strong>{" "}
-                      {DOMAIN_SCENARIO_LABELS[editor.domainScenario] || domainScenarioLabel}
-                    </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Quantidade estimada:</strong> {effectiveHeadcount}
+                </Typography>
 
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Quantidade estimada:</strong> {effectiveHeadcount}
-                    </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Referência mensal:</strong>{" "}
+                  {formatCurrency(effectiveMonthlyReference)}
+                </Typography>
 
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Referência mensal:</strong>{" "}
-                      {formatCurrency(effectiveMonthlyReference)}
-                    </Typography>
+                <Stack direction="row" spacing={0.75} alignItems="center">
+                  <AccessTimeIcon sx={{ fontSize: 16, color: "#7A708D" }} />
+                  <Typography variant="body2" color="text.secondary">
+                    Atualizado em {spreadsheet.updatedAt}
+                  </Typography>
+                </Stack>
+              </CompactInfoCard>
 
-                    <Stack direction="row" spacing={0.75} alignItems="center">
-                      <AccessTimeIcon sx={{ fontSize: 16, color: "#7A708D" }} />
-                      <Typography variant="body2" color="text.secondary">
-                        Atualizado em {spreadsheet.updatedAt}
-                      </Typography>
-                    </Stack>
-                  </Stack>
-                </CardContent>
-              </Card>
+              <CompactInfoCard title="Quadro preliminar de exequibilidade">
+                <Box
+                  sx={{
+                    p: 2,
+                    borderRadius: 3,
+                    bgcolor: exequibilityRisk.backgroundColor,
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{ color: exequibilityRisk.color, fontWeight: 800 }}
+                  >
+                    {exequibilityRisk.label}
+                  </Typography>
+                </Box>
 
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                <CardContent>
-                  <Stack spacing={2}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <ScienceOutlinedIcon sx={{ fontSize: 18 }} />
-                      <Typography variant="h6" fontWeight={700}>
-                        Leitura persistida de cálculo
-                      </Typography>
-                    </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Custos obrigatórios estimados:</strong>{" "}
+                  {formatCurrency(mandatoryCostTotal)}
+                </Typography>
 
-                    <Typography variant="body2" color="text.secondary">
-                      Este quadro privilegia o que já foi persistido em metadata pelos
-                      módulos especializados.
-                    </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Custos comprobatórios / materiais:</strong>{" "}
+                  {formatCurrency(evidentiaryCostTotal)}
+                </Typography>
 
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Labor breakdown persistido:</strong>{" "}
-                      {laborCostBreakdown ? "Sim" : "Não"}
-                    </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Saldo preliminar de exequibilidade:</strong>{" "}
+                  {formatCurrency(executabilityBalance)}
+                </Typography>
 
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Configuração de encargos persistida:</strong>{" "}
-                      {laborChargesConfig ? "Sim" : "Não"}
-                    </Typography>
-
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Resumo da composição persistido:</strong>{" "}
-                      {serviceCompositionSummary ? "Sim" : "Não"}
-                    </Typography>
-
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Memória técnica da composição:</strong>{" "}
-                      {serviceCompositionMemoryBundle ? "Sim" : "Não"}
-                    </Typography>
-                  </Stack>
-                </CardContent>
-              </Card>
-
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                <CardContent>
-                  <Stack spacing={2}>
-                    <Typography variant="h6" fontWeight={700}>
-                      Quadro preliminar de exequibilidade
-                    </Typography>
-
-                    <Box
-                      sx={{
-                        p: 2,
-                        borderRadius: 3,
-                        bgcolor: exequibilityRisk.backgroundColor,
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                        sx={{ color: exequibilityRisk.color, fontWeight: 800 }}
-                      >
-                        {exequibilityRisk.label}
-                      </Typography>
-                    </Box>
-
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Custos obrigatórios estimados:</strong>{" "}
-                      {formatCurrency(mandatoryCostTotal)}
-                    </Typography>
-
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Custos comprobatórios / materiais:</strong>{" "}
-                      {formatCurrency(evidentiaryCostTotal)}
-                    </Typography>
-
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Saldo preliminar de exequibilidade:</strong>{" "}
-                      {formatCurrency(executabilityBalance)}
-                    </Typography>
-
-                    <Typography variant="caption" color="text.secondary">
-                      Esta leitura ainda é preparatória. A próxima camada deverá
-                      transformar este quadro em parecer técnico automatizado, com
-                      segregação formal entre custo obrigatório, custo comprobatório,
-                      risco material e diligência recomendada.
-                    </Typography>
-                  </Stack>
-                </CardContent>
-              </Card>
+                <Typography variant="caption" color="text.secondary">
+                  Esta leitura ainda é preparatória. A próxima camada deverá
+                  transformar este quadro em parecer técnico automatizado, com
+                  segregação formal entre custo obrigatório, custo comprobatório,
+                  risco material e diligência recomendada.
+                </Typography>
+              </CompactInfoCard>
 
               {laborCostBreakdown || laborChargesConfig ? (
-                <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                  <CardContent>
-                    <Stack spacing={2}>
-                      <Typography variant="h6" fontWeight={700}>
-                        Bloco laboral persistido
-                      </Typography>
+                <CompactInfoCard title="Bloco laboral persistido">
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Headcount:</strong>{" "}
+                    {Number(laborCostBreakdown?.headcount || 0)}
+                  </Typography>
 
-                      <Typography variant="body2" color="text.secondary">
-                        Leitura preferencial de dados estruturados do módulo de dedicação
-                        exclusiva.
-                      </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Total salarial:</strong>{" "}
+                    {formatCurrency(Number(laborCostBreakdown?.salaryBaseTotal || 0))}
+                  </Typography>
 
-                      <Typography variant="body2" color="text.secondary">
-                        <strong>Headcount:</strong>{" "}
-                        {Number(laborCostBreakdown?.headcount || 0)}
-                      </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Benefícios obrigatórios:</strong>{" "}
+                    {formatCurrency(
+                      Number(laborCostBreakdown?.mandatoryBenefitsTotal || 0)
+                    )}
+                  </Typography>
 
-                      <Typography variant="body2" color="text.secondary">
-                        <strong>Total salarial:</strong>{" "}
-                        {formatCurrency(Number(laborCostBreakdown?.salaryBaseTotal || 0))}
-                      </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Adicionais:</strong>{" "}
+                    {formatCurrency(Number(laborCostBreakdown?.additionalTotal || 0))}
+                  </Typography>
 
-                      <Typography variant="body2" color="text.secondary">
-                        <strong>Benefícios obrigatórios:</strong>{" "}
-                        {formatCurrency(
-                          Number(laborCostBreakdown?.mandatoryBenefitsTotal || 0)
-                        )}
-                      </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Total laboral mensal:</strong>{" "}
+                    {formatCurrency(Number(laborCostBreakdown?.monthlyLaborTotal || 0))}
+                  </Typography>
 
-                      <Typography variant="body2" color="text.secondary">
-                        <strong>Adicionais:</strong>{" "}
-                        {formatCurrency(Number(laborCostBreakdown?.additionalTotal || 0))}
-                      </Typography>
+                  <Divider />
 
-                      <Typography variant="body2" color="text.secondary">
-                        <strong>Total laboral mensal:</strong>{" "}
-                        {formatCurrency(
-                          Number(laborCostBreakdown?.monthlyLaborTotal || 0)
-                        )}
-                      </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>FGTS:</strong>{" "}
+                    {Number(
+                      laborChargesConfig?.fgtsRate ??
+                        laborChargesConfig?.totalChargesPercentage ??
+                        0
+                    ).toFixed(2)}
+                    %
+                  </Typography>
 
-                      <Divider />
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>INSS:</strong>{" "}
+                    {Number(laborChargesConfig?.inssRate ?? 0).toFixed(2)}%
+                  </Typography>
 
-                      <Typography variant="body2" color="text.secondary">
-                        <strong>FGTS:</strong>{" "}
-                        {Number(
-                          laborChargesConfig?.fgtsRate ??
-                            laborChargesConfig?.totalChargesPercentage ??
-                            0
-                        ).toFixed(2)}
-                        %
-                      </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Férias:</strong>{" "}
+                    {Number(laborChargesConfig?.vacationProvisionRate ?? 0).toFixed(2)}%
+                  </Typography>
 
-                      <Typography variant="body2" color="text.secondary">
-                        <strong>INSS:</strong>{" "}
-                        {Number(laborChargesConfig?.inssRate ?? 0).toFixed(2)}%
-                      </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>13º salário:</strong>{" "}
+                    {Number(laborChargesConfig?.thirteenthSalaryRate ?? 0).toFixed(2)}%
+                  </Typography>
 
-                      <Typography variant="body2" color="text.secondary">
-                        <strong>Férias:</strong>{" "}
-                        {Number(laborChargesConfig?.vacationProvisionRate ?? 0).toFixed(2)}%
-                      </Typography>
-
-                      <Typography variant="body2" color="text.secondary">
-                        <strong>13º salário:</strong>{" "}
-                        {Number(
-                          laborChargesConfig?.thirteenthSalaryRate ?? 0
-                        ).toFixed(2)}
-                        %
-                      </Typography>
-
-                      <Typography variant="body2" color="text.secondary">
-                        <strong>Encargos efetivos:</strong>{" "}
-                        {Number(
-                          laborChargesConfig?.effectiveChargesRate ??
-                            laborChargesConfig?.totalChargesPercentage ??
-                            0
-                        ).toFixed(2)}
-                        %
-                      </Typography>
-                    </Stack>
-                  </CardContent>
-                </Card>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Encargos efetivos:</strong>{" "}
+                    {Number(
+                      laborChargesConfig?.effectiveChargesRate ??
+                        laborChargesConfig?.totalChargesPercentage ??
+                        0
+                    ).toFixed(2)}
+                    %
+                  </Typography>
+                </CompactInfoCard>
               ) : null}
 
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                <CardContent>
-                  <Stack spacing={1.5}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <InsightsOutlinedIcon sx={{ fontSize: 18 }} />
-                      <Typography variant="h6" fontWeight={700}>
-                        Painel modular
+              <CompactInfoCard title="Painel modular">
+                {pcfpModules.map((module) => (
+                  <Box
+                    key={module.key}
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 3,
+                      border: `1px solid ${module.borderColor}`,
+                      backgroundColor: module.backgroundColor,
+                    }}
+                  >
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="center"
+                      spacing={1}
+                    >
+                      <Typography variant="body2" fontWeight={700}>
+                        {module.shortTitle}
+                      </Typography>
+                      <Typography variant="body2" fontWeight={800}>
+                        {formatCurrency(module.total)}
                       </Typography>
                     </Stack>
+                  </Box>
+                ))}
+              </CompactInfoCard>
 
-                    {pcfpModules.map((module) => (
-                      <Box
-                        key={module.key}
-                        sx={{
-                          p: 1.5,
-                          borderRadius: 3,
-                          border: `1px solid ${module.borderColor}`,
-                          backgroundColor: module.backgroundColor,
-                        }}
-                      >
-                        <Stack
-                          direction="row"
-                          justifyContent="space-between"
-                          alignItems="center"
-                          spacing={1}
-                        >
-                          <Typography variant="body2" fontWeight={700}>
-                            {module.shortTitle}
-                          </Typography>
-                          <Typography variant="body2" fontWeight={800}>
-                            {formatCurrency(module.total)}
-                          </Typography>
-                        </Stack>
-                      </Box>
-                    ))}
-                  </Stack>
-                </CardContent>
-              </Card>
+              <CompactInfoCard title="Leitura e análise do domínio">
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Cenário identificado:</strong> {domainScenarioLabel}
+                </Typography>
 
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                <CardContent>
-                  <Stack spacing={1.5}>
-                    <Typography variant="h6" fontWeight={700}>
-                      Leitura e análise do domínio
+                {expectedDocuments.length > 0 ? (
+                  <Box>
+                    <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
+                      Documentos esperados
                     </Typography>
+                    <Stack spacing={0.6}>
+                      {expectedDocuments.map((item, index) => (
+                        <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
+                          • {item}
+                        </Typography>
+                      ))}
+                    </Stack>
+                  </Box>
+                ) : null}
 
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Cenário identificado:</strong> {domainScenarioLabel}
+                {expectedCostDrivers.length > 0 ? (
+                  <Box>
+                    <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
+                      Vetores de custo esperados
                     </Typography>
-
-                    {expectedDocuments.length > 0 ? (
-                      <Box>
-                        <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
-                          Documentos esperados
+                    <Stack spacing={0.6}>
+                      {expectedCostDrivers.map((item, index) => (
+                        <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
+                          • {item}
                         </Typography>
-                        <Stack spacing={0.6}>
-                          {expectedDocuments.map((item, index) => (
-                            <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
-                              • {item}
-                            </Typography>
-                          ))}
-                        </Stack>
-                      </Box>
-                    ) : null}
+                      ))}
+                    </Stack>
+                  </Box>
+                ) : null}
 
-                    {expectedCostDrivers.length > 0 ? (
-                      <Box>
-                        <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
-                          Vetores de custo esperados
-                        </Typography>
-                        <Stack spacing={0.6}>
-                          {expectedCostDrivers.map((item, index) => (
-                            <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
-                              • {item}
-                            </Typography>
-                          ))}
-                        </Stack>
-                      </Box>
-                    ) : null}
-
-                    {validationFocus.length > 0 ? (
-                      <Box>
-                        <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
-                          Focos de validação
-                        </Typography>
-                        <Stack spacing={0.6}>
-                          {validationFocus.map((item, index) => (
-                            <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
-                              • {item}
-                            </Typography>
-                          ))}
-                        </Stack>
-                      </Box>
-                    ) : null}
-
-                    {readingHints.length > 0 ? (
-                      <Box>
-                        <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
-                          Pistas de leitura
-                        </Typography>
-                        <Stack spacing={0.6}>
-                          {readingHints.map((item, index) => (
-                            <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
-                              • {item}
-                            </Typography>
-                          ))}
-                        </Stack>
-                      </Box>
-                    ) : null}
-                  </Stack>
-                </CardContent>
-              </Card>
-
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                <CardContent>
-                  <Stack spacing={1.5}>
-                    <Typography variant="h6" fontWeight={700}>
-                      Observações internas
+                {validationFocus.length > 0 ? (
+                  <Box>
+                    <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
+                      Focos de validação
                     </Typography>
+                    <Stack spacing={0.6}>
+                      {validationFocus.map((item, index) => (
+                        <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
+                          • {item}
+                        </Typography>
+                      ))}
+                    </Stack>
+                  </Box>
+                ) : null}
 
-                    <TextField
-                      label="Anotações preparatórias"
-                      value={editor.notes}
-                      onChange={(event) => updateEditorField("notes", event.target.value)}
-                      multiline
-                      minRows={4}
-                      fullWidth
-                    />
-
-                    <Typography variant="caption" color="text.secondary">
-                      Este campo já prepara a futura integração com histórico analítico,
-                      decisão interna, parecer consolidado e trilha de auditoria.
+                {readingHints.length > 0 ? (
+                  <Box>
+                    <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
+                      Pistas de leitura
                     </Typography>
-                  </Stack>
-                </CardContent>
-              </Card>
+                    <Stack spacing={0.6}>
+                      {readingHints.map((item, index) => (
+                        <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
+                          • {item}
+                        </Typography>
+                      ))}
+                    </Stack>
+                  </Box>
+                ) : null}
+              </CompactInfoCard>
+
+              <CompactInfoCard title="Observações internas">
+                <TextField
+                  label="Anotações preparatórias"
+                  value={editor.notes}
+                  onChange={(event) => updateEditorField("notes", event.target.value)}
+                  multiline
+                  minRows={4}
+                  fullWidth
+                />
+
+                <Typography variant="caption" color="text.secondary">
+                  Este campo já prepara a futura integração com histórico analítico,
+                  decisão interna, parecer consolidado e trilha de auditoria.
+                </Typography>
+              </CompactInfoCard>
             </Stack>
           </Box>
         </Stack>
