@@ -1,107 +1,192 @@
-import { createTheme } from "@mui/material/styles";
+import { createTheme, alpha } from "@mui/material/styles";
+import type { SxProps, Theme } from "@mui/material/styles";
 
-const theme = createTheme({
+export const theme = createTheme({
   palette: {
     mode: "light",
     primary: {
-      main: "#8c58a2",
-      light: "#a97abd",
-      dark: "#6f3f84",
-      contrastText: "#ffffff",
+      main: "#8E5AB5",
+      light: "#B88AD6",
+      dark: "#5B3A7A",
+      contrastText: "#FFFFFF",
     },
     secondary: {
-      main: "#6f3f84",
-      light: "#8c58a2",
-      dark: "#532c63",
-      contrastText: "#ffffff",
+      main: "#1565C0",
+      light: "#5E92F3",
+      dark: "#003C8F",
+      contrastText: "#FFFFFF",
     },
     background: {
-      default: "#f7f4f9",
-      paper: "#ffffff",
+      default: "#F7F3F8",
+      paper: "#FFFFFF",
     },
     text: {
-      primary: "#2f2235",
-      secondary: "#6f6277",
+      primary: "#241B3A",
+      secondary: "#6D6186",
     },
-    divider: "#e7ddeb",
+    success: {
+      main: "#2E7D32",
+    },
+    warning: {
+      main: "#ED6C02",
+    },
+    error: {
+      main: "#C62828",
+    },
+    divider: "rgba(91, 58, 122, 0.12)",
   },
+
   shape: {
-    borderRadius: 14,
+    borderRadius: 16,
   },
+
   typography: {
     fontFamily: [
       "Inter",
       "Roboto",
-      '"Helvetica Neue"',
+      "Helvetica",
       "Arial",
       "sans-serif",
     ].join(","),
-    h1: { fontWeight: 700 },
-    h2: { fontWeight: 700 },
-    h3: { fontWeight: 700 },
-    h4: { fontWeight: 700 },
-    h5: { fontWeight: 700 },
-    h6: { fontWeight: 700 },
+
+    h4: {
+      fontWeight: 800,
+      letterSpacing: "-0.02em",
+    },
+    h5: {
+      fontWeight: 800,
+      letterSpacing: "-0.02em",
+    },
+    h6: {
+      fontWeight: 700,
+    },
     button: {
+      fontWeight: 700,
       textTransform: "none",
-      fontWeight: 600,
     },
   },
+
   components: {
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          margin: 0,
-          padding: 0,
-          backgroundColor: "#f7f4f9",
-        },
-        "*": {
-          boxSizing: "border-box",
+          backgroundColor: "#F7F3F8",
         },
       },
     },
-    MuiAppBar: {
-      styleOverrides: {
-        root: {
-          background: "linear-gradient(90deg, #6f3f84 0%, #8c58a2 100%)",
-          boxShadow: "0 8px 24px rgba(111, 63, 132, 0.18)",
-        },
-      },
-    },
+
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 18,
-          boxShadow: "0 10px 30px rgba(81, 52, 96, 0.10)",
-          border: "1px solid #eee4f3",
+          borderRadius: 20,
         },
       },
     },
+
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
-          paddingInline: 16,
-          paddingBlock: 10,
+          borderRadius: 14,
+          boxShadow: "none",
         },
       },
     },
+
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 10,
-          fontWeight: 600,
+          fontWeight: 700,
+          borderRadius: 999,
         },
       },
     },
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          backgroundImage: "none",
-        },
+
+    MuiTextField: {
+      defaultProps: {
+        size: "small",
+        fullWidth: true,
       },
     },
   },
 });
+
+export const commonStyles = {
+  pageBackground: "#F7F3F8",
+  pageSectionGap: 3,
+  cardRadius: 4,
+  heroRadius: 5,
+  borderedCard: {
+    borderRadius: 4,
+    border: "1px solid rgba(91, 58, 122, 0.12)",
+    backgroundColor: "#FFFFFF",
+  } satisfies SxProps<Theme>,
+  heroCard: {
+    borderRadius: 5,
+    background:
+      "linear-gradient(180deg, rgba(238,229,243,1) 0%, rgba(235,226,240,1) 100%)",
+    border: "1px solid rgba(142, 90, 181, 0.12)",
+  } satisfies SxProps<Theme>,
+  mutedText: {
+    color: "#6D6186",
+  } satisfies SxProps<Theme>,
+  titleText: {
+    color: "#241B3A",
+    fontWeight: 800,
+  } satisfies SxProps<Theme>,
+};
+
+export function getStatusBadgeStyle(status?: string): SxProps<Theme> {
+  switch (status) {
+    case "Em elaboração":
+      return {
+        backgroundColor: alpha("#8E5AB5", 0.12),
+        color: "#8E5AB5",
+        fontWeight: 700,
+      };
+
+    case "Concluída":
+      return {
+        backgroundColor: alpha("#2E7D32", 0.12),
+        color: "#2E7D32",
+        fontWeight: 700,
+      };
+
+    case "Em revisão":
+      return {
+        backgroundColor: alpha("#ED6C02", 0.12),
+        color: "#ED6C02",
+        fontWeight: 700,
+      };
+
+    case "Exemplo nativo":
+      return {
+        backgroundColor: alpha("#1565C0", 0.12),
+        color: "#1565C0",
+        fontWeight: 700,
+      };
+
+    case "Pendente":
+      return {
+        backgroundColor: alpha("#ED6C02", 0.12),
+        color: "#ED6C02",
+        fontWeight: 700,
+      };
+
+    case "Conferido":
+    case "Calculado":
+      return {
+        backgroundColor: alpha("#2E7D32", 0.12),
+        color: "#2E7D32",
+        fontWeight: 700,
+      };
+
+    default:
+      return {
+        backgroundColor: alpha("#8E5AB5", 0.12),
+        color: "#8E5AB5",
+        fontWeight: 700,
+      };
+  }
+}
 
 export default theme;
