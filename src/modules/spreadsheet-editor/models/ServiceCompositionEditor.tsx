@@ -7,6 +7,8 @@ import {
   CardContent,
   Chip,
   Divider,
+  MenuItem,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -19,19 +21,25 @@ import AddIcon from "@mui/icons-material/Add";
 import BuildOutlinedIcon from "@mui/icons-material/BuildOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
+import SupportAgentOutlinedIcon from "@mui/icons-material/SupportAgentOutlined";
 import EditableCell from "../components/EditableCell";
 import {
   SpreadsheetRecord,
   updateSpreadsheet,
 } from "../../../services/spreadsheetService";
+import {
+  calculateServiceComposition,
+  extractEditableCompositionRows,
+  ServiceCompositionRow,
+  ServiceCompositionDemandType,
+} from "../calculators/serviceComposition";
 
 type Props = {
   spreadsheet: SpreadsheetRecord;
   onSpreadsheetUpdated?: (spreadsheet: SpreadsheetRecord) => void;
 };
-
-type EditorRow = SpreadsheetRecord["rows"][number];
 
 const STATUS_OPTIONS = [
   { value: "Pendente", label: "Pendente" },
@@ -48,6 +56,16 @@ const CATEGORY_OPTIONS = [
   { value: "Apoio operacional", label: "Apoio operacional" },
   { value: "EPIs e uniformes", label: "EPIs e uniformes" },
   { value: "Materiais de consumo", label: "Materiais de consumo" },
+];
+
+const DEMAND_TYPE_OPTIONS: Array<{
+  value: ServiceCompositionDemandType;
+  label: string;
+}> = [
+  { value: "recorrente", label: "Recorrente" },
+  { value: "eventual", label: "Eventual" },
+  { value: "sob_demanda", label: "Sob demanda" },
+  { value: "nao_informado", label: "Não informado" },
 ];
 
 function safeString(value: unknown) {
@@ -72,53 +90,6 @@ function formatCurrency(value: number) {
   }).format(value || 0);
 }
 
-function recalcSubtotal(row: EditorRow): EditorRow {
-  const quantidade = Number(row.quantidade || 0);
-  const valorUnitario = Number(row.valorUnitario || 0);
-
-  return {
-    ...row,
-    quantidade,
-    valorUnitario,
-    subtotal: Number((quantidade * valorUnitario).toFixed(2)),
-  };
-}
-
-function categoryIncludes(category: string, terms: string[]) {
-  const normalized = category.toLowerCase();
-  return terms.some((term) => normalized.includes(term));
-}
-
-function rowHasTrainingTag(row: EditorRow, tag: string) {
-  return Array.isArray(row.trainingTags) && row.trainingTags.includes(tag);
-}
-
-function isEditableCompositionRow(row: EditorRow) {
-  const category = safeString(row.categoria).toLowerCase();
-  const item = safeString(row.item).toLowerCase();
-
-  return (
-    categoryIncludes(category, [
-      "material",
-      "insumo",
-      "equipamento",
-      "logística",
-      "logistica",
-      "apoio operacional",
-      "epi",
-      "uniforme",
-    ]) ||
-    item.includes("equipamento") ||
-    item.includes("uniforme") ||
-    item.includes("epi") ||
-    rowHasTrainingTag(row, "service_composition_editable")
-  );
-}
-
-function extractEditableRows(rows: EditorRow[]) {
-  return rows.filter(isEditableCompositionRow).map(recalcSubtotal);
-}
-
 function buildRowId(prefix = "composition") {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `${prefix}_${crypto.randomUUID()}`;
@@ -127,11 +98,15 @@ function buildRowId(prefix = "composition") {
   return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`;
 }
 
-function buildMaterialRow(): EditorRow {
+function buildBaseRow(
+  item: string,
+  categoria: string,
+  extraTags: string[] = []
+): ServiceCompositionRow {
   return {
-    id: buildRowId("material"),
-    item: "Novo material",
-    categoria: "Materiais e insumos",
+    id: buildRowId("composition"),
+    item,
+    categoria,
     quantidade: 1,
     valorUnitario: 0,
     subtotal: 0,
@@ -139,109 +114,81 @@ function buildMaterialRow(): EditorRow {
     memoriaCalculo: "",
     origem: "edição local",
     automatico: false,
-    trainingTags: ["service_composition_editable", "material"],
+    trainingTags: ["service_composition_editable", ...extraTags],
+    metadata: {
+      demandType: "nao_informado",
+      serviceUnit: "",
+      periodicity: "",
+      productivityFactor: 1,
+      monthlyFactor: 1,
+      depreciationCriteria: "",
+      consumptionBase: "",
+      technicalJustification: "",
+    },
   };
 }
 
-function buildEquipmentRow(): EditorRow {
+function buildMaterialRow(): ServiceCompositionRow {
+  return buildBaseRow("Novo material", "Materiais e insumos", ["material"]);
+}
+
+function buildEquipmentRow(): ServiceCompositionRow {
+  return buildBaseRow("Novo equipamento", "Equipamentos", ["equipment"]);
+}
+
+function buildLogisticsRow(): ServiceCompositionRow {
+  return buildBaseRow("Novo item logístico", "Logística", ["logistics"]);
+}
+
+function buildOperationalSupportRow(): ServiceCompositionRow {
+  return buildBaseRow("Novo apoio operacional", "Apoio operacional", [
+    "operational_support",
+  ]);
+}
+
+function withMetadata(
+  row: ServiceCompositionRow
+): ServiceCompositionRow & {
+  metadata: Record<string, unknown>;
+} {
   return {
-    id: buildRowId("equipment"),
-    item: "Novo equipamento",
-    categoria: "Equipamentos",
-    quantidade: 1,
-    valorUnitario: 0,
-    subtotal: 0,
-    status: "Pendente",
-    memoriaCalculo: "",
-    origem: "edição local",
-    automatico: false,
-    trainingTags: ["service_composition_editable", "equipment"],
+    ...row,
+    metadata:
+      row.metadata && typeof row.metadata === "object"
+        ? { ...(row.metadata as Record<string, unknown>) }
+        : {},
   };
 }
 
-function summarizeRows(rows: EditorRow[]) {
-  const itemCount = rows.length;
+function mergeDemandTypeTags(
+  currentTags: string[] | undefined,
+  demandType: ServiceCompositionDemandType
+) {
+  const tags = Array.isArray(currentTags) ? [...currentTags] : [];
+  const cleaned = tags.filter(
+    (tag) => !["recorrente", "eventual", "sob_demanda"].includes(tag)
+  );
 
-  const total = rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
+  if (demandType === "recorrente") {
+    cleaned.push("recorrente");
+  } else if (demandType === "eventual") {
+    cleaned.push("eventual");
+  } else if (demandType === "sob_demanda") {
+    cleaned.push("sob_demanda");
+  }
 
-  const materialsTotal = rows.reduce((sum, row) => {
-    const category = safeString(row.categoria).toLowerCase();
-    if (
-      categoryIncludes(category, ["material", "insumo", "epi", "uniforme"]) &&
-      !category.includes("equipamento")
-    ) {
-      return sum + Number(row.subtotal || 0);
-    }
-    return sum;
-  }, 0);
+  if (!cleaned.includes("service_composition_editable")) {
+    cleaned.push("service_composition_editable");
+  }
 
-  const equipmentTotal = rows.reduce((sum, row) => {
-    const category = safeString(row.categoria).toLowerCase();
-    if (categoryIncludes(category, ["equipamento"])) {
-      return sum + Number(row.subtotal || 0);
-    }
-    return sum;
-  }, 0);
-
-  const logisticsTotal = rows.reduce((sum, row) => {
-    const category = safeString(row.categoria).toLowerCase();
-    if (categoryIncludes(category, ["logística", "logistica"])) {
-      return sum + Number(row.subtotal || 0);
-    }
-    return sum;
-  }, 0);
-
-  const supportTotal = rows.reduce((sum, row) => {
-    const category = safeString(row.categoria).toLowerCase();
-    if (categoryIncludes(category, ["apoio operacional"])) {
-      return sum + Number(row.subtotal || 0);
-    }
-    return sum;
-  }, 0);
-
-  const recurringTotal = rows.reduce((sum, row) => {
-    const tags = Array.isArray(row.trainingTags) ? row.trainingTags : [];
-    if (tags.includes("recorrente")) {
-      return sum + Number(row.subtotal || 0);
-    }
-    return sum;
-  }, 0);
-
-  const eventualTotal = rows.reduce((sum, row) => {
-    const tags = Array.isArray(row.trainingTags) ? row.trainingTags : [];
-    if (tags.includes("eventual")) {
-      return sum + Number(row.subtotal || 0);
-    }
-    return sum;
-  }, 0);
-
-  const onDemandTotal = rows.reduce((sum, row) => {
-    const tags = Array.isArray(row.trainingTags) ? row.trainingTags : [];
-    if (tags.includes("sob_demanda")) {
-      return sum + Number(row.subtotal || 0);
-    }
-    return sum;
-  }, 0);
-
-  return {
-    itemCount,
-    total: Number(total.toFixed(2)),
-    workforceTotal: 0,
-    materialsTotal: Number(materialsTotal.toFixed(2)),
-    equipmentTotal: Number(equipmentTotal.toFixed(2)),
-    logisticsTotal: Number(logisticsTotal.toFixed(2)),
-    supportTotal: Number(supportTotal.toFixed(2)),
-    recurringTotal: Number(recurringTotal.toFixed(2)),
-    eventualTotal: Number(eventualTotal.toFixed(2)),
-    onDemandTotal: Number(onDemandTotal.toFixed(2)),
-  };
+  return cleaned;
 }
 
 export default function ServiceCompositionEditor({
   spreadsheet,
   onSpreadsheetUpdated,
 }: Props) {
-  const [rows, setRows] = useState<EditorRow[]>([]);
+  const [rows, setRows] = useState<ServiceCompositionRow[]>([]);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error" | null;
     message: string;
@@ -251,27 +198,74 @@ export default function ServiceCompositionEditor({
   });
 
   useEffect(() => {
-    setRows(extractEditableRows(spreadsheet.rows));
+    setRows(extractEditableCompositionRows(spreadsheet.rows));
   }, [spreadsheet]);
 
-  const summary = useMemo(() => summarizeRows(rows), [rows]);
+  const calculation = useMemo(() => calculateServiceComposition(rows), [rows]);
+  const summary = calculation.summary;
+  const memoryBundle = calculation.memoryBundle;
+  const normalizedRows = calculation.normalizedRows;
 
-  function updateRow(index: number, field: keyof EditorRow, value: string) {
+  function updateRow(index: number, field: keyof ServiceCompositionRow, value: string) {
     setRows((current) =>
       current.map((row, rowIndex) => {
         if (rowIndex !== index) {
           return row;
         }
 
-        const nextRow: EditorRow = {
-          ...row,
+        const prepared = withMetadata(row);
+
+        return {
+          ...prepared,
           [field]:
             field === "quantidade" || field === "valorUnitario"
               ? normalizeNumberInput(value)
               : value,
         };
+      })
+    );
+  }
 
-        return recalcSubtotal(nextRow);
+  function updateRowMetadata(index: number, key: string, value: string | number) {
+    setRows((current) =>
+      current.map((row, rowIndex) => {
+        if (rowIndex !== index) {
+          return row;
+        }
+
+        const prepared = withMetadata(row);
+
+        return {
+          ...prepared,
+          metadata: {
+            ...prepared.metadata,
+            [key]:
+              key === "productivityFactor" || key === "monthlyFactor"
+                ? normalizeNumberInput(value)
+                : value,
+          },
+        };
+      })
+    );
+  }
+
+  function updateDemandType(index: number, demandType: ServiceCompositionDemandType) {
+    setRows((current) =>
+      current.map((row, rowIndex) => {
+        if (rowIndex !== index) {
+          return row;
+        }
+
+        const prepared = withMetadata(row);
+
+        return {
+          ...prepared,
+          trainingTags: mergeDemandTypeTags(prepared.trainingTags, demandType),
+          metadata: {
+            ...prepared.metadata,
+            demandType,
+          },
+        };
       })
     );
   }
@@ -284,38 +278,51 @@ export default function ServiceCompositionEditor({
     setRows((current) => [...current, buildEquipmentRow()]);
   }
 
+  function handleAddLogisticsRow() {
+    setRows((current) => [...current, buildLogisticsRow()]);
+  }
+
+  function handleAddOperationalSupportRow() {
+    setRows((current) => [...current, buildOperationalSupportRow()]);
+  }
+
   function handleRemoveRow(index: number) {
     setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
   }
 
   function handleSave() {
     try {
-      const sanitizedRows = rows.map((row) => {
-        const normalizedCategory =
-          safeString(row.categoria).trim() || "Materiais e insumos";
+      const sanitizedRows = normalizedRows.map((row) => {
+        const metadata = {
+          ...(row.metadata && typeof row.metadata === "object"
+            ? (row.metadata as Record<string, unknown>)
+            : {}),
+          demandType: row.demandType,
+          serviceUnit: row.serviceUnit,
+          periodicity: row.periodicity,
+          productivityFactor: row.productivityFactor,
+          monthlyFactor: row.monthlyFactor,
+          depreciationCriteria: row.depreciationCriteria,
+          consumptionBase: row.consumptionBase,
+          technicalJustification: row.technicalJustification,
+        };
 
-        const nextTrainingTags = Array.isArray(row.trainingTags)
-          ? [...row.trainingTags]
-          : [];
-
-        if (!nextTrainingTags.includes("service_composition_editable")) {
-          nextTrainingTags.push("service_composition_editable");
-        }
-
-        return recalcSubtotal({
+        return {
           ...row,
           item: safeString(row.item).trim() || "Item sem nome",
-          categoria: normalizedCategory,
+          categoria: safeString(row.categoria).trim() || "Materiais e insumos",
           quantidade: Math.max(0, Number(row.quantidade || 0)),
           valorUnitario: Math.max(0, Number(row.valorUnitario || 0)),
+          subtotal: Number(row.subtotal || 0),
           status: safeString(row.status).trim() || "Pendente",
           memoriaCalculo: safeString(row.memoriaCalculo),
-          trainingTags: nextTrainingTags,
-        });
+          trainingTags: mergeDemandTypeTags(row.trainingTags, row.demandType),
+          metadata,
+        };
       });
 
       const preservedRows = spreadsheet.rows.filter(
-        (row) => !isEditableCompositionRow(row)
+        (row) => !extractEditableCompositionRows([row]).length
       );
 
       const rebuiltRows = [...sanitizedRows, ...preservedRows];
@@ -333,6 +340,7 @@ export default function ServiceCompositionEditor({
           editorModule: "service_composition",
           lastEditedSection: "materials_equipments_logistics",
           serviceCompositionSummary: summary,
+          serviceCompositionMemoryBundle: memoryBundle,
         },
       });
 
@@ -343,7 +351,7 @@ export default function ServiceCompositionEditor({
       setFeedback({
         type: "success",
         message:
-          "Insumos, materiais e equipamentos salvos com sucesso.",
+          "Composição de serviços salva com cálculo, resumo técnico e memória persistida.",
       });
 
       onSpreadsheetUpdated?.(updated);
@@ -374,13 +382,18 @@ export default function ServiceCompositionEditor({
               </Typography>
 
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-                Este bloco permite editar materiais, insumos, equipamentos,
-                logística e apoio operacional, atualizando a composição total da
-                planilha.
+                Este bloco passa a operar com cálculo estruturado, classificando
+                materiais, insumos, equipamentos, logística e apoio operacional,
+                além de persistir resumo técnico e memória de composição.
               </Typography>
             </Box>
 
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1.25}
+              flexWrap="wrap"
+              useFlexGap
+            >
               <Button
                 variant="outlined"
                 startIcon={<Inventory2OutlinedIcon />}
@@ -395,6 +408,22 @@ export default function ServiceCompositionEditor({
                 onClick={handleAddEquipmentRow}
               >
                 Adicionar equipamento
+              </Button>
+
+              <Button
+                variant="outlined"
+                startIcon={<LocalShippingOutlinedIcon />}
+                onClick={handleAddLogisticsRow}
+              >
+                Adicionar logística
+              </Button>
+
+              <Button
+                variant="outlined"
+                startIcon={<SupportAgentOutlinedIcon />}
+                onClick={handleAddOperationalSupportRow}
+              >
+                Adicionar apoio
               </Button>
 
               <Button
@@ -427,9 +456,19 @@ export default function ServiceCompositionEditor({
               variant="outlined"
             />
             <Chip
-              label={`Logística/apoio: ${formatCurrency(
-                summary.logisticsTotal + summary.supportTotal
-              )}`}
+              label={`Logística: ${formatCurrency(summary.logisticsTotal)}`}
+              variant="outlined"
+            />
+            <Chip
+              label={`Apoio operacional: ${formatCurrency(summary.supportTotal)}`}
+              variant="outlined"
+            />
+            <Chip
+              label={`EPIs/uniformes: ${formatCurrency(summary.episAndUniformsTotal)}`}
+              variant="outlined"
+            />
+            <Chip
+              label={`Consumo: ${formatCurrency(summary.consumablesTotal)}`}
               variant="outlined"
             />
             <Chip
@@ -444,20 +483,40 @@ export default function ServiceCompositionEditor({
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ minWidth: 220 }}>
+                  <TableCell sx={{ minWidth: 200 }}>
                     <strong>Item</strong>
                   </TableCell>
 
-                  <TableCell sx={{ minWidth: 180 }}>
+                  <TableCell sx={{ minWidth: 170 }}>
                     <strong>Categoria</strong>
                   </TableCell>
 
                   <TableCell sx={{ minWidth: 120 }}>
-                    <strong>Quantidade</strong>
+                    <strong>Tipo de demanda</strong>
                   </TableCell>
 
-                  <TableCell sx={{ minWidth: 140 }}>
+                  <TableCell sx={{ minWidth: 110 }}>
+                    <strong>Qtd.</strong>
+                  </TableCell>
+
+                  <TableCell sx={{ minWidth: 130 }}>
                     <strong>Valor unitário</strong>
+                  </TableCell>
+
+                  <TableCell sx={{ minWidth: 120 }}>
+                    <strong>Unidade</strong>
+                  </TableCell>
+
+                  <TableCell sx={{ minWidth: 130 }}>
+                    <strong>Periodicidade</strong>
+                  </TableCell>
+
+                  <TableCell sx={{ minWidth: 120 }}>
+                    <strong>Produtividade</strong>
+                  </TableCell>
+
+                  <TableCell sx={{ minWidth: 120 }}>
+                    <strong>Mensalização</strong>
                   </TableCell>
 
                   <TableCell align="right" sx={{ minWidth: 130 }}>
@@ -468,7 +527,15 @@ export default function ServiceCompositionEditor({
                     <strong>Status</strong>
                   </TableCell>
 
-                  <TableCell sx={{ minWidth: 220 }}>
+                  <TableCell sx={{ minWidth: 180 }}>
+                    <strong>Base de consumo</strong>
+                  </TableCell>
+
+                  <TableCell sx={{ minWidth: 180 }}>
+                    <strong>Depreciação</strong>
+                  </TableCell>
+
+                  <TableCell sx={{ minWidth: 240 }}>
                     <strong>Memória / justificativa</strong>
                   </TableCell>
 
@@ -479,87 +546,177 @@ export default function ServiceCompositionEditor({
               </TableHead>
 
               <TableBody>
-                {rows.length > 0 ? (
-                  rows.map((row, index) => (
-                    <TableRow key={row.id || `${row.item}-${index}`}>
-                      <TableCell>
-                        <EditableCell
-                          value={row.item}
-                          onChange={(value) => updateRow(index, "item", value)}
-                        />
-                      </TableCell>
+                {normalizedRows.length > 0 ? (
+                  normalizedRows.map((row, index) => {
+                    const metadata =
+                      row.metadata && typeof row.metadata === "object"
+                        ? (row.metadata as Record<string, unknown>)
+                        : {};
 
-                      <TableCell>
-                        <EditableCell
-                          type="select"
-                          value={row.categoria}
-                          options={CATEGORY_OPTIONS}
-                          onChange={(value) => updateRow(index, "categoria", value)}
-                        />
-                      </TableCell>
+                    return (
+                      <TableRow key={row.id || `${row.item}-${index}`}>
+                        <TableCell>
+                          <EditableCell
+                            value={row.item}
+                            onChange={(value) => updateRow(index, "item", value)}
+                          />
+                        </TableCell>
 
-                      <TableCell>
-                        <EditableCell
-                          type="number"
-                          value={row.quantidade}
-                          onChange={(value) => updateRow(index, "quantidade", value)}
-                          min={0}
-                          step={1}
-                        />
-                      </TableCell>
+                        <TableCell>
+                          <EditableCell
+                            type="select"
+                            value={row.categoria}
+                            options={CATEGORY_OPTIONS}
+                            onChange={(value) => updateRow(index, "categoria", value)}
+                          />
+                        </TableCell>
 
-                      <TableCell>
-                        <EditableCell
-                          type="number"
-                          value={row.valorUnitario}
-                          onChange={(value) => updateRow(index, "valorUnitario", value)}
-                          min={0}
-                          step={0.01}
-                        />
-                      </TableCell>
+                        <TableCell>
+                          <Select
+                            size="small"
+                            fullWidth
+                            value={row.demandType}
+                            onChange={(event) =>
+                              updateDemandType(
+                                index,
+                                event.target.value as ServiceCompositionDemandType
+                              )
+                            }
+                          >
+                            {DEMAND_TYPE_OPTIONS.map((option) => (
+                              <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </TableCell>
 
-                      <TableCell align="right">
-                        <Typography variant="body2" fontWeight={700}>
-                          {formatCurrency(row.subtotal || 0)}
-                        </Typography>
-                      </TableCell>
+                        <TableCell>
+                          <EditableCell
+                            type="number"
+                            value={row.quantidade}
+                            onChange={(value) => updateRow(index, "quantidade", value)}
+                            min={0}
+                            step={0.01}
+                          />
+                        </TableCell>
 
-                      <TableCell>
-                        <EditableCell
-                          type="select"
-                          value={row.status}
-                          options={STATUS_OPTIONS}
-                          onChange={(value) => updateRow(index, "status", value)}
-                        />
-                      </TableCell>
+                        <TableCell>
+                          <EditableCell
+                            type="number"
+                            value={row.valorUnitario}
+                            onChange={(value) =>
+                              updateRow(index, "valorUnitario", value)
+                            }
+                            min={0}
+                            step={0.01}
+                          />
+                        </TableCell>
 
-                      <TableCell>
-                        <EditableCell
-                          value={row.memoriaCalculo || ""}
-                          onChange={(value) =>
-                            updateRow(index, "memoriaCalculo", value)
-                          }
-                        />
-                      </TableCell>
+                        <TableCell>
+                          <EditableCell
+                            value={safeString(metadata.serviceUnit)}
+                            onChange={(value) =>
+                              updateRowMetadata(index, "serviceUnit", value)
+                            }
+                          />
+                        </TableCell>
 
-                      <TableCell align="center">
-                        <Button
-                          color="error"
-                          variant="text"
-                          onClick={() => handleRemoveRow(index)}
-                          startIcon={<DeleteOutlineIcon />}
-                        >
-                          Remover
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        <TableCell>
+                          <EditableCell
+                            value={safeString(metadata.periodicity)}
+                            onChange={(value) =>
+                              updateRowMetadata(index, "periodicity", value)
+                            }
+                          />
+                        </TableCell>
+
+                        <TableCell>
+                          <EditableCell
+                            type="number"
+                            value={Number(metadata.productivityFactor ?? 1)}
+                            onChange={(value) =>
+                              updateRowMetadata(index, "productivityFactor", value)
+                            }
+                            min={0}
+                            step={0.01}
+                          />
+                        </TableCell>
+
+                        <TableCell>
+                          <EditableCell
+                            type="number"
+                            value={Number(metadata.monthlyFactor ?? 1)}
+                            onChange={(value) =>
+                              updateRowMetadata(index, "monthlyFactor", value)
+                            }
+                            min={0}
+                            step={0.01}
+                          />
+                        </TableCell>
+
+                        <TableCell align="right">
+                          <Typography variant="body2" fontWeight={700}>
+                            {formatCurrency(row.subtotal || 0)}
+                          </Typography>
+                        </TableCell>
+
+                        <TableCell>
+                          <EditableCell
+                            type="select"
+                            value={row.status}
+                            options={STATUS_OPTIONS}
+                            onChange={(value) => updateRow(index, "status", value)}
+                          />
+                        </TableCell>
+
+                        <TableCell>
+                          <EditableCell
+                            value={safeString(metadata.consumptionBase)}
+                            onChange={(value) =>
+                              updateRowMetadata(index, "consumptionBase", value)
+                            }
+                          />
+                        </TableCell>
+
+                        <TableCell>
+                          <EditableCell
+                            value={safeString(metadata.depreciationCriteria)}
+                            onChange={(value) =>
+                              updateRowMetadata(index, "depreciationCriteria", value)
+                            }
+                          />
+                        </TableCell>
+
+                        <TableCell>
+                          <EditableCell
+                            value={row.memoriaCalculo || ""}
+                            onChange={(value) =>
+                              updateRow(index, "memoriaCalculo", value)
+                            }
+                          />
+                        </TableCell>
+
+                        <TableCell align="center">
+                          <Button
+                            color="error"
+                            variant="text"
+                            onClick={() => handleRemoveRow(index)}
+                            startIcon={<DeleteOutlineIcon />}
+                          >
+                            Remover
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8}>
+                    <TableCell colSpan={15}>
                       <Typography variant="body2" color="text.secondary">
                         Nenhum item de composição editável foi encontrado.
-                        Adicione materiais ou equipamentos para iniciar este módulo.
+                        Adicione materiais, equipamentos, logística ou apoio
+                        operacional para iniciar este módulo.
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -573,7 +730,11 @@ export default function ServiceCompositionEditor({
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)", xl: "repeat(4, 1fr)" },
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(2, 1fr)",
+                xl: "repeat(4, 1fr)",
+              },
               gap: 2,
             }}
           >
@@ -602,10 +763,60 @@ export default function ServiceCompositionEditor({
             <Card variant="outlined" sx={{ borderRadius: 3 }}>
               <CardContent>
                 <Typography variant="caption" color="text.secondary">
-                  Logística e apoio
+                  Logística
                 </Typography>
                 <Typography variant="h6" fontWeight={800}>
-                  {formatCurrency(summary.logisticsTotal + summary.supportTotal)}
+                  {formatCurrency(summary.logisticsTotal)}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  Apoio operacional
+                </Typography>
+                <Typography variant="h6" fontWeight={800}>
+                  {formatCurrency(summary.supportTotal)}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  EPIs e uniformes
+                </Typography>
+                <Typography variant="h6" fontWeight={800}>
+                  {formatCurrency(summary.episAndUniformsTotal)}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  Materiais de consumo
+                </Typography>
+                <Typography variant="h6" fontWeight={800}>
+                  {formatCurrency(summary.consumablesTotal)}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  Recorrente / eventual / sob demanda
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  Recorrente: <strong>{formatCurrency(summary.recurringTotal)}</strong>
+                </Typography>
+                <Typography variant="body2">
+                  Eventual: <strong>{formatCurrency(summary.eventualTotal)}</strong>
+                </Typography>
+                <Typography variant="body2">
+                  Sob demanda: <strong>{formatCurrency(summary.onDemandTotal)}</strong>
                 </Typography>
               </CardContent>
             </Card>
