@@ -50,7 +50,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function coerceNumber(value: unknown, fallback = 0): number {
+function parseNumber(value: unknown, fallback = 0): number {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : fallback;
   }
@@ -68,39 +68,39 @@ export function sanitizeLaborChargesConfig(
   input?: Partial<LaborChargesConfig> | null
 ): LaborChargesConfig {
   return {
-    employerInssRate: coerceNumber(
+    employerInssRate: parseNumber(
       input?.employerInssRate,
       DEFAULT_LABOR_CHARGES_CONFIG.employerInssRate
     ),
-    fgtsRate: coerceNumber(
+    fgtsRate: parseNumber(
       input?.fgtsRate,
       DEFAULT_LABOR_CHARGES_CONFIG.fgtsRate
     ),
-    ratRate: coerceNumber(
+    ratRate: parseNumber(
       input?.ratRate,
       DEFAULT_LABOR_CHARGES_CONFIG.ratRate
     ),
-    thirdPartyRate: coerceNumber(
+    thirdPartyRate: parseNumber(
       input?.thirdPartyRate,
       DEFAULT_LABOR_CHARGES_CONFIG.thirdPartyRate
     ),
-    vacationProvisionRate: coerceNumber(
+    vacationProvisionRate: parseNumber(
       input?.vacationProvisionRate,
       DEFAULT_LABOR_CHARGES_CONFIG.vacationProvisionRate
     ),
-    thirteenthProvisionRate: coerceNumber(
+    thirteenthProvisionRate: parseNumber(
       input?.thirteenthProvisionRate,
       DEFAULT_LABOR_CHARGES_CONFIG.thirteenthProvisionRate
     ),
-    valeTransportePerEmployee: coerceNumber(
+    valeTransportePerEmployee: parseNumber(
       input?.valeTransportePerEmployee,
       DEFAULT_LABOR_CHARGES_CONFIG.valeTransportePerEmployee
     ),
-    valeAlimentacaoPerEmployee: coerceNumber(
+    valeAlimentacaoPerEmployee: parseNumber(
       input?.valeAlimentacaoPerEmployee,
       DEFAULT_LABOR_CHARGES_CONFIG.valeAlimentacaoPerEmployee
     ),
-    otherBenefitsPerEmployee: coerceNumber(
+    otherBenefitsPerEmployee: parseNumber(
       input?.otherBenefitsPerEmployee,
       DEFAULT_LABOR_CHARGES_CONFIG.otherBenefitsPerEmployee
     ),
@@ -114,17 +114,19 @@ export function extractLaborChargesConfigMetadata(
     return { ...DEFAULT_LABOR_CHARGES_CONFIG };
   }
 
-  return sanitizeLaborChargesConfig({
-    employerInssRate: raw.employerInssRate,
-    fgtsRate: raw.fgtsRate,
-    ratRate: raw.ratRate,
-    thirdPartyRate: raw.thirdPartyRate,
-    vacationProvisionRate: raw.vacationProvisionRate,
-    thirteenthProvisionRate: raw.thirteenthProvisionRate,
-    valeTransportePerEmployee: raw.valeTransportePerEmployee,
-    valeAlimentacaoPerEmployee: raw.valeAlimentacaoPerEmployee,
-    otherBenefitsPerEmployee: raw.otherBenefitsPerEmployee,
-  });
+  const partialConfig: Partial<LaborChargesConfig> = {
+    employerInssRate: parseNumber(raw["employerInssRate"]),
+    fgtsRate: parseNumber(raw["fgtsRate"]),
+    ratRate: parseNumber(raw["ratRate"]),
+    thirdPartyRate: parseNumber(raw["thirdPartyRate"]),
+    vacationProvisionRate: parseNumber(raw["vacationProvisionRate"]),
+    thirteenthProvisionRate: parseNumber(raw["thirteenthProvisionRate"]),
+    valeTransportePerEmployee: parseNumber(raw["valeTransportePerEmployee"]),
+    valeAlimentacaoPerEmployee: parseNumber(raw["valeAlimentacaoPerEmployee"]),
+    otherBenefitsPerEmployee: parseNumber(raw["otherBenefitsPerEmployee"]),
+  };
+
+  return sanitizeLaborChargesConfig(partialConfig);
 }
 
 export function extractLaborCostBreakdownMetadata(
@@ -134,47 +136,30 @@ export function extractLaborCostBreakdownMetadata(
     return null;
   }
 
-  const config = extractLaborChargesConfigMetadata(raw.config);
-
-  const salaryBaseTotal = coerceNumber(raw.salaryBaseTotal);
-  const quantity = coerceNumber(raw.quantity);
-  const employerInss = coerceNumber(raw.employerInss);
-  const fgts = coerceNumber(raw.fgts);
-  const rat = coerceNumber(raw.rat);
-  const thirdPartyCharges = coerceNumber(raw.thirdPartyCharges);
-  const feriasProvision = coerceNumber(raw.feriasProvision);
-  const thirteenthProvision = coerceNumber(raw.thirteenthProvision);
-  const valeTransporte = coerceNumber(raw.valeTransporte);
-  const valeAlimentacao = coerceNumber(raw.valeAlimentacao);
-  const otherBenefits = coerceNumber(raw.otherBenefits);
-  const totalEncargos = coerceNumber(raw.totalEncargos);
-  const totalBenefits = coerceNumber(raw.totalBenefits);
-  const custoTotal = coerceNumber(raw.custoTotal);
-
   return {
-    salaryBaseTotal,
-    quantity,
-    employerInss,
-    fgts,
-    rat,
-    thirdPartyCharges,
-    feriasProvision,
-    thirteenthProvision,
-    valeTransporte,
-    valeAlimentacao,
-    otherBenefits,
-    totalEncargos,
-    totalBenefits,
-    custoTotal,
-    config,
+    salaryBaseTotal: parseNumber(raw["salaryBaseTotal"]),
+    quantity: parseNumber(raw["quantity"]),
+    employerInss: parseNumber(raw["employerInss"]),
+    fgts: parseNumber(raw["fgts"]),
+    rat: parseNumber(raw["rat"]),
+    thirdPartyCharges: parseNumber(raw["thirdPartyCharges"]),
+    feriasProvision: parseNumber(raw["feriasProvision"]),
+    thirteenthProvision: parseNumber(raw["thirteenthProvision"]),
+    valeTransporte: parseNumber(raw["valeTransporte"]),
+    valeAlimentacao: parseNumber(raw["valeAlimentacao"]),
+    otherBenefits: parseNumber(raw["otherBenefits"]),
+    totalEncargos: parseNumber(raw["totalEncargos"]),
+    totalBenefits: parseNumber(raw["totalBenefits"]),
+    custoTotal: parseNumber(raw["custoTotal"]),
+    config: extractLaborChargesConfigMetadata(raw["config"]),
   };
 }
 
 export function calculateLaborCost(input: LaborInput): LaborResult {
   const config = sanitizeLaborChargesConfig(input.config);
 
-  const salaryBaseTotal = coerceNumber(input.salaryBaseTotal, 0);
-  const quantity = coerceNumber(input.quantity, 0);
+  const salaryBaseTotal = parseNumber(input.salaryBaseTotal, 0);
+  const quantity = parseNumber(input.quantity, 0);
 
   const employerInss = salaryBaseTotal * (config.employerInssRate / 100);
   const fgts = salaryBaseTotal * (config.fgtsRate / 100);
