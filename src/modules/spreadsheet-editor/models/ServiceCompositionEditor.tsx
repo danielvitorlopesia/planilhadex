@@ -16,29 +16,11 @@ import {
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import BuildOutlinedIcon from "@mui/icons-material/BuildOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
-
 import EditableCell from "../components/EditableCell";
-import ServiceCompositionMemoryCard from "../components/ServiceCompositionMemoryCard";
-import ServiceCompositionSummaryCard from "../components/ServiceCompositionSummaryCard";
-
-import {
-  buildServiceCompositionMemoryBundle,
-  buildServiceCompositionRowMemory,
-  buildServiceCompositionSummary,
-  calculateServiceCompositionItemSubtotal,
-  inferRecurrenceTypeFromPeriodicity,
-  inferServiceCompositionCategory,
-  sanitizeServiceCompositionDraftRow,
-  SERVICE_COMPOSITION_CATEGORY_OPTIONS,
-  SERVICE_COMPOSITION_DEPRECIATION_OPTIONS,
-  SERVICE_COMPOSITION_PERIODICITY_OPTIONS,
-  SERVICE_COMPOSITION_RECURRENCE_OPTIONS,
-  SERVICE_COMPOSITION_STATUS_OPTIONS,
-  ServiceCompositionDraftRow,
-} from "../utils/serviceCompositionCalculator";
-
 import {
   SpreadsheetRecord,
   updateSpreadsheet,
@@ -49,7 +31,39 @@ type Props = {
   onSpreadsheetUpdated?: (spreadsheet: SpreadsheetRecord) => void;
 };
 
-type SpreadsheetRow = SpreadsheetRecord["rows"][number];
+type EditorRow = SpreadsheetRecord["rows"][number];
+
+const STATUS_OPTIONS = [
+  { value: "Pendente", label: "Pendente" },
+  { value: "Conferido", label: "Conferido" },
+  { value: "Exemplo do domínio", label: "Exemplo do domínio" },
+  { value: "Em elaboração", label: "Em elaboração" },
+  { value: "Calculado", label: "Calculado" },
+];
+
+const CATEGORY_OPTIONS = [
+  { value: "Materiais e insumos", label: "Materiais e insumos" },
+  { value: "Equipamentos", label: "Equipamentos" },
+  { value: "Logística", label: "Logística" },
+  { value: "Apoio operacional", label: "Apoio operacional" },
+  { value: "EPIs e uniformes", label: "EPIs e uniformes" },
+  { value: "Materiais de consumo", label: "Materiais de consumo" },
+];
+
+function safeString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function normalizeNumberInput(value: string | number) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  const normalized = String(value).trim().replace(/\./g, "").replace(",", ".");
+  const parsed = Number(normalized);
+
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -58,103 +72,168 @@ function formatCurrency(value: number) {
   }).format(value || 0);
 }
 
-function normalizeNumberInput(value: string | number) {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : 0;
-  }
+function recalcSubtotal(row: EditorRow): EditorRow {
+  const quantidade = Number(row.quantidade || 0);
+  const valorUnitario = Number(row.valorUnitario || 0);
 
-  const normalized = String(value).replace(/\./g, "").replace(",", ".");
-  const parsed = Number(normalized);
-
-  return Number.isFinite(parsed) ? parsed : 0;
+  return {
+    ...row,
+    quantidade,
+    valorUnitario,
+    subtotal: Number((quantidade * valorUnitario).toFixed(2)),
+  };
 }
 
-function isManagedServiceCompositionRow(row: SpreadsheetRow) {
-  const category = String(row.categoria || "").toLowerCase();
-  const tags = Array.isArray(row.trainingTags) ? row.trainingTags : [];
+function categoryIncludes(category: string, terms: string[]) {
+  const normalized = category.toLowerCase();
+  return terms.some((term) => normalized.includes(term));
+}
+
+function rowHasTrainingTag(row: EditorRow, tag: string) {
+  return Array.isArray(row.trainingTags) && row.trainingTags.includes(tag);
+}
+
+function isEditableCompositionRow(row: EditorRow) {
+  const category = safeString(row.categoria).toLowerCase();
+  const item = safeString(row.item).toLowerCase();
 
   return (
-    tags.includes("service_composition_row") ||
-    category.includes("materiais e insumos") ||
-    category.includes("equipamentos") ||
-    category.includes("logística operacional") ||
-    category.includes("logistica operacional") ||
-    category.includes("apoio operacional") ||
-    category.includes("equipe técnica") ||
-    category.includes("equipe tecnica") ||
-    category.includes("equipe operacional")
+    categoryIncludes(category, [
+      "material",
+      "insumo",
+      "equipamento",
+      "logística",
+      "logistica",
+      "apoio operacional",
+      "epi",
+      "uniforme",
+    ]) ||
+    item.includes("equipamento") ||
+    item.includes("uniforme") ||
+    item.includes("epi") ||
+    rowHasTrainingTag(row, "service_composition_editable")
   );
 }
 
-function extractStoredDraftRows(
-  spreadsheet: SpreadsheetRecord
-): ServiceCompositionDraftRow[] {
-  const raw =
-    spreadsheet.metadata &&
-    typeof spreadsheet.metadata === "object" &&
-    Array.isArray(spreadsheet.metadata.serviceCompositionDraftRows)
-      ? (spreadsheet.metadata.serviceCompositionDraftRows as Array<
-          Partial<ServiceCompositionDraftRow>
-        >)
-      : [];
-
-  return raw.map((row) => sanitizeServiceCompositionDraftRow(row));
+function extractEditableRows(rows: EditorRow[]) {
+  return rows.filter(isEditableCompositionRow).map(recalcSubtotal);
 }
 
-function extractDraftRowsFromSpreadsheetRows(
-  rows: SpreadsheetRow[]
-): ServiceCompositionDraftRow[] {
-  return rows
-    .filter(isManagedServiceCompositionRow)
-    .map((row) => {
-      const category = inferServiceCompositionCategory(String(row.categoria || ""));
+function buildRowId(prefix = "composition") {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
 
-      return sanitizeServiceCompositionDraftRow({
-        id:
-          typeof row.id === "string"
-            ? row.id
-            : `svc_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-        item: String(row.item || ""),
-        category,
-        recurrenceType: inferRecurrenceTypeFromPeriodicity("mensal"),
-        serviceUnit: "unidade",
-        periodicity: "mensal",
-        quantity: Number(row.quantidade || 0),
-        unitCost: Number(row.valorUnitario || 0),
-        productivityFactor: 1,
-        allocationFactor: 1,
-        depreciationMethod: category === "Equipamentos" ? "rateio_linear" : "nao_aplica",
-        usefulLifeMonths: category === "Equipamentos" ? 12 : 0,
-        status: String(row.status || "Pendente"),
-        consumptionBasis: "",
-        technicalJustification: row.memoriaCalculo || "",
-      });
-    });
+  return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`;
 }
 
-function convertDraftRowToSpreadsheetRow(
-  row: ServiceCompositionDraftRow
-): SpreadsheetRow {
-  const subtotal = calculateServiceCompositionItemSubtotal(row);
-
+function buildMaterialRow(): EditorRow {
   return {
-    id: row.id,
-    item: row.item.trim() || "Item sem nome",
-    categoria: row.category,
-    quantidade: Math.max(0, Number(row.quantity || 0)),
-    valorUnitario: row.quantity > 0 ? Number((subtotal / row.quantity).toFixed(2)) : 0,
-    subtotal,
-    status: row.status.trim() || "Pendente",
-    memoriaCalculo: buildServiceCompositionRowMemory(row),
+    id: buildRowId("material"),
+    item: "Novo material",
+    categoria: "Materiais e insumos",
+    quantidade: 1,
+    valorUnitario: 0,
+    subtotal: 0,
+    status: "Pendente",
+    memoriaCalculo: "",
     origem: "edição local",
     automatico: false,
-    trainingTags: [
-      "service_composition_row",
-      `recurrence_${row.recurrenceType}`,
-      row.depreciationMethod === "rateio_linear"
-        ? "with_depreciation"
-        : "without_depreciation",
-    ],
+    trainingTags: ["service_composition_editable", "material"],
+  };
+}
+
+function buildEquipmentRow(): EditorRow {
+  return {
+    id: buildRowId("equipment"),
+    item: "Novo equipamento",
+    categoria: "Equipamentos",
+    quantidade: 1,
+    valorUnitario: 0,
+    subtotal: 0,
+    status: "Pendente",
+    memoriaCalculo: "",
+    origem: "edição local",
+    automatico: false,
+    trainingTags: ["service_composition_editable", "equipment"],
+  };
+}
+
+function summarizeRows(rows: EditorRow[]) {
+  const itemCount = rows.length;
+
+  const total = rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
+
+  const materialsTotal = rows.reduce((sum, row) => {
+    const category = safeString(row.categoria).toLowerCase();
+    if (
+      categoryIncludes(category, ["material", "insumo", "epi", "uniforme"]) &&
+      !category.includes("equipamento")
+    ) {
+      return sum + Number(row.subtotal || 0);
+    }
+    return sum;
+  }, 0);
+
+  const equipmentTotal = rows.reduce((sum, row) => {
+    const category = safeString(row.categoria).toLowerCase();
+    if (categoryIncludes(category, ["equipamento"])) {
+      return sum + Number(row.subtotal || 0);
+    }
+    return sum;
+  }, 0);
+
+  const logisticsTotal = rows.reduce((sum, row) => {
+    const category = safeString(row.categoria).toLowerCase();
+    if (categoryIncludes(category, ["logística", "logistica"])) {
+      return sum + Number(row.subtotal || 0);
+    }
+    return sum;
+  }, 0);
+
+  const supportTotal = rows.reduce((sum, row) => {
+    const category = safeString(row.categoria).toLowerCase();
+    if (categoryIncludes(category, ["apoio operacional"])) {
+      return sum + Number(row.subtotal || 0);
+    }
+    return sum;
+  }, 0);
+
+  const recurringTotal = rows.reduce((sum, row) => {
+    const tags = Array.isArray(row.trainingTags) ? row.trainingTags : [];
+    if (tags.includes("recorrente")) {
+      return sum + Number(row.subtotal || 0);
+    }
+    return sum;
+  }, 0);
+
+  const eventualTotal = rows.reduce((sum, row) => {
+    const tags = Array.isArray(row.trainingTags) ? row.trainingTags : [];
+    if (tags.includes("eventual")) {
+      return sum + Number(row.subtotal || 0);
+    }
+    return sum;
+  }, 0);
+
+  const onDemandTotal = rows.reduce((sum, row) => {
+    const tags = Array.isArray(row.trainingTags) ? row.trainingTags : [];
+    if (tags.includes("sob_demanda")) {
+      return sum + Number(row.subtotal || 0);
+    }
+    return sum;
+  }, 0);
+
+  return {
+    itemCount,
+    total: Number(total.toFixed(2)),
+    workforceTotal: 0,
+    materialsTotal: Number(materialsTotal.toFixed(2)),
+    equipmentTotal: Number(equipmentTotal.toFixed(2)),
+    logisticsTotal: Number(logisticsTotal.toFixed(2)),
+    supportTotal: Number(supportTotal.toFixed(2)),
+    recurringTotal: Number(recurringTotal.toFixed(2)),
+    eventualTotal: Number(eventualTotal.toFixed(2)),
+    onDemandTotal: Number(onDemandTotal.toFixed(2)),
   };
 }
 
@@ -162,7 +241,7 @@ export default function ServiceCompositionEditor({
   spreadsheet,
   onSpreadsheetUpdated,
 }: Props) {
-  const [rows, setRows] = useState<ServiceCompositionDraftRow[]>([]);
+  const [rows, setRows] = useState<EditorRow[]>([]);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error" | null;
     message: string;
@@ -172,108 +251,37 @@ export default function ServiceCompositionEditor({
   });
 
   useEffect(() => {
-    const storedDraftRows = extractStoredDraftRows(spreadsheet);
-
-    if (storedDraftRows.length > 0) {
-      setRows(storedDraftRows);
-      return;
-    }
-
-    setRows(extractDraftRowsFromSpreadsheetRows(spreadsheet.rows));
+    setRows(extractEditableRows(spreadsheet.rows));
   }, [spreadsheet]);
 
-  const summary = useMemo(() => {
-    return buildServiceCompositionSummary(rows);
-  }, [rows]);
+  const summary = useMemo(() => summarizeRows(rows), [rows]);
 
-  const memoryBundle = useMemo(() => {
-    return buildServiceCompositionMemoryBundle(rows);
-  }, [rows]);
-
-  const totalHeadcount = useMemo(() => {
-    return rows
-      .filter((row) => row.category === "Equipe técnica / operacional")
-      .reduce((sum, row) => sum + Number(row.quantity || 0), 0);
-  }, [rows]);
-
-  function updateRow<K extends keyof ServiceCompositionDraftRow>(
-    index: number,
-    field: K,
-    value: string
-  ) {
+  function updateRow(index: number, field: keyof EditorRow, value: string) {
     setRows((current) =>
       current.map((row, rowIndex) => {
         if (rowIndex !== index) {
           return row;
         }
 
-        const next: ServiceCompositionDraftRow = {
+        const nextRow: EditorRow = {
           ...row,
           [field]:
-            field === "quantity" ||
-            field === "unitCost" ||
-            field === "productivityFactor" ||
-            field === "allocationFactor" ||
-            field === "usefulLifeMonths"
+            field === "quantidade" || field === "valorUnitario"
               ? normalizeNumberInput(value)
               : value,
-        } as ServiceCompositionDraftRow;
+        };
 
-        if (field === "category" && value === "Equipamentos") {
-          if (next.depreciationMethod === "nao_aplica") {
-            next.depreciationMethod = "rateio_linear";
-          }
-          if (!next.usefulLifeMonths || next.usefulLifeMonths <= 0) {
-            next.usefulLifeMonths = 12;
-          }
-        }
-
-        if (field === "category" && value !== "Equipamentos") {
-          next.depreciationMethod = "nao_aplica";
-          next.usefulLifeMonths = 0;
-        }
-
-        if (field === "periodicity") {
-          if (value === "sob_demanda") {
-            next.recurrenceType = "sob_demanda";
-          } else if (next.recurrenceType === "sob_demanda") {
-            next.recurrenceType = "recorrente";
-          }
-        }
-
-        if (field === "depreciationMethod" && value === "nao_aplica") {
-          next.usefulLifeMonths = 0;
-        }
-
-        if (field === "depreciationMethod" && value === "rateio_linear") {
-          next.usefulLifeMonths = next.usefulLifeMonths > 0 ? next.usefulLifeMonths : 12;
-        }
-
-        return sanitizeServiceCompositionDraftRow(next);
+        return recalcSubtotal(nextRow);
       })
     );
   }
 
-  function handleAddRow() {
-    setRows((current) => [
-      ...current,
-      sanitizeServiceCompositionDraftRow({
-        item: "Novo componente",
-        category: "Materiais e insumos",
-        recurrenceType: "recorrente",
-        serviceUnit: "unidade",
-        periodicity: "mensal",
-        quantity: 1,
-        unitCost: 0,
-        productivityFactor: 1,
-        allocationFactor: 1,
-        depreciationMethod: "nao_aplica",
-        usefulLifeMonths: 0,
-        status: "Pendente",
-        consumptionBasis: "",
-        technicalJustification: "",
-      }),
-    ]);
+  function handleAddMaterialRow() {
+    setRows((current) => [...current, buildMaterialRow()]);
+  }
+
+  function handleAddEquipmentRow() {
+    setRows((current) => [...current, buildEquipmentRow()]);
   }
 
   function handleRemoveRow(index: number) {
@@ -282,42 +290,49 @@ export default function ServiceCompositionEditor({
 
   function handleSave() {
     try {
-      const sanitizedRows = rows.map((row) =>
-        sanitizeServiceCompositionDraftRow({
-          ...row,
-          item: String(row.item || "").trim() || "Item sem nome",
-        })
-      );
+      const sanitizedRows = rows.map((row) => {
+        const normalizedCategory =
+          safeString(row.categoria).trim() || "Materiais e insumos";
 
-      const managedSpreadsheetRows = sanitizedRows.map((row) =>
-        convertDraftRowToSpreadsheetRow(row)
-      );
+        const nextTrainingTags = Array.isArray(row.trainingTags)
+          ? [...row.trainingTags]
+          : [];
+
+        if (!nextTrainingTags.includes("service_composition_editable")) {
+          nextTrainingTags.push("service_composition_editable");
+        }
+
+        return recalcSubtotal({
+          ...row,
+          item: safeString(row.item).trim() || "Item sem nome",
+          categoria: normalizedCategory,
+          quantidade: Math.max(0, Number(row.quantidade || 0)),
+          valorUnitario: Math.max(0, Number(row.valorUnitario || 0)),
+          status: safeString(row.status).trim() || "Pendente",
+          memoriaCalculo: safeString(row.memoriaCalculo),
+          trainingTags: nextTrainingTags,
+        });
+      });
 
       const preservedRows = spreadsheet.rows.filter(
-        (row) => !isManagedServiceCompositionRow(row)
+        (row) => !isEditableCompositionRow(row)
       );
 
-      const rebuiltRows = [...managedSpreadsheetRows, ...preservedRows];
+      const rebuiltRows = [...sanitizedRows, ...preservedRows];
 
       const monthlyBaseValue = rebuiltRows.reduce(
         (sum, row) => sum + Number(row.subtotal || 0),
         0
       );
 
-      const nextSummary = buildServiceCompositionSummary(sanitizedRows);
-      const nextMemoryBundle = buildServiceCompositionMemoryBundle(sanitizedRows);
-
       const updated = updateSpreadsheet(spreadsheet.id, {
         rows: rebuiltRows,
-        monthlyBaseValue,
-        headcount: totalHeadcount,
+        monthlyBaseValue: Number(monthlyBaseValue.toFixed(2)),
         metadata: {
           ...(spreadsheet.metadata ?? {}),
           editorModule: "service_composition",
-          lastEditedSection: "service_composition_rows",
-          serviceCompositionDraftRows: sanitizedRows,
-          serviceCompositionSummary: nextSummary,
-          serviceCompositionMemoryBundle: nextMemoryBundle,
+          lastEditedSection: "materials_equipments_logistics",
+          serviceCompositionSummary: summary,
         },
       });
 
@@ -327,7 +342,8 @@ export default function ServiceCompositionEditor({
 
       setFeedback({
         type: "success",
-        message: "Composição de serviços salva com sucesso.",
+        message:
+          "Insumos, materiais e equipamentos salvos com sucesso.",
       });
 
       onSpreadsheetUpdated?.(updated);
@@ -358,19 +374,27 @@ export default function ServiceCompositionEditor({
               </Typography>
 
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-                Este bloco permite montar a composição material e operacional do
-                serviço, com recorrência, periodicidade, produtividade,
-                rateio/depreciação, base de consumo e justificativa técnica.
+                Este bloco permite editar materiais, insumos, equipamentos,
+                logística e apoio operacional, atualizando a composição total da
+                planilha.
               </Typography>
             </Box>
 
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
               <Button
                 variant="outlined"
-                startIcon={<AddIcon />}
-                onClick={handleAddRow}
+                startIcon={<Inventory2OutlinedIcon />}
+                onClick={handleAddMaterialRow}
               >
-                Adicionar linha
+                Adicionar material
+              </Button>
+
+              <Button
+                variant="outlined"
+                startIcon={<BuildOutlinedIcon />}
+                onClick={handleAddEquipmentRow}
+              >
+                Adicionar equipamento
               </Button>
 
               <Button
@@ -395,11 +419,21 @@ export default function ServiceCompositionEditor({
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             <Chip label={`Itens: ${summary.itemCount}`} variant="outlined" />
             <Chip
-              label={`Total da composição: ${formatCurrency(summary.total)}`}
+              label={`Materiais/insumos: ${formatCurrency(summary.materialsTotal)}`}
               variant="outlined"
             />
             <Chip
-              label={`Quantidade operacional: ${totalHeadcount}`}
+              label={`Equipamentos: ${formatCurrency(summary.equipmentTotal)}`}
+              variant="outlined"
+            />
+            <Chip
+              label={`Logística/apoio: ${formatCurrency(
+                summary.logisticsTotal + summary.supportTotal
+              )}`}
+              variant="outlined"
+            />
+            <Chip
+              label={`Total do módulo: ${formatCurrency(summary.total)}`}
               variant="outlined"
             />
           </Stack>
@@ -411,23 +445,11 @@ export default function ServiceCompositionEditor({
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ minWidth: 220 }}>
-                    <strong>Componente</strong>
+                    <strong>Item</strong>
                   </TableCell>
 
-                  <TableCell sx={{ minWidth: 190 }}>
-                    <strong>Bloco</strong>
-                  </TableCell>
-
-                  <TableCell sx={{ minWidth: 150 }}>
-                    <strong>Recorrência</strong>
-                  </TableCell>
-
-                  <TableCell sx={{ minWidth: 150 }}>
-                    <strong>Unidade</strong>
-                  </TableCell>
-
-                  <TableCell sx={{ minWidth: 150 }}>
-                    <strong>Periodicidade</strong>
+                  <TableCell sx={{ minWidth: 180 }}>
+                    <strong>Categoria</strong>
                   </TableCell>
 
                   <TableCell sx={{ minWidth: 120 }}>
@@ -435,42 +457,22 @@ export default function ServiceCompositionEditor({
                   </TableCell>
 
                   <TableCell sx={{ minWidth: 140 }}>
-                    <strong>Custo unitário</strong>
-                  </TableCell>
-
-                  <TableCell sx={{ minWidth: 150 }}>
-                    <strong>Produtividade</strong>
-                  </TableCell>
-
-                  <TableCell sx={{ minWidth: 170 }}>
-                    <strong>Rateio contratual</strong>
-                  </TableCell>
-
-                  <TableCell sx={{ minWidth: 170 }}>
-                    <strong>Depreciação</strong>
-                  </TableCell>
-
-                  <TableCell sx={{ minWidth: 150 }}>
-                    <strong>Vida útil (meses)</strong>
-                  </TableCell>
-
-                  <TableCell sx={{ minWidth: 220 }}>
-                    <strong>Base de consumo</strong>
-                  </TableCell>
-
-                  <TableCell sx={{ minWidth: 240 }}>
-                    <strong>Justificativa técnica</strong>
+                    <strong>Valor unitário</strong>
                   </TableCell>
 
                   <TableCell align="right" sx={{ minWidth: 130 }}>
                     <strong>Subtotal</strong>
                   </TableCell>
 
-                  <TableCell sx={{ minWidth: 150 }}>
+                  <TableCell sx={{ minWidth: 160 }}>
                     <strong>Status</strong>
                   </TableCell>
 
-                  <TableCell align="center" sx={{ minWidth: 100 }}>
+                  <TableCell sx={{ minWidth: 220 }}>
+                    <strong>Memória / justificativa</strong>
+                  </TableCell>
+
+                  <TableCell align="center" sx={{ minWidth: 90 }}>
                     <strong>Ação</strong>
                   </TableCell>
                 </TableRow>
@@ -490,52 +492,17 @@ export default function ServiceCompositionEditor({
                       <TableCell>
                         <EditableCell
                           type="select"
-                          value={row.category}
-                          options={SERVICE_COMPOSITION_CATEGORY_OPTIONS}
-                          onChange={(value) =>
-                            updateRow(index, "category", value)
-                          }
-                        />
-                      </TableCell>
-
-                      <TableCell>
-                        <EditableCell
-                          type="select"
-                          value={row.recurrenceType}
-                          options={SERVICE_COMPOSITION_RECURRENCE_OPTIONS}
-                          onChange={(value) =>
-                            updateRow(index, "recurrenceType", value)
-                          }
-                        />
-                      </TableCell>
-
-                      <TableCell>
-                        <EditableCell
-                          value={row.serviceUnit}
-                          onChange={(value) =>
-                            updateRow(index, "serviceUnit", value)
-                          }
-                        />
-                      </TableCell>
-
-                      <TableCell>
-                        <EditableCell
-                          type="select"
-                          value={row.periodicity}
-                          options={SERVICE_COMPOSITION_PERIODICITY_OPTIONS}
-                          onChange={(value) =>
-                            updateRow(index, "periodicity", value)
-                          }
+                          value={row.categoria}
+                          options={CATEGORY_OPTIONS}
+                          onChange={(value) => updateRow(index, "categoria", value)}
                         />
                       </TableCell>
 
                       <TableCell>
                         <EditableCell
                           type="number"
-                          value={row.quantity}
-                          onChange={(value) =>
-                            updateRow(index, "quantity", value)
-                          }
+                          value={row.quantidade}
+                          onChange={(value) => updateRow(index, "quantidade", value)}
                           min={0}
                           step={1}
                         />
@@ -544,86 +511,16 @@ export default function ServiceCompositionEditor({
                       <TableCell>
                         <EditableCell
                           type="number"
-                          value={row.unitCost}
-                          onChange={(value) =>
-                            updateRow(index, "unitCost", value)
-                          }
+                          value={row.valorUnitario}
+                          onChange={(value) => updateRow(index, "valorUnitario", value)}
                           min={0}
                           step={0.01}
-                        />
-                      </TableCell>
-
-                      <TableCell>
-                        <EditableCell
-                          type="number"
-                          value={row.productivityFactor}
-                          onChange={(value) =>
-                            updateRow(index, "productivityFactor", value)
-                          }
-                          min={0}
-                          step={0.01}
-                        />
-                      </TableCell>
-
-                      <TableCell>
-                        <EditableCell
-                          type="number"
-                          value={row.allocationFactor}
-                          onChange={(value) =>
-                            updateRow(index, "allocationFactor", value)
-                          }
-                          min={0}
-                          step={0.01}
-                        />
-                      </TableCell>
-
-                      <TableCell>
-                        <EditableCell
-                          type="select"
-                          value={row.depreciationMethod}
-                          options={SERVICE_COMPOSITION_DEPRECIATION_OPTIONS}
-                          onChange={(value) =>
-                            updateRow(index, "depreciationMethod", value)
-                          }
-                        />
-                      </TableCell>
-
-                      <TableCell>
-                        <EditableCell
-                          type="number"
-                          value={row.usefulLifeMonths}
-                          onChange={(value) =>
-                            updateRow(index, "usefulLifeMonths", value)
-                          }
-                          min={0}
-                          step={1}
-                          disabled={row.depreciationMethod === "nao_aplica"}
-                        />
-                      </TableCell>
-
-                      <TableCell>
-                        <EditableCell
-                          value={row.consumptionBasis}
-                          onChange={(value) =>
-                            updateRow(index, "consumptionBasis", value)
-                          }
-                        />
-                      </TableCell>
-
-                      <TableCell>
-                        <EditableCell
-                          value={row.technicalJustification}
-                          onChange={(value) =>
-                            updateRow(index, "technicalJustification", value)
-                          }
                         />
                       </TableCell>
 
                       <TableCell align="right">
                         <Typography variant="body2" fontWeight={700}>
-                          {formatCurrency(
-                            calculateServiceCompositionItemSubtotal(row)
-                          )}
+                          {formatCurrency(row.subtotal || 0)}
                         </Typography>
                       </TableCell>
 
@@ -631,8 +528,17 @@ export default function ServiceCompositionEditor({
                         <EditableCell
                           type="select"
                           value={row.status}
-                          options={SERVICE_COMPOSITION_STATUS_OPTIONS}
+                          options={STATUS_OPTIONS}
                           onChange={(value) => updateRow(index, "status", value)}
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <EditableCell
+                          value={row.memoriaCalculo || ""}
+                          onChange={(value) =>
+                            updateRow(index, "memoriaCalculo", value)
+                          }
                         />
                       </TableCell>
 
@@ -650,10 +556,10 @@ export default function ServiceCompositionEditor({
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={16}>
+                    <TableCell colSpan={8}>
                       <Typography variant="body2" color="text.secondary">
-                        Nenhum componente foi identificado ainda. Adicione a primeira
-                        linha para começar a montar a composição de serviços.
+                        Nenhum item de composição editável foi encontrado.
+                        Adicione materiais ou equipamentos para iniciar este módulo.
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -662,9 +568,59 @@ export default function ServiceCompositionEditor({
             </Table>
           </Box>
 
-          <ServiceCompositionSummaryCard summary={summary} />
+          <Divider />
 
-          <ServiceCompositionMemoryCard items={memoryBundle} />
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)", xl: "repeat(4, 1fr)" },
+              gap: 2,
+            }}
+          >
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  Materiais e insumos
+                </Typography>
+                <Typography variant="h6" fontWeight={800}>
+                  {formatCurrency(summary.materialsTotal)}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  Equipamentos
+                </Typography>
+                <Typography variant="h6" fontWeight={800}>
+                  {formatCurrency(summary.equipmentTotal)}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  Logística e apoio
+                </Typography>
+                <Typography variant="h6" fontWeight={800}>
+                  {formatCurrency(summary.logisticsTotal + summary.supportTotal)}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  Total da composição
+                </Typography>
+                <Typography variant="h6" fontWeight={800}>
+                  {formatCurrency(summary.total)}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Box>
         </Stack>
       </CardContent>
     </Card>
