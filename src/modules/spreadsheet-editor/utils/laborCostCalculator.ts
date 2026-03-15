@@ -46,7 +46,7 @@ export const DEFAULT_LABOR_CHARGES_CONFIG: LaborChargesConfig = {
   otherBenefitsPerEmployee: 0,
 };
 
-function safeNumber(value: unknown, fallback = 0) {
+function parseNumber(value: unknown, fallback = 0): number {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : fallback;
   }
@@ -61,37 +61,43 @@ function safeNumber(value: unknown, fallback = 0) {
 }
 
 export function sanitizeLaborChargesConfig(
-  input?: Partial<LaborChargesConfig>
+  config?: Partial<LaborChargesConfig>
 ): LaborChargesConfig {
   return {
-    employerInssRate: safeNumber(
-      input?.employerInssRate,
+    employerInssRate: parseNumber(
+      config?.employerInssRate,
       DEFAULT_LABOR_CHARGES_CONFIG.employerInssRate
     ),
-    fgtsRate: safeNumber(input?.fgtsRate, DEFAULT_LABOR_CHARGES_CONFIG.fgtsRate),
-    ratRate: safeNumber(input?.ratRate, DEFAULT_LABOR_CHARGES_CONFIG.ratRate),
-    thirdPartyRate: safeNumber(
-      input?.thirdPartyRate,
+    fgtsRate: parseNumber(
+      config?.fgtsRate,
+      DEFAULT_LABOR_CHARGES_CONFIG.fgtsRate
+    ),
+    ratRate: parseNumber(
+      config?.ratRate,
+      DEFAULT_LABOR_CHARGES_CONFIG.ratRate
+    ),
+    thirdPartyRate: parseNumber(
+      config?.thirdPartyRate,
       DEFAULT_LABOR_CHARGES_CONFIG.thirdPartyRate
     ),
-    vacationProvisionRate: safeNumber(
-      input?.vacationProvisionRate,
+    vacationProvisionRate: parseNumber(
+      config?.vacationProvisionRate,
       DEFAULT_LABOR_CHARGES_CONFIG.vacationProvisionRate
     ),
-    thirteenthProvisionRate: safeNumber(
-      input?.thirteenthProvisionRate,
+    thirteenthProvisionRate: parseNumber(
+      config?.thirteenthProvisionRate,
       DEFAULT_LABOR_CHARGES_CONFIG.thirteenthProvisionRate
     ),
-    valeTransportePerEmployee: safeNumber(
-      input?.valeTransportePerEmployee,
+    valeTransportePerEmployee: parseNumber(
+      config?.valeTransportePerEmployee,
       DEFAULT_LABOR_CHARGES_CONFIG.valeTransportePerEmployee
     ),
-    valeAlimentacaoPerEmployee: safeNumber(
-      input?.valeAlimentacaoPerEmployee,
+    valeAlimentacaoPerEmployee: parseNumber(
+      config?.valeAlimentacaoPerEmployee,
       DEFAULT_LABOR_CHARGES_CONFIG.valeAlimentacaoPerEmployee
     ),
-    otherBenefitsPerEmployee: safeNumber(
-      input?.otherBenefitsPerEmployee,
+    otherBenefitsPerEmployee: parseNumber(
+      config?.otherBenefitsPerEmployee,
       DEFAULT_LABOR_CHARGES_CONFIG.otherBenefitsPerEmployee
     ),
   };
@@ -99,8 +105,9 @@ export function sanitizeLaborChargesConfig(
 
 export function calculateLaborCost(input: LaborInput): LaborResult {
   const config = sanitizeLaborChargesConfig(input.config);
-  const salaryBaseTotal = safeNumber(input.salaryBaseTotal, 0);
-  const quantity = safeNumber(input.quantity, 0);
+
+  const salaryBaseTotal = parseNumber(input.salaryBaseTotal, 0);
+  const quantity = parseNumber(input.quantity, 0);
 
   const employerInss = salaryBaseTotal * (config.employerInssRate / 100);
   const fgts = salaryBaseTotal * (config.fgtsRate / 100);
