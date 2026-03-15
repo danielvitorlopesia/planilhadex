@@ -42,9 +42,6 @@ import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import PrecisionManufacturingOutlinedIcon from "@mui/icons-material/PrecisionManufacturingOutlined";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import SummarizeOutlinedIcon from "@mui/icons-material/SummarizeOutlined";
-import CalculateOutlinedIcon from "@mui/icons-material/CalculateOutlined";
-import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
-import SchemaOutlinedIcon from "@mui/icons-material/SchemaOutlined";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import SpreadsheetEditor from "../modules/spreadsheet-editor/SpreadsheetEditor";
 import {
@@ -56,19 +53,7 @@ import {
 type LoadState = "loading" | "success" | "error";
 type SaveState = "idle" | "saving" | "success" | "error";
 
-type SpreadsheetDetailRow = {
-  id?: string;
-  item: string;
-  categoria: string;
-  quantidade: number;
-  valorUnitario: number;
-  subtotal: number;
-  status: string;
-  memoriaCalculo?: string;
-  origem?: string;
-  automatico?: boolean;
-  trainingTags?: string[];
-};
+type SpreadsheetDetailRow = SpreadsheetRecord["rows"][number];
 
 type SpreadsheetDetailRecord = SpreadsheetRecord & {
   contractReference?: string;
@@ -144,70 +129,6 @@ type PcfpModuleGroup = PcfpModuleDefinition & {
   total: number;
 };
 
-type LaborChargesConfigMetadata = {
-  employerInssRate: number;
-  fgtsRate: number;
-  ratRate: number;
-  thirdPartyRate: number;
-  vacationProvisionRate: number;
-  thirteenthProvisionRate: number;
-  valeTransportePerEmployee: number;
-  valeAlimentacaoPerEmployee: number;
-  otherBenefitsPerEmployee: number;
-};
-
-type LaborCostBreakdownMetadata = {
-  salaryBaseTotal: number;
-  quantity: number;
-  employerInss: number;
-  fgts: number;
-  rat: number;
-  thirdPartyCharges: number;
-  feriasProvision: number;
-  thirteenthProvision: number;
-  valeTransporte: number;
-  valeAlimentacao: number;
-  otherBenefits: number;
-  totalEncargos: number;
-  totalBenefits: number;
-  custoTotal: number;
-  config?: LaborChargesConfigMetadata;
-};
-
-type ServiceCompositionSummaryMetadata = {
-  itemCount: number;
-  total: number;
-  workforceTotal: number;
-  materialsTotal: number;
-  equipmentTotal: number;
-  logisticsTotal: number;
-  supportTotal: number;
-  recurringTotal: number;
-  eventualTotal: number;
-  onDemandTotal: number;
-};
-
-type ServiceCompositionMemoryItemMetadata = {
-  id: string;
-  item: string;
-  category: string;
-  recurrenceType: string;
-  serviceUnit: string;
-  periodicity: string;
-  quantity: number;
-  unitCost: number;
-  productivityFactor: number;
-  monthlyizationFactor: number;
-  allocationFactor: number;
-  depreciationMethod: string;
-  depreciationFactor: number;
-  usefulLifeMonths: number;
-  subtotal: number;
-  formula: string;
-  consumptionBasis: string;
-  technicalJustification: string;
-};
-
 const DOMAIN_SCENARIO_LABELS: Record<string, string> = {
   reception_administrative_support: "Recepção e apoio administrativo",
   cleaning_conservation: "Limpeza e conservação",
@@ -278,6 +199,10 @@ const PCFP_MODULES: PcfpModuleDefinition[] = [
   },
 ];
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -294,7 +219,7 @@ function parseNumber(value: string | number | undefined | null) {
     return 0;
   }
 
-  const normalized = String(value).replace(/\./g, "").replace(",", ".");
+  const normalized = String(value).trim().replace(/\./g, "").replace(",", ".");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
 }
@@ -311,8 +236,14 @@ function safeString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
-function safeObject(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+function safeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => (typeof item === "string" ? item : ""))
+    .filter(Boolean);
 }
 
 function getModelLabel(modelType?: string) {
@@ -417,15 +348,15 @@ function itemMatches(item: string, terms: string[]) {
 
 function sumRowsByCategory(rows: SpreadsheetDetailRow[], terms: string[]) {
   return rows.reduce((sum, row) => {
-    if (categoryMatches(row.categoria, terms)) {
-      return sum + (row.subtotal || 0);
+    if (categoryMatches(String(row.categoria || ""), terms)) {
+      return sum + Number(row.subtotal || 0);
     }
     return sum;
   }, 0);
 }
 
 function findFirstRowByItem(rows: SpreadsheetDetailRow[], terms: string[]) {
-  return rows.find((row) => itemMatches(row.item, terms));
+  return rows.find((row) => itemMatches(String(row.item || ""), terms));
 }
 
 function getDomainScenarioLabel(record?: SpreadsheetDetailRecord | null) {
@@ -442,20 +373,24 @@ function getDomainScenarioLabel(record?: SpreadsheetDetailRecord | null) {
 }
 
 function extractStoredEditorDraft(record: SpreadsheetDetailRecord) {
-  const raw = record.metadata?.editorDraft;
-
-  if (typeof raw === "object" && raw !== null) {
-    return raw as Partial<EditorState>;
+  const metadata = record.metadata;
+  if (!isRecord(metadata)) {
+    return {};
   }
 
-  return {};
+  const raw = metadata["editorDraft"];
+  if (!isRecord(raw)) {
+    return {};
+  }
+
+  return raw as Partial<EditorState>;
 }
 
 function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
   const storedDraft = extractStoredEditorDraft(record);
 
   const laborRows = record.rows.filter((row) =>
-    categoryMatches(row.categoria, ["mão de obra", "equipe operacional"])
+    categoryMatches(String(row.categoria || ""), ["mão de obra", "equipe operacional"])
   );
 
   const firstLaborRow = laborRows[0];
@@ -472,11 +407,11 @@ function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
 
   const inferredHeadcount =
     record.headcount ??
-    laborRows.reduce((sum, row) => sum + (row.quantidade || 0), 0);
+    laborRows.reduce((sum, row) => sum + Number(row.quantidade || 0), 0);
 
   const inferredMonthlyBaseValue =
     record.monthlyBaseValue ??
-    record.rows.reduce((sum, row) => sum + (row.subtotal || 0), 0);
+    record.rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
 
   return {
     contractingAgency:
@@ -490,7 +425,7 @@ function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
     state: storedDraft.state ?? "",
     cboCode: storedDraft.cboCode ?? "",
     professionalCategory:
-      storedDraft.professionalCategory ?? firstLaborRow?.item ?? "",
+      storedDraft.professionalCategory ?? safeString(firstLaborRow?.item),
     cctReference: storedDraft.cctReference ?? "",
     taxRegime: storedDraft.taxRegime ?? "lucro_presumido",
     objectDescription: storedDraft.objectDescription ?? record.description ?? "",
@@ -502,14 +437,15 @@ function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
     workScale: storedDraft.workScale ?? "",
     weeklyHours: storedDraft.weeklyHours ?? "",
     monthlyHours: storedDraft.monthlyHours ?? "",
-    salaryBase: storedDraft.salaryBase ?? stringifyNumber(firstLaborRow?.valorUnitario ?? 0),
+    salaryBase: storedDraft.salaryBase ?? stringifyNumber(Number(firstLaborRow?.valorUnitario || 0)),
     nightAdditional: storedDraft.nightAdditional ?? "",
     hazardAdditional: storedDraft.hazardAdditional ?? "",
     mealAllowance:
-      storedDraft.mealAllowance ?? stringifyNumber(mealAllowanceRow?.valorUnitario ?? 0),
+      storedDraft.mealAllowance ??
+      stringifyNumber(Number(mealAllowanceRow?.valorUnitario || 0)),
     transportAllowance:
       storedDraft.transportAllowance ??
-      stringifyNumber(transportAllowanceRow?.valorUnitario ?? 0),
+      stringifyNumber(Number(transportAllowanceRow?.valorUnitario || 0)),
     mandatoryBenefitsNotes: storedDraft.mandatoryBenefitsNotes ?? "",
     notes: storedDraft.notes ?? safeString(record.notes),
   };
@@ -555,8 +491,8 @@ function getExequibilityRisk(
 }
 
 function classifyRowToModule(row: SpreadsheetDetailRow): PcfpModuleKey {
-  const category = row.categoria.toLowerCase();
-  const item = row.item.toLowerCase();
+  const category = String(row.categoria || "").toLowerCase();
+  const item = String(row.item || "").toLowerCase();
 
   if (
     category.includes("encargos") ||
@@ -628,140 +564,14 @@ function buildPcfpModuleGroups(rows: SpreadsheetDetailRow[]): PcfpModuleGroup[] 
 
     if (target) {
       target.rows.push(row);
-      target.total += row.subtotal || 0;
+      target.total += Number(row.subtotal || 0);
     }
   });
 
   return groups;
 }
 
-function extractLaborChargesConfigMetadata(
-  spreadsheet: SpreadsheetDetailRecord
-): LaborChargesConfigMetadata | null {
-  const metadata = safeObject(spreadsheet.metadata);
-  const config = safeObject(metadata?.laborChargesConfig);
-
-  if (!config) {
-    return null;
-  }
-
-  return {
-    employerInssRate: parseNumber(config.employerInssRate),
-    fgtsRate: parseNumber(config.fgtsRate),
-    ratRate: parseNumber(config.ratRate),
-    thirdPartyRate: parseNumber(config.thirdPartyRate),
-    vacationProvisionRate: parseNumber(config.vacationProvisionRate),
-    thirteenthProvisionRate: parseNumber(config.thirteenthProvisionRate),
-    valeTransportePerEmployee: parseNumber(config.valeTransportePerEmployee),
-    valeAlimentacaoPerEmployee: parseNumber(config.valeAlimentacaoPerEmployee),
-    otherBenefitsPerEmployee: parseNumber(config.otherBenefitsPerEmployee),
-  };
-}
-
-function extractLaborCostBreakdownMetadata(
-  spreadsheet: SpreadsheetDetailRecord
-): LaborCostBreakdownMetadata | null {
-  const metadata = safeObject(spreadsheet.metadata);
-  const breakdown = safeObject(metadata?.laborCostBreakdown);
-
-  if (!breakdown) {
-    return null;
-  }
-
-  return {
-    salaryBaseTotal: parseNumber(breakdown.salaryBaseTotal),
-    quantity: parseNumber(breakdown.quantity),
-    employerInss: parseNumber(breakdown.employerInss),
-    fgts: parseNumber(breakdown.fgts),
-    rat: parseNumber(breakdown.rat),
-    thirdPartyCharges: parseNumber(breakdown.thirdPartyCharges),
-    feriasProvision: parseNumber(breakdown.feriasProvision),
-    thirteenthProvision: parseNumber(breakdown.thirteenthProvision),
-    valeTransporte: parseNumber(breakdown.valeTransporte),
-    valeAlimentacao: parseNumber(breakdown.valeAlimentacao),
-    otherBenefits: parseNumber(breakdown.otherBenefits),
-    totalEncargos: parseNumber(breakdown.totalEncargos),
-    totalBenefits: parseNumber(breakdown.totalBenefits),
-    custoTotal: parseNumber(breakdown.custoTotal),
-    config: extractLaborChargesConfigMetadata(spreadsheet) ?? undefined,
-  };
-}
-
-function extractServiceCompositionSummaryMetadata(
-  spreadsheet: SpreadsheetDetailRecord
-): ServiceCompositionSummaryMetadata | null {
-  const metadata = safeObject(spreadsheet.metadata);
-  const summary = safeObject(metadata?.serviceCompositionSummary);
-
-  if (!summary) {
-    return null;
-  }
-
-  return {
-    itemCount: parseNumber(summary.itemCount),
-    total: parseNumber(summary.total),
-    workforceTotal: parseNumber(summary.workforceTotal),
-    materialsTotal: parseNumber(summary.materialsTotal),
-    equipmentTotal: parseNumber(summary.equipmentTotal),
-    logisticsTotal: parseNumber(summary.logisticsTotal),
-    supportTotal: parseNumber(summary.supportTotal),
-    recurringTotal: parseNumber(summary.recurringTotal),
-    eventualTotal: parseNumber(summary.eventualTotal),
-    onDemandTotal: parseNumber(summary.onDemandTotal),
-  };
-}
-
-function extractServiceCompositionMemoryBundleMetadata(
-  spreadsheet: SpreadsheetDetailRecord
-): ServiceCompositionMemoryItemMetadata[] {
-  const metadata = safeObject(spreadsheet.metadata);
-  const bundle = metadata?.serviceCompositionMemoryBundle;
-
-  if (!Array.isArray(bundle)) {
-    return [];
-  }
-
-  return bundle.map((item, index) => {
-    const raw = safeObject(item) ?? {};
-    return {
-      id: safeString(raw.id) || `memory_${index}`,
-      item: safeString(raw.item),
-      category: safeString(raw.category),
-      recurrenceType: safeString(raw.recurrenceType),
-      serviceUnit: safeString(raw.serviceUnit),
-      periodicity: safeString(raw.periodicity),
-      quantity: parseNumber(raw.quantity),
-      unitCost: parseNumber(raw.unitCost),
-      productivityFactor: parseNumber(raw.productivityFactor),
-      monthlyizationFactor: parseNumber(raw.monthlyizationFactor),
-      allocationFactor: parseNumber(raw.allocationFactor),
-      depreciationMethod: safeString(raw.depreciationMethod),
-      depreciationFactor: parseNumber(raw.depreciationFactor),
-      usefulLifeMonths: parseNumber(raw.usefulLifeMonths),
-      subtotal: parseNumber(raw.subtotal),
-      formula: safeString(raw.formula),
-      consumptionBasis: safeString(raw.consumptionBasis),
-      technicalJustification: safeString(raw.technicalJustification),
-    };
-  });
-}
-
-function labelDepreciationMethod(value?: string) {
-  switch (value) {
-    case "rateio_linear":
-      return "Rateio linear";
-    case "nao_aplica":
-      return "Não se aplica";
-    default:
-      return value || "Não informado";
-  }
-}
-
-function ModuleSummaryCard({
-  module,
-}: {
-  module: PcfpModuleGroup;
-}) {
+function ModuleSummaryCard({ module }: { module: PcfpModuleGroup }) {
   return (
     <Card
       variant="outlined"
@@ -793,11 +603,7 @@ function ModuleSummaryCard({
   );
 }
 
-function ModuleDetailCard({
-  module,
-}: {
-  module: PcfpModuleGroup;
-}) {
+function ModuleDetailCard({ module }: { module: PcfpModuleGroup }) {
   return (
     <Card variant="outlined" sx={{ borderRadius: 4 }}>
       <CardContent sx={{ p: 0 }}>
@@ -822,16 +628,8 @@ function ModuleDetailCard({
             </Typography>
 
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Chip
-                size="small"
-                label={`${module.rows.length} item(ns)`}
-                variant="outlined"
-              />
-              <Chip
-                size="small"
-                label={formatCurrency(module.total)}
-                variant="outlined"
-              />
+              <Chip size="small" label={`${module.rows.length} item(ns)`} variant="outlined" />
+              <Chip size="small" label={formatCurrency(module.total)} variant="outlined" />
             </Stack>
           </Stack>
         </Box>
@@ -861,24 +659,24 @@ function ModuleDetailCard({
             <TableBody>
               {module.rows.length > 0 ? (
                 module.rows.map((row, index) => (
-                  <TableRow key={`${module.key}-${row.item}-${index}`}>
+                  <TableRow key={`${module.key}-${String(row.item)}-${index}`}>
                     <TableCell>
                       <Stack spacing={0.35}>
-                        <Typography variant="body2">{row.item}</Typography>
+                        <Typography variant="body2">{String(row.item || "")}</Typography>
                         {row.memoriaCalculo ? (
                           <Typography variant="caption" color="text.secondary">
-                            {row.memoriaCalculo}
+                            {String(row.memoriaCalculo)}
                           </Typography>
                         ) : null}
                       </Stack>
                     </TableCell>
-                    <TableCell>{row.categoria}</TableCell>
-                    <TableCell align="right">{row.quantidade}</TableCell>
+                    <TableCell>{String(row.categoria || "")}</TableCell>
+                    <TableCell align="right">{Number(row.quantidade || 0)}</TableCell>
                     <TableCell align="right">
-                      {formatCurrency(row.valorUnitario)}
+                      {formatCurrency(Number(row.valorUnitario || 0))}
                     </TableCell>
                     <TableCell align="right">
-                      {formatCurrency(row.subtotal)}
+                      {formatCurrency(Number(row.subtotal || 0))}
                     </TableCell>
                   </TableRow>
                 ))
@@ -894,361 +692,6 @@ function ModuleDetailCard({
             </TableBody>
           </Table>
         </Box>
-      </CardContent>
-    </Card>
-  );
-}
-
-function PersistedLaborBreakdownCard({
-  breakdown,
-  config,
-}: {
-  breakdown: LaborCostBreakdownMetadata;
-  config: LaborChargesConfigMetadata | null;
-}) {
-  return (
-    <Card variant="outlined" sx={{ borderRadius: 4 }}>
-      <CardContent>
-        <Stack spacing={2}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <CalculateOutlinedIcon sx={{ fontSize: 18 }} />
-            <Typography variant="h6" fontWeight={700}>
-              Memória técnica — encargos e benefícios
-            </Typography>
-          </Stack>
-
-          <Typography variant="body2" color="text.secondary">
-            Estrutura consolidada persistida pelo editor de dedicação exclusiva.
-          </Typography>
-
-          <Divider />
-
-          <Typography variant="body2" color="text.secondary">
-            Salários-base: <strong>{formatCurrency(breakdown.salaryBaseTotal)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            INSS patronal: <strong>{formatCurrency(breakdown.employerInss)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            FGTS: <strong>{formatCurrency(breakdown.fgts)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            RAT / GILRAT: <strong>{formatCurrency(breakdown.rat)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Terceiros: <strong>{formatCurrency(breakdown.thirdPartyCharges)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Provisão de férias: <strong>{formatCurrency(breakdown.feriasProvision)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Provisão de 13º: <strong>{formatCurrency(breakdown.thirteenthProvision)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Vale-transporte: <strong>{formatCurrency(breakdown.valeTransporte)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Vale-alimentação: <strong>{formatCurrency(breakdown.valeAlimentacao)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Outros benefícios: <strong>{formatCurrency(breakdown.otherBenefits)}</strong>
-          </Typography>
-
-          <Divider />
-
-          <Typography variant="body2" color="text.secondary">
-            Total de encargos: <strong>{formatCurrency(breakdown.totalEncargos)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Total de benefícios: <strong>{formatCurrency(breakdown.totalBenefits)}</strong>
-          </Typography>
-          <Typography variant="h6" fontWeight={800}>
-            Custo consolidado: {formatCurrency(breakdown.custoTotal)}
-          </Typography>
-
-          {config ? (
-            <>
-              <Divider />
-              <Typography variant="subtitle2" fontWeight={700}>
-                Parâmetros aplicados
-              </Typography>
-
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
-                  gap: 1.5,
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">
-                  INSS: <strong>{config.employerInssRate}%</strong>
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  FGTS: <strong>{config.fgtsRate}%</strong>
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  RAT: <strong>{config.ratRate}%</strong>
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Terceiros: <strong>{config.thirdPartyRate}%</strong>
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Férias: <strong>{config.vacationProvisionRate}%</strong>
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  13º: <strong>{config.thirteenthProvisionRate}%</strong>
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  VT por empregado: <strong>{formatCurrency(config.valeTransportePerEmployee)}</strong>
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  VA por empregado: <strong>{formatCurrency(config.valeAlimentacaoPerEmployee)}</strong>
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Outros benefícios por empregado:{" "}
-                  <strong>{formatCurrency(config.otherBenefitsPerEmployee)}</strong>
-                </Typography>
-              </Box>
-            </>
-          ) : null}
-        </Stack>
-      </CardContent>
-    </Card>
-  );
-}
-
-function PersistedServiceCompositionSummaryCard({
-  summary,
-}: {
-  summary: ServiceCompositionSummaryMetadata;
-}) {
-  return (
-    <Card variant="outlined" sx={{ borderRadius: 4 }}>
-      <CardContent>
-        <Stack spacing={2}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <SchemaOutlinedIcon sx={{ fontSize: 18 }} />
-            <Typography variant="h6" fontWeight={700}>
-              Memória técnica — síntese da composição
-            </Typography>
-          </Stack>
-
-          <Typography variant="body2" color="text.secondary">
-            Consolidação persistida do editor de composição de serviços.
-          </Typography>
-
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
-              gap: 2,
-            }}
-          >
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  Itens gerenciados
-                </Typography>
-                <Typography variant="h5" fontWeight={800}>
-                  {summary.itemCount}
-                </Typography>
-              </CardContent>
-            </Card>
-
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  Total consolidado
-                </Typography>
-                <Typography variant="h5" fontWeight={800}>
-                  {formatCurrency(summary.total)}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Box>
-
-          <Divider />
-
-          <Typography variant="subtitle2" fontWeight={700}>
-            Totais por bloco
-          </Typography>
-
-          <Typography variant="body2" color="text.secondary">
-            Equipe técnica / operacional:{" "}
-            <strong>{formatCurrency(summary.workforceTotal)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Materiais e insumos:{" "}
-            <strong>{formatCurrency(summary.materialsTotal)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Equipamentos: <strong>{formatCurrency(summary.equipmentTotal)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Logística operacional:{" "}
-            <strong>{formatCurrency(summary.logisticsTotal)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Apoio operacional: <strong>{formatCurrency(summary.supportTotal)}</strong>
-          </Typography>
-
-          <Divider />
-
-          <Typography variant="subtitle2" fontWeight={700}>
-            Totais por recorrência
-          </Typography>
-
-          <Typography variant="body2" color="text.secondary">
-            Recorrente: <strong>{formatCurrency(summary.recurringTotal)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Eventual: <strong>{formatCurrency(summary.eventualTotal)}</strong>
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Sob demanda: <strong>{formatCurrency(summary.onDemandTotal)}</strong>
-          </Typography>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
-}
-
-function PersistedServiceCompositionMemoryCard({
-  items,
-}: {
-  items: ServiceCompositionMemoryItemMetadata[];
-}) {
-  return (
-    <Card variant="outlined" sx={{ borderRadius: 4 }}>
-      <CardContent>
-        <Stack spacing={2}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <FactCheckOutlinedIcon sx={{ fontSize: 18 }} />
-            <Typography variant="h6" fontWeight={700}>
-              Memória auditável item a item
-            </Typography>
-          </Stack>
-
-          <Typography variant="body2" color="text.secondary">
-            Fórmula aplicada, fatores de periodicidade, rateio/depreciação,
-            base de consumo e justificativa técnica persistidos no editor.
-          </Typography>
-
-          {items.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              Nenhuma memória técnica persistida foi encontrada.
-            </Typography>
-          ) : (
-            <Stack spacing={2}>
-              {items.map((item) => (
-                <Card key={item.id} variant="outlined" sx={{ borderRadius: 3 }}>
-                  <CardContent>
-                    <Stack spacing={1.5}>
-                      <Stack
-                        direction={{ xs: "column", md: "row" }}
-                        justifyContent="space-between"
-                        alignItems={{ xs: "flex-start", md: "center" }}
-                        spacing={1}
-                      >
-                        <Box>
-                          <Typography variant="subtitle1" fontWeight={800}>
-                            {item.item}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {item.category}
-                          </Typography>
-                        </Box>
-
-                        <Typography variant="subtitle1" fontWeight={800}>
-                          {formatCurrency(item.subtotal)}
-                        </Typography>
-                      </Stack>
-
-                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                        <Chip size="small" label={`Recorrência: ${item.recurrenceType}`} />
-                        <Chip size="small" label={`Periodicidade: ${item.periodicity}`} />
-                        <Chip size="small" label={`Unidade: ${item.serviceUnit}`} />
-                        <Chip
-                          size="small"
-                          label={`Depreciação: ${labelDepreciationMethod(item.depreciationMethod)}`}
-                        />
-                      </Stack>
-
-                      <Box
-                        sx={{
-                          display: "grid",
-                          gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" },
-                          gap: 1.5,
-                        }}
-                      >
-                        <Typography variant="body2" color="text.secondary">
-                          Quantidade: <strong>{item.quantity}</strong>
-                        </Typography>
-
-                        <Typography variant="body2" color="text.secondary">
-                          Custo unitário: <strong>{formatCurrency(item.unitCost)}</strong>
-                        </Typography>
-
-                        <Typography variant="body2" color="text.secondary">
-                          Fator produtividade: <strong>{item.productivityFactor}</strong>
-                        </Typography>
-
-                        <Typography variant="body2" color="text.secondary">
-                          Fator mensal: <strong>{item.monthlyizationFactor}</strong>
-                        </Typography>
-
-                        <Typography variant="body2" color="text.secondary">
-                          Rateio contratual: <strong>{item.allocationFactor}</strong>
-                        </Typography>
-
-                        <Typography variant="body2" color="text.secondary">
-                          Fator depreciação: <strong>{item.depreciationFactor}</strong>
-                        </Typography>
-                      </Box>
-
-                      {item.usefulLifeMonths > 0 ? (
-                        <Typography variant="body2" color="text.secondary">
-                          Vida útil considerada: <strong>{item.usefulLifeMonths} mês(es)</strong>
-                        </Typography>
-                      ) : null}
-
-                      <Box>
-                        <Typography variant="body2" fontWeight={700}>
-                          Fórmula aplicada
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {item.formula}
-                        </Typography>
-                      </Box>
-
-                      {item.consumptionBasis ? (
-                        <Box>
-                          <Typography variant="body2" fontWeight={700}>
-                            Base de consumo
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {item.consumptionBasis}
-                          </Typography>
-                        </Box>
-                      ) : null}
-
-                      {item.technicalJustification ? (
-                        <Box>
-                          <Typography variant="body2" fontWeight={700}>
-                            Justificativa técnica
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {item.technicalJustification}
-                          </Typography>
-                        </Box>
-                      ) : null}
-                    </Stack>
-                  </CardContent>
-                </Card>
-              ))}
-            </Stack>
-          )}
-        </Stack>
       </CardContent>
     </Card>
   );
@@ -1295,9 +738,8 @@ export default function SpreadsheetDetail() {
 
           const localDraftOverride =
             localSpreadsheet &&
-            localSpreadsheet.metadata &&
-            typeof localSpreadsheet.metadata === "object" &&
-            localSpreadsheet.metadata.localDraftOverride === true;
+            isRecord(localSpreadsheet.metadata) &&
+            localSpreadsheet.metadata["localDraftOverride"] === true;
 
           const payload = localDraftOverride ? localSpreadsheet : apiPayload;
 
@@ -1360,17 +802,17 @@ export default function SpreadsheetDetail() {
 
   const totalValue = useMemo(() => {
     if (!spreadsheet) return 0;
-    return spreadsheet.rows.reduce((sum, row) => sum + (row.subtotal || 0), 0);
+    return spreadsheet.rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
   }, [spreadsheet]);
 
   const totalItems = spreadsheet?.rows.length ?? 0;
   const pendingItems =
-    spreadsheet?.rows.filter((row) => row.status === "Pendente").length ?? 0;
+    spreadsheet?.rows.filter((row) => String(row.status || "") === "Pendente").length ?? 0;
 
   const laborRows = useMemo(() => {
     if (!spreadsheet) return [];
     return spreadsheet.rows.filter((row) =>
-      categoryMatches(row.categoria, ["mão de obra", "equipe operacional"])
+      categoryMatches(String(row.categoria || ""), ["mão de obra", "equipe operacional"])
     );
   }, [spreadsheet]);
 
@@ -1413,26 +855,6 @@ export default function SpreadsheetDetail() {
   const pcfpModules = useMemo(() => {
     if (!spreadsheet) return [];
     return buildPcfpModuleGroups(spreadsheet.rows);
-  }, [spreadsheet]);
-
-  const persistedLaborChargesConfig = useMemo(() => {
-    if (!spreadsheet) return null;
-    return extractLaborChargesConfigMetadata(spreadsheet);
-  }, [spreadsheet]);
-
-  const persistedLaborBreakdown = useMemo(() => {
-    if (!spreadsheet) return null;
-    return extractLaborCostBreakdownMetadata(spreadsheet);
-  }, [spreadsheet]);
-
-  const persistedServiceCompositionSummary = useMemo(() => {
-    if (!spreadsheet) return null;
-    return extractServiceCompositionSummaryMetadata(spreadsheet);
-  }, [spreadsheet]);
-
-  const persistedServiceCompositionMemoryBundle = useMemo(() => {
-    if (!spreadsheet) return [];
-    return extractServiceCompositionMemoryBundleMetadata(spreadsheet);
   }, [spreadsheet]);
 
   function updateEditorField(field: keyof EditorState, value: string) {
@@ -1557,6 +979,11 @@ export default function SpreadsheetDetail() {
   const modelStyles = getModelChipStyles(spreadsheet.modelType);
   const statusStyles = getStatusChipStyles(spreadsheet.status);
   const domainScenarioLabel = getDomainScenarioLabel(spreadsheet);
+
+  const expectedDocuments = safeStringArray(spreadsheet.trainingProfile?.expectedDocuments);
+  const expectedCostDrivers = safeStringArray(spreadsheet.trainingProfile?.expectedCostDrivers);
+  const validationFocus = safeStringArray(spreadsheet.trainingProfile?.validationFocus);
+  const readingHints = safeStringArray(spreadsheet.trainingProfile?.readingHints);
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#F7F3F8", py: 4 }}>
@@ -1703,9 +1130,9 @@ export default function SpreadsheetDetail() {
             severity="info"
             sx={{ borderRadius: 3 }}
           >
-            Esta tela já está na etapa de editor orientado por domínio e agora também
-            lê a memória técnica persistida no <strong>metadata</strong>, preparando a
-            próxima fase do motor de cálculo, da explicabilidade e do parecer técnico.
+            Esta tela já está na etapa de editor orientado por domínio e agora passa
+            a exibir uma estrutura modular preliminar da PCFP, preparando a próxima
+            fase do motor de cálculo e da análise técnica automatizada.
           </Alert>
 
           <Box
@@ -2016,15 +1443,15 @@ export default function SpreadsheetDetail() {
                         </TableHead>
                         <TableBody>
                           {laborRows.map((row, index) => (
-                            <TableRow key={`${row.item}-${index}`}>
-                              <TableCell>{row.item}</TableCell>
-                              <TableCell>{row.categoria}</TableCell>
-                              <TableCell align="right">{row.quantidade}</TableCell>
+                            <TableRow key={`${String(row.item)}-${index}`}>
+                              <TableCell>{String(row.item || "")}</TableCell>
+                              <TableCell>{String(row.categoria || "")}</TableCell>
+                              <TableCell align="right">{Number(row.quantidade || 0)}</TableCell>
                               <TableCell align="right">
-                                {formatCurrency(row.valorUnitario)}
+                                {formatCurrency(Number(row.valorUnitario || 0))}
                               </TableCell>
                               <TableCell align="right">
-                                {formatCurrency(row.subtotal)}
+                                {formatCurrency(Number(row.subtotal || 0))}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -2253,28 +1680,6 @@ export default function SpreadsheetDetail() {
                 }}
               />
 
-              {spreadsheet.modelType === "service_composition" &&
-              persistedServiceCompositionSummary ? (
-                <PersistedServiceCompositionSummaryCard
-                  summary={persistedServiceCompositionSummary}
-                />
-              ) : null}
-
-              {spreadsheet.modelType === "service_composition" &&
-              persistedServiceCompositionMemoryBundle.length > 0 ? (
-                <PersistedServiceCompositionMemoryCard
-                  items={persistedServiceCompositionMemoryBundle}
-                />
-              ) : null}
-
-              {spreadsheet.modelType === "dedicated_labor" &&
-              persistedLaborBreakdown ? (
-                <PersistedLaborBreakdownCard
-                  breakdown={persistedLaborBreakdown}
-                  config={persistedLaborChargesConfig}
-                />
-              ) : null}
-
               <Card variant="outlined" sx={{ borderRadius: 4 }}>
                 <CardContent sx={{ p: 0 }}>
                   <Box sx={{ px: 3, py: 2.5 }}>
@@ -2315,45 +1720,41 @@ export default function SpreadsheetDetail() {
 
                       <TableBody>
                         {spreadsheet.rows.map((row, index) => (
-                          <TableRow key={`${row.item}-${index}`}>
+                          <TableRow key={`${String(row.item)}-${index}`}>
                             <TableCell>
                               <Stack spacing={0.4}>
-                                <Typography variant="body2">{row.item}</Typography>
+                                <Typography variant="body2">{String(row.item || "")}</Typography>
                                 {row.memoriaCalculo ? (
                                   <Typography variant="caption" color="text.secondary">
-                                    {row.memoriaCalculo}
+                                    {String(row.memoriaCalculo)}
                                   </Typography>
                                 ) : null}
                               </Stack>
                             </TableCell>
-                            <TableCell>{row.categoria}</TableCell>
-                            <TableCell align="right">{row.quantidade}</TableCell>
+                            <TableCell>{String(row.categoria || "")}</TableCell>
+                            <TableCell align="right">{Number(row.quantidade || 0)}</TableCell>
                             <TableCell align="right">
-                              {formatCurrency(row.valorUnitario)}
+                              {formatCurrency(Number(row.valorUnitario || 0))}
                             </TableCell>
                             <TableCell align="right">
-                              {formatCurrency(row.subtotal)}
+                              {formatCurrency(Number(row.subtotal || 0))}
                             </TableCell>
                             <TableCell>
                               <Chip
                                 size="small"
-                                label={row.status}
+                                label={String(row.status || "")}
                                 sx={{
                                   backgroundColor:
-                                    row.status === "Pendente"
+                                    String(row.status || "") === "Pendente"
                                       ? "#FFF3E0"
-                                      : row.status === "Exemplo do domínio"
+                                      : String(row.status || "") === "Exemplo do domínio"
                                       ? "#E3F2FD"
-                                      : row.status === "Calculado"
-                                      ? "#F3E5F5"
                                       : "#E7F6EC",
                                   color:
-                                    row.status === "Pendente"
+                                    String(row.status || "") === "Pendente"
                                       ? "#EF6C00"
-                                      : row.status === "Exemplo do domínio"
+                                      : String(row.status || "") === "Exemplo do domínio"
                                       ? "#1565C0"
-                                      : row.status === "Calculado"
-                                      ? "#7B1FA2"
                                       : "#2E7D32",
                                   fontWeight: 700,
                                 }}
@@ -2405,8 +1806,7 @@ export default function SpreadsheetDetail() {
                     </Typography>
 
                     <Typography variant="body2" color="text.secondary">
-                      <strong>Quantidade estimada:</strong>{" "}
-                      {parseNumber(editor.headcount)}
+                      <strong>Quantidade estimada:</strong> {parseNumber(editor.headcount)}
                     </Typography>
 
                     <Typography variant="body2" color="text.secondary">
@@ -2510,21 +1910,6 @@ export default function SpreadsheetDetail() {
                 </CardContent>
               </Card>
 
-              {spreadsheet.modelType === "service_composition" &&
-              persistedServiceCompositionSummary ? (
-                <PersistedServiceCompositionSummaryCard
-                  summary={persistedServiceCompositionSummary}
-                />
-              ) : null}
-
-              {spreadsheet.modelType === "dedicated_labor" &&
-              persistedLaborBreakdown ? (
-                <PersistedLaborBreakdownCard
-                  breakdown={persistedLaborBreakdown}
-                  config={persistedLaborChargesConfig}
-                />
-              ) : null}
-
               <Card variant="outlined" sx={{ borderRadius: 4 }}>
                 <CardContent>
                   <Stack spacing={1.5}>
@@ -2536,18 +1921,14 @@ export default function SpreadsheetDetail() {
                       <strong>Cenário identificado:</strong> {domainScenarioLabel}
                     </Typography>
 
-                    {spreadsheet.trainingProfile?.expectedDocuments?.length ? (
+                    {expectedDocuments.length > 0 ? (
                       <Box>
                         <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
                           Documentos esperados
                         </Typography>
                         <Stack spacing={0.6}>
-                          {spreadsheet.trainingProfile.expectedDocuments.map((item) => (
-                            <Typography
-                              key={item}
-                              variant="body2"
-                              color="text.secondary"
-                            >
+                          {expectedDocuments.map((item, index) => (
+                            <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
                               • {item}
                             </Typography>
                           ))}
@@ -2555,18 +1936,14 @@ export default function SpreadsheetDetail() {
                       </Box>
                     ) : null}
 
-                    {spreadsheet.trainingProfile?.expectedCostDrivers?.length ? (
+                    {expectedCostDrivers.length > 0 ? (
                       <Box>
                         <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
                           Vetores de custo esperados
                         </Typography>
                         <Stack spacing={0.6}>
-                          {spreadsheet.trainingProfile.expectedCostDrivers.map((item) => (
-                            <Typography
-                              key={item}
-                              variant="body2"
-                              color="text.secondary"
-                            >
+                          {expectedCostDrivers.map((item, index) => (
+                            <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
                               • {item}
                             </Typography>
                           ))}
@@ -2574,18 +1951,14 @@ export default function SpreadsheetDetail() {
                       </Box>
                     ) : null}
 
-                    {spreadsheet.trainingProfile?.validationFocus?.length ? (
+                    {validationFocus.length > 0 ? (
                       <Box>
                         <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
                           Focos de validação
                         </Typography>
                         <Stack spacing={0.6}>
-                          {spreadsheet.trainingProfile.validationFocus.map((item) => (
-                            <Typography
-                              key={item}
-                              variant="body2"
-                              color="text.secondary"
-                            >
+                          {validationFocus.map((item, index) => (
+                            <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
                               • {item}
                             </Typography>
                           ))}
@@ -2593,18 +1966,14 @@ export default function SpreadsheetDetail() {
                       </Box>
                     ) : null}
 
-                    {spreadsheet.trainingProfile?.readingHints?.length ? (
+                    {readingHints.length > 0 ? (
                       <Box>
                         <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
                           Pistas de leitura
                         </Typography>
                         <Stack spacing={0.6}>
-                          {spreadsheet.trainingProfile.readingHints.map((item) => (
-                            <Typography
-                              key={item}
-                              variant="body2"
-                              color="text.secondary"
-                            >
+                          {readingHints.map((item, index) => (
+                            <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
                               • {item}
                             </Typography>
                           ))}
