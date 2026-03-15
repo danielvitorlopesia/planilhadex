@@ -106,6 +106,7 @@ export default function AppShell({ children }: AppShellProps) {
         flexDirection: "column",
         bgcolor: "#FFFFFF",
         overflowX: "hidden",
+        minWidth: 0,
       }}
     >
       <Box
@@ -115,9 +116,10 @@ export default function AppShell({ children }: AppShellProps) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          minWidth: 0,
         }}
       >
-        <Stack direction="row" spacing={1.1} alignItems="center">
+        <Stack direction="row" spacing={1.1} alignItems="center" sx={{ minWidth: 0 }}>
           <Box
             sx={{
               width: 36,
@@ -136,13 +138,27 @@ export default function AppShell({ children }: AppShellProps) {
           <Box sx={{ minWidth: 0 }}>
             <Typography
               variant="subtitle2"
-              sx={{ fontWeight: 800, color: "#241B3A", lineHeight: 1.2 }}
+              sx={{
+                fontWeight: 800,
+                color: "#241B3A",
+                lineHeight: 1.2,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
             >
               CustoPúblico
             </Typography>
             <Typography
               variant="caption"
-              sx={{ color: "#6D6186", lineHeight: 1.2 }}
+              sx={{
+                color: "#6D6186",
+                lineHeight: 1.2,
+                display: "block",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
             >
               Gestão de Planilhas Públicas
             </Typography>
@@ -192,6 +208,7 @@ export default function AppShell({ children }: AppShellProps) {
                 backgroundColor: active ? "#F4EEFB" : "transparent",
                 color: active ? "#5B3A7A" : "#4B4260",
                 px: 1.5,
+                minWidth: 0,
                 "&:hover": {
                   backgroundColor: active ? "#EFE7F6" : "#F8F5FA",
                 },
@@ -201,6 +218,7 @@ export default function AppShell({ children }: AppShellProps) {
                 sx={{
                   minWidth: 36,
                   color: active ? "#5B3A7A" : "#7A6F91",
+                  flexShrink: 0,
                 }}
               >
                 {item.icon}
@@ -230,12 +248,13 @@ export default function AppShell({ children }: AppShellProps) {
             minHeight: 44,
             color: "#4B4260",
             px: 1.5,
+            minWidth: 0,
             "&:hover": {
               backgroundColor: "#F8F5FA",
             },
           }}
         >
-          <ListItemIcon sx={{ minWidth: 36, color: "#7A6F91" }}>
+          <ListItemIcon sx={{ minWidth: 36, color: "#7A6F91", flexShrink: 0 }}>
             <SettingsOutlinedIcon />
           </ListItemIcon>
           <ListItemText
@@ -257,7 +276,9 @@ export default function AppShell({ children }: AppShellProps) {
         display: "flex",
         minHeight: "100vh",
         bgcolor: "#F7F3F8",
-        overflowX: "clip",
+        overflowX: "hidden",
+        width: "100%",
+        maxWidth: "100%",
       }}
     >
       <AppBar
@@ -270,7 +291,8 @@ export default function AppShell({ children }: AppShellProps) {
           backdropFilter: "blur(10px)",
           borderBottom: "1px solid rgba(142, 90, 181, 0.10)",
           color: "#241B3A",
-          overflowX: "clip",
+          overflowX: "hidden",
+          maxWidth: "100%",
         }}
       >
         <Toolbar sx={{ minHeight: "64px !important", px: { xs: 2, md: 2.5 } }}>
@@ -343,6 +365,7 @@ export default function AppShell({ children }: AppShellProps) {
           width: { lg: DRAWER_WIDTH },
           flexShrink: { lg: 0 },
           overflowX: "hidden",
+          maxWidth: "100%",
         }}
       >
         <Drawer
@@ -369,7 +392,8 @@ export default function AppShell({ children }: AppShellProps) {
           flexGrow: 1,
           width: { lg: `calc(100% - ${DRAWER_WIDTH}px)` },
           minWidth: 0,
-          overflowX: "clip",
+          maxWidth: "100%",
+          overflowX: "hidden",
         }}
       >
         <Toolbar sx={{ minHeight: "64px !important" }} />
@@ -377,10 +401,11 @@ export default function AppShell({ children }: AppShellProps) {
           sx={{
             px: { xs: 1.5, sm: 2, lg: 2.5 },
             py: { xs: 1.5, sm: 2 },
+            width: "100%",
             maxWidth: "100%",
             mx: "auto",
             minWidth: 0,
-            overflowX: "clip",
+            overflowX: "hidden",
           }}
         >
           {children}
