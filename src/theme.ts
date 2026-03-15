@@ -35,17 +35,20 @@ const muiTheme = createTheme({
     },
     divider: "#E3D9F1",
   },
+
   shape: {
-    borderRadius: 16,
+    borderRadius: 14,
   },
+
   typography: {
-    fontFamily: [
-      "Inter",
-      "Roboto",
-      "Helvetica",
-      "Arial",
-      "sans-serif",
-    ].join(","),
+    fontFamily: ["Inter", "Roboto", "Helvetica", "Arial", "sans-serif"].join(","),
+
+    h1: { fontSize: "32px", fontWeight: 700 },
+    h2: { fontSize: "26px", fontWeight: 700 },
+    h3: { fontSize: "22px", fontWeight: 700 },
+    h4: { fontSize: "18px", fontWeight: 600 },
+    body1: { fontSize: "15px" },
+    body2: { fontSize: "14px" },
   },
 });
 
@@ -83,7 +86,7 @@ const radius: AppTheme["radius"] = {
   sm: "8px",
   md: "12px",
   lg: "16px",
-  xl: "24px",
+  xl: "22px",
 };
 
 export const theme: AppTheme = Object.assign(muiTheme, {
@@ -92,28 +95,31 @@ export const theme: AppTheme = Object.assign(muiTheme, {
 });
 
 export const commonStyles: Record<string, CSSProperties> = {
+
   page: {
     background: "#F7F3F8",
     minHeight: "100vh",
-    padding: "40px",
+    padding: "28px",
   },
 
+  /* LARGURA GLOBAL DO SISTEMA */
   container: {
-    maxWidth: "1200px",
+    maxWidth: "1600px",
     margin: "0 auto",
+    width: "100%",
   },
 
   backLink: {
     display: "inline-block",
-    marginBottom: "16px",
+    marginBottom: "14px",
     color: theme.colors.primaryDark,
     textDecoration: "none",
     fontWeight: 600,
   },
 
   sectionTitle: {
-    margin: "0 0 12px 0",
-    fontSize: "20px",
+    margin: "0 0 10px 0",
+    fontSize: "18px",
     fontWeight: 700,
     color: theme.colors.textStrong,
   },
@@ -122,18 +128,18 @@ export const commonStyles: Record<string, CSSProperties> = {
     background: theme.colors.white,
     border: `1px solid ${theme.colors.primaryBorder}`,
     borderRadius: theme.radius.xl,
-    padding: "28px",
+    padding: "22px",
   },
 
   cardOverline: {
-    margin: "0 0 8px 0",
-    fontSize: "14px",
+    margin: "0 0 6px 0",
+    fontSize: "13px",
     color: theme.colors.textMuted,
   },
 
   cardTitle: {
-    margin: "0 0 10px 0",
-    fontSize: "24px",
+    margin: "0 0 8px 0",
+    fontSize: "20px",
     color: theme.colors.textStrong,
     fontWeight: 700,
   },
@@ -141,7 +147,7 @@ export const commonStyles: Record<string, CSSProperties> = {
   cardText: {
     margin: 0,
     color: theme.colors.textSoft,
-    fontSize: "16px",
+    fontSize: "14px",
     lineHeight: 1.5,
   },
 
@@ -149,7 +155,7 @@ export const commonStyles: Record<string, CSSProperties> = {
     background: theme.palette.primary.main,
     color: "#FFFFFF",
     border: "none",
-    padding: "12px 20px",
+    padding: "10px 18px",
     borderRadius: theme.radius.md,
     fontWeight: 700,
     cursor: "pointer",
@@ -159,21 +165,21 @@ export const commonStyles: Record<string, CSSProperties> = {
     background: theme.palette.primary.main,
     color: "#FFFFFF",
     border: "none",
-    padding: "12px 20px",
+    padding: "10px 18px",
     borderRadius: theme.radius.md,
     fontWeight: 700,
     cursor: "pointer",
   },
 
   emptyState: {
-    padding: "40px",
+    padding: "30px",
     textAlign: "center",
     color: theme.colors.textMedium,
   },
 
   message: {
-    marginTop: "12px",
-    fontSize: "14px",
+    marginTop: "10px",
+    fontSize: "13px",
   },
 };
 
@@ -188,6 +194,7 @@ export function getStatusBadgeStyle(status?: string): CSSProperties {
         padding: "4px 10px",
         borderRadius: "999px",
         fontWeight: 600,
+        fontSize: "12px",
       };
 
     case "Pendente":
@@ -198,6 +205,7 @@ export function getStatusBadgeStyle(status?: string): CSSProperties {
         padding: "4px 10px",
         borderRadius: "999px",
         fontWeight: 600,
+        fontSize: "12px",
       };
 
     case "Erro":
@@ -207,6 +215,7 @@ export function getStatusBadgeStyle(status?: string): CSSProperties {
         padding: "4px 10px",
         borderRadius: "999px",
         fontWeight: 600,
+        fontSize: "12px",
       };
 
     default:
@@ -216,6 +225,7 @@ export function getStatusBadgeStyle(status?: string): CSSProperties {
         padding: "4px 10px",
         borderRadius: "999px",
         fontWeight: 600,
+        fontSize: "12px",
       };
   }
 }
