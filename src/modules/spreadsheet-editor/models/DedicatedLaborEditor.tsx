@@ -26,8 +26,9 @@ import LaborChargesConfigCard from "../components/LaborChargesConfigCard";
 import {
   calculateLaborCost,
   DEFAULT_LABOR_CHARGES_CONFIG,
-  extractLaborChargesConfigMetadata,
   LaborChargesConfig,
+  LaborResult,
+  sanitizeLaborChargesConfig,
 } from "../utils/laborCostCalculator";
 
 import {
@@ -108,16 +109,21 @@ function extractStoredChargesConfig(
   spreadsheet: SpreadsheetRecord
 ): LaborChargesConfig {
   const metadata = spreadsheet.metadata;
+
   if (!isRecord(metadata)) {
-    return { ...DEFAULT_LABOR_CHARGES_CONFIG };
+    return DEFAULT_LABOR_CHARGES_CONFIG;
   }
 
-  return extractLaborChargesConfigMetadata(metadata["laborChargesConfig"]);
+  const raw = metadata["laborChargesConfig"];
+
+  if (!isRecord(raw)) {
+    return DEFAULT_LABOR_CHARGES_CONFIG;
+  }
+
+  return sanitizeLaborChargesConfig(raw as Partial<LaborChargesConfig>);
 }
 
-function buildDerivedRows(
-  result: ReturnType<typeof calculateLaborCost>
-): EditorRow[] {
+function buildDerivedRows(result: LaborResult): EditorRow[] {
   const generatedStatus = "Calculado";
 
   return [
@@ -238,7 +244,7 @@ function buildDerivedRows(
       automatico: true,
       trainingTags: ["generated_labor_benefit"],
     },
-  ].filter((row) => row.subtotal > 0);
+  ].filter((row) => Number(row.subtotal || 0) > 0);
 }
 
 function formatCurrency(value: number) {
@@ -270,7 +276,7 @@ export default function DedicatedLaborEditor({
   }, [spreadsheet]);
 
   const totalLabor = useMemo(() => {
-    return rows.reduce((sum, row) => sum + (row.subtotal || 0), 0);
+    return rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
   }, [rows]);
 
   const totalHeadcount = useMemo(() => {
@@ -347,7 +353,7 @@ export default function DedicatedLaborEditor({
 
       const recalculatedLaborCost = calculateLaborCost({
         salaryBaseTotal: sanitizedLaborRows.reduce(
-          (sum, row) => sum + (row.subtotal || 0),
+          (sum, row) => sum + Number(row.subtotal || 0),
           0
         ),
         quantity: sanitizedLaborRows.reduce(
@@ -361,7 +367,7 @@ export default function DedicatedLaborEditor({
       const rebuiltRows = [...sanitizedLaborRows, ...derivedRows, ...preservedRows];
 
       const monthlyBaseValue = rebuiltRows.reduce(
-        (sum, row) => sum + (row.subtotal || 0),
+        (sum, row) => sum + Number(row.subtotal || 0),
         0
       );
 
@@ -505,17 +511,17 @@ export default function DedicatedLaborEditor({
               <TableBody>
                 {rows.length > 0 ? (
                   rows.map((row, index) => (
-                    <TableRow key={row.id || `${row.item}-${index}`}>
+                    <TableRow key={row.id || `${String(row.item)}-${index}`}>
                       <TableCell>
                         <EditableCell
-                          value={row.item}
+                          value={String(row.item || "")}
                           onChange={(value) => updateRow(index, "item", value)}
                         />
                       </TableCell>
 
                       <TableCell>
                         <EditableCell
-                          value={row.categoria}
+                          value={String(row.categoria || "")}
                           onChange={(value) => updateRow(index, "categoria", value)}
                         />
                       </TableCell>
@@ -523,7 +529,7 @@ export default function DedicatedLaborEditor({
                       <TableCell>
                         <EditableCell
                           type="number"
-                          value={row.quantidade}
+                          value={Number(row.quantidade || 0)}
                           onChange={(value) => updateRow(index, "quantidade", value)}
                           min={0}
                           step={1}
@@ -533,7 +539,7 @@ export default function DedicatedLaborEditor({
                       <TableCell>
                         <EditableCell
                           type="number"
-                          value={row.valorUnitario}
+                          value={Number(row.valorUnitario || 0)}
                           onChange={(value) => updateRow(index, "valorUnitario", value)}
                           min={0}
                           step={0.01}
@@ -542,14 +548,14 @@ export default function DedicatedLaborEditor({
 
                       <TableCell align="right">
                         <Typography variant="body2" fontWeight={700}>
-                          {formatCurrency(row.subtotal || 0)}
+                          {formatCurrency(Number(row.subtotal || 0))}
                         </Typography>
                       </TableCell>
 
                       <TableCell>
                         <EditableCell
                           type="select"
-                          value={row.status}
+                          value={String(row.status || "")}
                           options={STATUS_OPTIONS}
                           onChange={(value) => updateRow(index, "status", value)}
                         />
@@ -571,8 +577,8 @@ export default function DedicatedLaborEditor({
                   <TableRow>
                     <TableCell colSpan={7}>
                       <Typography variant="body2" color="text.secondary">
-                        Nenhuma linha de mão de obra encontrada. Adicione a primeira
-                        linha para começar.
+                        Nenhuma linha de mão de obra encontrada.
+                        Adicione a primeira linha para começar.
                       </Typography>
                     </TableCell>
                   </TableRow>
