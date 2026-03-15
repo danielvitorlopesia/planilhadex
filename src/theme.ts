@@ -1,17 +1,29 @@
 import { createTheme } from "@mui/material/styles";
+import type { CSSProperties } from "react";
 
-export const theme = createTheme({
+const muiTheme = createTheme({
   palette: {
     mode: "light",
     primary: {
       main: "#8E5AB5",
       dark: "#5B3A7A",
+      light: "#B89ACF",
+      contrastText: "#FFFFFF",
     },
     secondary: {
       main: "#1565C0",
+      dark: "#0D47A1",
+      light: "#5E92F3",
+      contrastText: "#FFFFFF",
     },
     error: {
       main: "#C62828",
+    },
+    warning: {
+      main: "#ED6C02",
+    },
+    success: {
+      main: "#2E7D32",
     },
     background: {
       default: "#F7F3F8",
@@ -21,37 +33,65 @@ export const theme = createTheme({
       primary: "#241B3A",
       secondary: "#6D6186",
     },
+    divider: "#E3D9F1",
+  },
+  shape: {
+    borderRadius: 16,
+  },
+  typography: {
+    fontFamily: [
+      "Inter",
+      "Roboto",
+      "Helvetica",
+      "Arial",
+      "sans-serif",
+    ].join(","),
   },
 });
 
-/*
-EXTENSÕES UTILIZADAS PELO SISTEMA
-(padrão antigo usado nas telas)
-*/
+export type AppTheme = typeof muiTheme & {
+  colors: {
+    white: string;
+    danger: string;
+    primaryDark: string;
+    primaryBorder: string;
+    textMuted: string;
+    textMedium: string;
+    textSoft: string;
+    textStrong: string;
+  };
+  radius: {
+    sm: string;
+    md: string;
+    lg: string;
+    xl: string;
+  };
+};
 
-export const colors = {
+const colors: AppTheme["colors"] = {
   white: "#FFFFFF",
-
   danger: "#C62828",
-
   primaryDark: "#5B3A7A",
-
+  primaryBorder: "#E3D9F1",
   textMuted: "#9B8BB5",
   textMedium: "#6D6186",
   textSoft: "#7A6F91",
   textStrong: "#241B3A",
-
-  primaryBorder: "#E3D9F1",
 };
 
-export const radius = {
+const radius: AppTheme["radius"] = {
   sm: "8px",
   md: "12px",
   lg: "16px",
   xl: "24px",
 };
 
-export const commonStyles = {
+export const theme: AppTheme = Object.assign(muiTheme, {
+  colors,
+  radius,
+});
+
+export const commonStyles: Record<string, CSSProperties> = {
   page: {
     background: "#F7F3F8",
     minHeight: "100vh",
@@ -66,39 +106,69 @@ export const commonStyles = {
   backLink: {
     display: "inline-block",
     marginBottom: "16px",
-    color: "#5B3A7A",
+    color: theme.colors.primaryDark,
     textDecoration: "none",
     fontWeight: 600,
   },
 
   sectionTitle: {
-    marginBottom: "12px",
+    margin: "0 0 12px 0",
     fontSize: "20px",
     fontWeight: 700,
-    color: "#241B3A",
+    color: theme.colors.textStrong,
   },
 
   card: {
-    background: "#FFFFFF",
-    border: "1px solid #E3D9F1",
-    borderRadius: "16px",
-    padding: "24px",
+    background: theme.colors.white,
+    border: `1px solid ${theme.colors.primaryBorder}`,
+    borderRadius: theme.radius.xl,
+    padding: "28px",
+  },
+
+  cardOverline: {
+    margin: "0 0 8px 0",
+    fontSize: "14px",
+    color: theme.colors.textMuted,
+  },
+
+  cardTitle: {
+    margin: "0 0 10px 0",
+    fontSize: "24px",
+    color: theme.colors.textStrong,
+    fontWeight: 700,
+  },
+
+  cardText: {
+    margin: 0,
+    color: theme.colors.textSoft,
+    fontSize: "16px",
+    lineHeight: 1.5,
   },
 
   buttonPrimary: {
-    background: "#8E5AB5",
+    background: theme.palette.primary.main,
     color: "#FFFFFF",
     border: "none",
     padding: "12px 20px",
-    borderRadius: "12px",
+    borderRadius: theme.radius.md,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+
+  primaryButton: {
+    background: theme.palette.primary.main,
+    color: "#FFFFFF",
+    border: "none",
+    padding: "12px 20px",
+    borderRadius: theme.radius.md,
     fontWeight: 700,
     cursor: "pointer",
   },
 
   emptyState: {
     padding: "40px",
-    textAlign: "center" as const,
-    color: "#6D6186",
+    textAlign: "center",
+    color: theme.colors.textMedium,
   },
 
   message: {
@@ -107,10 +177,11 @@ export const commonStyles = {
   },
 };
 
-export function getStatusBadgeStyle(status?: string) {
+export function getStatusBadgeStyle(status?: string): CSSProperties {
   switch (status) {
     case "Conferido":
     case "Calculado":
+    case "Concluída":
       return {
         background: "#E8F5E9",
         color: "#2E7D32",
@@ -120,6 +191,7 @@ export function getStatusBadgeStyle(status?: string) {
       };
 
     case "Pendente":
+    case "Em revisão":
       return {
         background: "#FFF3E0",
         color: "#ED6C02",
