@@ -78,6 +78,9 @@ const muiTheme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 16,
+          minWidth: 0,
+          maxWidth: "100%",
+          overflow: "hidden",
         },
       },
     },
@@ -86,6 +89,7 @@ const muiTheme = createTheme({
       styleOverrides: {
         root: {
           padding: 18,
+          minWidth: 0,
           "&:last-child": {
             paddingBottom: 18,
           },
@@ -102,6 +106,7 @@ const muiTheme = createTheme({
           paddingLeft: 14,
           paddingRight: 14,
           minHeight: 38,
+          maxWidth: "100%",
         },
       },
     },
@@ -111,6 +116,7 @@ const muiTheme = createTheme({
         root: {
           fontSize: 12,
           height: 28,
+          maxWidth: "100%",
         },
       },
     },
@@ -118,6 +124,16 @@ const muiTheme = createTheme({
     MuiTextField: {
       defaultProps: {
         size: "small",
+        fullWidth: true,
+      },
+    },
+
+    MuiFormControl: {
+      styleOverrides: {
+        root: {
+          minWidth: 0,
+          maxWidth: "100%",
+        },
       },
     },
 
@@ -126,10 +142,25 @@ const muiTheme = createTheme({
         root: {
           borderRadius: 12,
           fontSize: 14,
+          minWidth: 0,
+          maxWidth: "100%",
         },
         input: {
           paddingTop: 10,
           paddingBottom: 10,
+          minWidth: 0,
+        },
+      },
+    },
+
+    MuiInputBase: {
+      styleOverrides: {
+        root: {
+          minWidth: 0,
+          maxWidth: "100%",
+        },
+        input: {
+          minWidth: 0,
         },
       },
     },
