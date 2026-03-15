@@ -43,6 +43,7 @@ import PrecisionManufacturingOutlinedIcon from "@mui/icons-material/PrecisionMan
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import SummarizeOutlinedIcon from "@mui/icons-material/SummarizeOutlined";
 import MemoryOutlinedIcon from "@mui/icons-material/MemoryOutlined";
+import FunctionsOutlinedIcon from "@mui/icons-material/FunctionsOutlined";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import SpreadsheetEditor from "../modules/spreadsheet-editor/SpreadsheetEditor";
 import {
@@ -159,54 +160,40 @@ type ServiceCompositionSummary = {
   equipmentTotal?: number;
   logisticsTotal?: number;
   supportTotal?: number;
-  episAndUniformsTotal?: number;
-  consumablesTotal?: number;
   recurringTotal?: number;
   eventualTotal?: number;
   onDemandTotal?: number;
+  totalsByCategory?: Record<string, number>;
+  totalsByRecurrence?: Record<string, number>;
 };
 
 type ServiceCompositionMemoryItem = {
-  rowId?: string | number;
+  id?: string;
   item?: string;
   category?: string;
-  categoryKey?: string;
-  demandType?: string;
-  quantity?: number;
-  unitCost?: number;
-  subtotal?: number;
+  recurrenceType?: string;
   serviceUnit?: string;
   periodicity?: string;
+  quantity?: number;
+  unitCost?: number;
   productivityFactor?: number;
-  monthlyFactor?: number;
-  depreciationCriteria?: string;
-  consumptionBase?: string;
+  monthlyizationFactor?: number;
+  allocationFactor?: number;
+  depreciationMethod?: string;
+  depreciationFactor?: number;
+  usefulLifeMonths?: number;
+  subtotal?: number;
+  formula?: string;
+  consumptionBasis?: string;
   technicalJustification?: string;
-  memoryText?: string;
-  source?: string;
-  automatic?: boolean;
-  status?: string;
 };
 
-type ServiceCompositionMemoryBundle = {
+type ServiceCompositionEngineSnapshot = {
   generatedAt?: string;
-  editorModule?: string;
   itemCount?: number;
-  totals?: {
-    materials?: number;
-    equipment?: number;
-    logistics?: number;
-    operationalSupport?: number;
-    episAndUniforms?: number;
-    consumables?: number;
-    grandTotal?: number;
-  };
-  demandBreakdown?: {
-    recurring?: number;
-    eventual?: number;
-    onDemand?: number;
-  };
-  items?: ServiceCompositionMemoryItem[];
+  total?: number;
+  totalByCategory?: Record<string, number>;
+  totalByRecurrence?: Record<string, number>;
 };
 
 const DOMAIN_SCENARIO_LABELS: Record<string, string> = {
@@ -355,60 +342,30 @@ function getModelIcon(modelType?: string) {
 function getModelChipStyles(modelType?: string) {
   switch (modelType) {
     case "dedicated_labor":
-      return {
-        backgroundColor: "#EDE7F6",
-        color: "#5E35B1",
-      };
+      return { backgroundColor: "#EDE7F6", color: "#5E35B1" };
     case "non_dedicated_labor":
-      return {
-        backgroundColor: "#E3F2FD",
-        color: "#1565C0",
-      };
+      return { backgroundColor: "#E3F2FD", color: "#1565C0" };
     case "service_composition":
-      return {
-        backgroundColor: "#E8F5E9",
-        color: "#2E7D32",
-      };
+      return { backgroundColor: "#E8F5E9", color: "#2E7D32" };
     case "economic_rebalance":
-      return {
-        backgroundColor: "#FFF3E0",
-        color: "#EF6C00",
-      };
+      return { backgroundColor: "#FFF3E0", color: "#EF6C00" };
     default:
-      return {
-        backgroundColor: "#EDE7F6",
-        color: "#5E35B1",
-      };
+      return { backgroundColor: "#EDE7F6", color: "#5E35B1" };
   }
 }
 
 function getStatusChipStyles(status?: string) {
   switch (status) {
     case "Em elaboração":
-      return {
-        backgroundColor: "#EFE7F6",
-        color: "#8E5AB5",
-      };
+      return { backgroundColor: "#EFE7F6", color: "#8E5AB5" };
     case "Concluída":
-      return {
-        backgroundColor: "#E7F6EC",
-        color: "#2E7D32",
-      };
+      return { backgroundColor: "#E7F6EC", color: "#2E7D32" };
     case "Em revisão":
-      return {
-        backgroundColor: "#FFF3E0",
-        color: "#ED6C02",
-      };
+      return { backgroundColor: "#FFF3E0", color: "#ED6C02" };
     case "Exemplo nativo":
-      return {
-        backgroundColor: "#E3F2FD",
-        color: "#1565C0",
-      };
+      return { backgroundColor: "#E3F2FD", color: "#1565C0" };
     default:
-      return {
-        backgroundColor: "#EFE7F6",
-        color: "#8E5AB5",
-      };
+      return { backgroundColor: "#EFE7F6", color: "#8E5AB5" };
   }
 }
 
@@ -469,6 +426,17 @@ function readMetadataRecord(
   return isRecord(raw) ? raw : null;
 }
 
+function readMetadataArray<T>(
+  record: SpreadsheetDetailRecord | null | undefined,
+  key: string
+): T[] {
+  if (!record || !isRecord(record.metadata)) {
+    return [];
+  }
+  const raw = record.metadata[key];
+  return Array.isArray(raw) ? (raw as T[]) : [];
+}
+
 function readLaborCostBreakdown(
   record: SpreadsheetDetailRecord | null | undefined
 ): LaborCostBreakdown | null {
@@ -492,9 +460,18 @@ function readServiceCompositionSummary(
 
 function readServiceCompositionMemoryBundle(
   record: SpreadsheetDetailRecord | null | undefined
-): ServiceCompositionMemoryBundle | null {
-  const raw = readMetadataRecord(record, "serviceCompositionMemoryBundle");
-  return raw ? (raw as ServiceCompositionMemoryBundle) : null;
+): ServiceCompositionMemoryItem[] {
+  return readMetadataArray<ServiceCompositionMemoryItem>(
+    record,
+    "serviceCompositionMemoryBundle"
+  );
+}
+
+function readServiceCompositionEngineSnapshot(
+  record: SpreadsheetDetailRecord | null | undefined
+): ServiceCompositionEngineSnapshot | null {
+  const raw = readMetadataRecord(record, "serviceCompositionEngineSnapshot");
+  return raw ? (raw as ServiceCompositionEngineSnapshot) : null;
 }
 
 function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
@@ -879,18 +856,20 @@ function ModuleDetailCard({ module }: { module: PcfpModuleGroup }) {
 
 function PersistedCompositionCard({
   summary,
-  memoryBundle,
+  memoryItems,
+  engineSnapshot,
 }: {
   summary: ServiceCompositionSummary | null;
-  memoryBundle: ServiceCompositionMemoryBundle | null;
+  memoryItems: ServiceCompositionMemoryItem[];
+  engineSnapshot: ServiceCompositionEngineSnapshot | null;
 }) {
-  const items = Array.isArray(memoryBundle?.items) ? memoryBundle.items : [];
-  const totals = memoryBundle?.totals;
-  const demandBreakdown = memoryBundle?.demandBreakdown;
-
-  if (!summary && !memoryBundle) {
+  if (!summary && !engineSnapshot && memoryItems.length === 0) {
     return null;
   }
+
+  const totalByCategory = summary?.totalsByCategory ?? engineSnapshot?.totalByCategory ?? {};
+  const totalByRecurrence =
+    summary?.totalsByRecurrence ?? engineSnapshot?.totalByRecurrence ?? {};
 
   return (
     <Card
@@ -913,7 +892,9 @@ function PersistedCompositionCard({
           </Stack>
 
           <Typography variant="body2" color="text.secondary">
-            Esta seção lê diretamente os blocos técnicos persistidos em metadata.
+            Esta seção lê diretamente os blocos persistidos pelo motor de composição,
+            priorizando o resumo consolidado, a memória técnica por item e o snapshot
+            executivo da rodada de cálculo.
           </Typography>
 
           <Box
@@ -930,22 +911,34 @@ function PersistedCompositionCard({
           >
             <ExecutiveMetricCard
               label="Itens persistidos"
-              value={summary?.itemCount ?? memoryBundle?.itemCount ?? 0}
+              value={summary?.itemCount ?? engineSnapshot?.itemCount ?? memoryItems.length}
             />
             <ExecutiveMetricCard
               label="Total persistido"
-              value={formatCurrency(Number(summary?.total ?? totals?.grandTotal ?? 0))}
+              value={formatCurrency(Number(summary?.total ?? engineSnapshot?.total ?? 0))}
             />
-            <CompactInfoCard title="Gerado em">
-              <Typography variant="body2" fontWeight={700}>
-                {memoryBundle?.generatedAt
-                  ? new Date(memoryBundle.generatedAt).toLocaleString("pt-BR")
-                  : "Não informado"}
+            <CompactInfoCard title="Resumo por recorrência">
+              <Typography variant="body2" color="text.secondary">
+                Recorrente:{" "}
+                <strong>{formatCurrency(Number(totalByRecurrence["recorrente"] || 0))}</strong>
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Eventual:{" "}
+                <strong>{formatCurrency(Number(totalByRecurrence["eventual"] || 0))}</strong>
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Sob demanda:{" "}
+                <strong>{formatCurrency(Number(totalByRecurrence["sob_demanda"] || 0))}</strong>
               </Typography>
             </CompactInfoCard>
-            <CompactInfoCard title="Tipo de bloco">
+            <CompactInfoCard title="Snapshot do motor">
+              <Typography variant="body2" color="text.secondary">
+                Gerado em:
+              </Typography>
               <Typography variant="body2" fontWeight={700}>
-                {safeString(memoryBundle?.editorModule) || "service_composition"}
+                {engineSnapshot?.generatedAt
+                  ? new Date(engineSnapshot.generatedAt).toLocaleString("pt-BR")
+                  : "Não informado"}
               </Typography>
             </CompactInfoCard>
           </Box>
@@ -956,32 +949,48 @@ function PersistedCompositionCard({
               gridTemplateColumns: {
                 xs: "1fr",
                 sm: "repeat(2, minmax(0, 1fr))",
-                xl: "repeat(4, minmax(0, 1fr))",
+                xl: "repeat(5, minmax(0, 1fr))",
               },
               gap: 2,
               minWidth: 0,
             }}
           >
             <ExecutiveMetricCard
+              label="Equipe técnica / operacional"
+              value={formatCurrency(Number(totalByCategory["Equipe técnica / operacional"] || 0))}
+            />
+            <ExecutiveMetricCard
               label="Materiais e insumos"
-              value={formatCurrency(Number(summary?.materialsTotal ?? totals?.materials ?? 0))}
+              value={formatCurrency(Number(totalByCategory["Materiais e insumos"] || 0))}
             />
             <ExecutiveMetricCard
               label="Equipamentos"
-              value={formatCurrency(Number(summary?.equipmentTotal ?? totals?.equipment ?? 0))}
+              value={formatCurrency(Number(totalByCategory["Equipamentos"] || 0))}
             />
             <ExecutiveMetricCard
-              label="Logística"
-              value={formatCurrency(Number(summary?.logisticsTotal ?? totals?.logistics ?? 0))}
+              label="Logística operacional"
+              value={formatCurrency(Number(totalByCategory["Logística operacional"] || 0))}
             />
             <ExecutiveMetricCard
               label="Apoio operacional"
-              value={formatCurrency(Number(summary?.supportTotal ?? totals?.operationalSupport ?? 0))}
+              value={formatCurrency(Number(totalByCategory["Apoio operacional"] || 0))}
             />
           </Box>
 
+          <CompactInfoCard title="Leitura técnica consolidada">
+            <Typography variant="body2" color="text.secondary">
+              O motor consolidou <strong>{memoryItems.length}</strong> item(ns) com
+              fórmula, fatores de produtividade, rateio, periodicidade e técnica
+              declarada.
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Este bloco já está apto a sustentar comparação entre versões,
+              explicabilidade e parecer automatizado.
+            </Typography>
+          </CompactInfoCard>
+
           <Box sx={{ overflowX: "auto", width: "100%" }}>
-            <Table size="small" sx={{ minWidth: 960 }}>
+            <Table size="small" sx={{ minWidth: 1180 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>
@@ -991,48 +1000,39 @@ function PersistedCompositionCard({
                     <strong>Categoria</strong>
                   </TableCell>
                   <TableCell>
-                    <strong>Demanda</strong>
+                    <strong>Recorrência</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Periodicidade</strong>
                   </TableCell>
                   <TableCell align="right">
-                    <strong>Quantidade</strong>
+                    <strong>Qtd.</strong>
                   </TableCell>
                   <TableCell align="right">
-                    <strong>Valor unitário</strong>
+                    <strong>Unitário</strong>
                   </TableCell>
                   <TableCell align="right">
                     <strong>Subtotal</strong>
                   </TableCell>
                   <TableCell>
-                    <strong>Unidade / periodicidade</strong>
+                    <strong>Fórmula</strong>
                   </TableCell>
                   <TableCell>
-                    <strong>Base / depreciação</strong>
+                    <strong>Base / justificativa</strong>
                   </TableCell>
                 </TableRow>
               </TableHead>
 
               <TableBody>
-                {items.length > 0 ? (
-                  items.map((item, index) => (
-                    <TableRow key={`${String(item.rowId ?? item.item)}-${index}`}>
-                      <TableCell sx={{ minWidth: 220 }}>
-                        <Stack spacing={0.35}>
-                          <Typography variant="body2">
-                            {safeString(item.item) || "Item sem nome"}
-                          </Typography>
-                          {safeString(item.technicalJustification) ? (
-                            <Typography variant="caption" color="text.secondary">
-                              {safeString(item.technicalJustification)}
-                            </Typography>
-                          ) : safeString(item.memoryText) ? (
-                            <Typography variant="caption" color="text.secondary">
-                              {safeString(item.memoryText)}
-                            </Typography>
-                          ) : null}
-                        </Stack>
+                {memoryItems.length > 0 ? (
+                  memoryItems.map((item, index) => (
+                    <TableRow key={`${String(item.id)}-${index}`}>
+                      <TableCell sx={{ minWidth: 200 }}>
+                        {safeString(item.item) || "Item sem nome"}
                       </TableCell>
                       <TableCell>{safeString(item.category)}</TableCell>
-                      <TableCell>{safeString(item.demandType) || "nao_informado"}</TableCell>
+                      <TableCell>{safeString(item.recurrenceType)}</TableCell>
+                      <TableCell>{safeString(item.periodicity)}</TableCell>
                       <TableCell align="right">{Number(item.quantity || 0)}</TableCell>
                       <TableCell align="right">
                         {formatCurrency(Number(item.unitCost || 0))}
@@ -1040,31 +1040,34 @@ function PersistedCompositionCard({
                       <TableCell align="right">
                         {formatCurrency(Number(item.subtotal || 0))}
                       </TableCell>
-                      <TableCell>
-                        <Stack spacing={0.35}>
-                          <Typography variant="body2">
-                            Unidade: {safeString(item.serviceUnit) || "—"}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Periodicidade: {safeString(item.periodicity) || "—"}
-                          </Typography>
-                        </Stack>
+                      <TableCell sx={{ minWidth: 280 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {safeString(item.formula) || "Sem fórmula registrada"}
+                        </Typography>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ minWidth: 260 }}>
                         <Stack spacing={0.35}>
-                          <Typography variant="body2">
-                            Base: {safeString(item.consumptionBase) || "—"}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Depreciação: {safeString(item.depreciationCriteria) || "—"}
-                          </Typography>
+                          {safeString(item.consumptionBasis) ? (
+                            <Typography variant="caption" color="text.secondary">
+                              Base: {safeString(item.consumptionBasis)}
+                            </Typography>
+                          ) : null}
+                          {safeString(item.technicalJustification) ? (
+                            <Typography variant="caption" color="text.secondary">
+                              Justificativa: {safeString(item.technicalJustification)}
+                            </Typography>
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">
+                              Sem justificativa técnica registrada.
+                            </Typography>
+                          )}
                         </Stack>
                       </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8}>
+                    <TableCell colSpan={9}>
                       <Typography variant="body2" color="text.secondary">
                         Nenhum item estruturado foi encontrado no bundle persistido.
                       </Typography>
@@ -1074,30 +1077,6 @@ function PersistedCompositionCard({
               </TableBody>
             </Table>
           </Box>
-
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            <Chip
-              label={`Recorrente: ${formatCurrency(
-                Number(summary?.recurringTotal ?? demandBreakdown?.recurring ?? 0)
-              )}`}
-              size="small"
-              variant="outlined"
-            />
-            <Chip
-              label={`Eventual: ${formatCurrency(
-                Number(summary?.eventualTotal ?? demandBreakdown?.eventual ?? 0)
-              )}`}
-              size="small"
-              variant="outlined"
-            />
-            <Chip
-              label={`Sob demanda: ${formatCurrency(
-                Number(summary?.onDemandTotal ?? demandBreakdown?.onDemand ?? 0)
-              )}`}
-              size="small"
-              variant="outlined"
-            />
-          </Stack>
         </Stack>
       </CardContent>
     </Card>
@@ -1233,6 +1212,10 @@ export default function SpreadsheetDetail() {
     () => readServiceCompositionMemoryBundle(spreadsheet),
     [spreadsheet]
   );
+  const serviceCompositionEngineSnapshot = useMemo(
+    () => readServiceCompositionEngineSnapshot(spreadsheet),
+    [spreadsheet]
+  );
 
   const mandatoryCostTotal = useMemo(() => {
     if (!spreadsheet) return 0;
@@ -1258,7 +1241,9 @@ export default function SpreadsheetDetail() {
   const evidentiaryCostTotal = useMemo(() => {
     if (!spreadsheet) return 0;
 
-    const persistedCompositionTotal = Number(serviceCompositionSummary?.total || 0);
+    const persistedCompositionTotal = Number(
+      serviceCompositionSummary?.total ?? serviceCompositionEngineSnapshot?.total ?? 0
+    );
     if (persistedCompositionTotal > 0) {
       return persistedCompositionTotal;
     }
@@ -1273,7 +1258,7 @@ export default function SpreadsheetDetail() {
       "epi",
       "uniforme",
     ]);
-  }, [spreadsheet, serviceCompositionSummary]);
+  }, [spreadsheet, serviceCompositionSummary, serviceCompositionEngineSnapshot]);
 
   const analysisReferenceValue = useMemo(() => {
     if (!editor) return 0;
@@ -1304,7 +1289,9 @@ export default function SpreadsheetDetail() {
 
   const effectiveMonthlyReference = useMemo(() => {
     const persistedLabor = Number(laborCostBreakdown?.monthlyLaborTotal || 0);
-    const persistedComposition = Number(serviceCompositionSummary?.total || 0);
+    const persistedComposition = Number(
+      serviceCompositionSummary?.total ?? serviceCompositionEngineSnapshot?.total ?? 0
+    );
     const explicitEditor = parseNumber(editor?.monthlyBaseValue);
 
     if (explicitEditor > 0) {
@@ -1316,7 +1303,13 @@ export default function SpreadsheetDetail() {
     }
 
     return totalValue;
-  }, [laborCostBreakdown, serviceCompositionSummary, editor, totalValue]);
+  }, [
+    laborCostBreakdown,
+    serviceCompositionSummary,
+    serviceCompositionEngineSnapshot,
+    editor,
+    totalValue,
+  ]);
 
   function updateEditorField(field: keyof EditorState, value: string) {
     setEditor((current) => {
@@ -1602,7 +1595,9 @@ export default function SpreadsheetDetail() {
             severity="info"
             sx={{ borderRadius: 3 }}
           >
-            Esta tela já consome metadata estruturada quando disponível.
+            Esta tela já consome o resumo, a memória técnica e o snapshot do motor de
+            composição quando disponíveis, reduzindo inferência e preparando a base
+            para comparação entre versões, repactuação e parecer automatizado.
           </Alert>
 
           <Box
@@ -1634,11 +1629,14 @@ export default function SpreadsheetDetail() {
             }}
           >
             <Stack spacing={2} sx={{ minWidth: 0 }}>
-              {(serviceCompositionSummary || serviceCompositionMemoryBundle) &&
+              {(serviceCompositionSummary ||
+                serviceCompositionEngineSnapshot ||
+                serviceCompositionMemoryBundle.length > 0) &&
               spreadsheet.modelType === "service_composition" ? (
                 <PersistedCompositionCard
                   summary={serviceCompositionSummary}
-                  memoryBundle={serviceCompositionMemoryBundle}
+                  memoryItems={serviceCompositionMemoryBundle}
+                  engineSnapshot={serviceCompositionEngineSnapshot}
                 />
               ) : null}
 
@@ -1660,7 +1658,12 @@ export default function SpreadsheetDetail() {
 
                 <Typography variant="body2" color="text.secondary">
                   <strong>Memória técnica da composição:</strong>{" "}
-                  {serviceCompositionMemoryBundle ? "Sim" : "Não"}
+                  {serviceCompositionMemoryBundle.length > 0 ? "Sim" : "Não"}
+                </Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Snapshot do motor:</strong>{" "}
+                  {serviceCompositionEngineSnapshot ? "Sim" : "Não"}
                 </Typography>
               </CompactInfoCard>
 
@@ -2337,6 +2340,40 @@ export default function SpreadsheetDetail() {
                 </CompactInfoCard>
               ) : null}
 
+              {(serviceCompositionEngineSnapshot || serviceCompositionMemoryBundle.length > 0) &&
+              spreadsheet.modelType === "service_composition" ? (
+                <CompactInfoCard title="Snapshot do motor de composição">
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <FunctionsOutlinedIcon sx={{ fontSize: 18 }} />
+                    <Typography variant="body2" fontWeight={700}>
+                      Rodada consolidada de cálculo
+                    </Typography>
+                  </Stack>
+
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Itens:</strong>{" "}
+                    {serviceCompositionEngineSnapshot?.itemCount ??
+                      serviceCompositionMemoryBundle.length}
+                  </Typography>
+
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Total:</strong>{" "}
+                    {formatCurrency(
+                      Number(serviceCompositionEngineSnapshot?.total ?? 0)
+                    )}
+                  </Typography>
+
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Gerado em:</strong>{" "}
+                    {serviceCompositionEngineSnapshot?.generatedAt
+                      ? new Date(
+                          serviceCompositionEngineSnapshot.generatedAt
+                        ).toLocaleString("pt-BR")
+                      : "Não informado"}
+                  </Typography>
+                </CompactInfoCard>
+              ) : null}
+
               <CompactInfoCard title="Painel modular">
                 {pcfpModules.map((module) => (
                   <Box
@@ -2442,7 +2479,8 @@ export default function SpreadsheetDetail() {
                 />
 
                 <Typography variant="caption" color="text.secondary">
-                  Este campo já prepara a futura integração com histórico analítico.
+                  Este campo já prepara a futura integração com histórico analítico,
+                  decisão interna, parecer consolidado e trilha de auditoria.
                 </Typography>
               </CompactInfoCard>
             </Stack>
