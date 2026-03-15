@@ -1,65 +1,23 @@
-export type ServiceCompositionCategory =
-  | "Equipe técnica / operacional"
-  | "Materiais e insumos"
-  | "Equipamentos"
-  | "Logística operacional"
-  | "Apoio operacional";
+import { SpreadsheetRecord } from "../../../services/spreadsheetService";
 
-export type ServiceCompositionPeriodicity =
-  | "mensal"
-  | "bimestral"
-  | "trimestral"
-  | "quadrimestral"
-  | "semestral"
-  | "anual"
-  | "sob_demanda";
+export type SpreadsheetRow = SpreadsheetRecord["rows"][number];
 
-export type ServiceCompositionRecurrenceType =
+export type ServiceDemandType =
   | "recorrente"
   | "eventual"
-  | "sob_demanda";
+  | "sob_demanda"
+  | "nao_informado";
 
-export type ServiceCompositionDepreciationMethod =
-  | "nao_aplica"
-  | "rateio_linear";
-
-export type ServiceCompositionDraftRow = {
-  id: string;
-  item: string;
-  category: ServiceCompositionCategory;
-  recurrenceType: ServiceCompositionRecurrenceType;
-  serviceUnit: string;
-  periodicity: ServiceCompositionPeriodicity;
-  quantity: number;
-  unitCost: number;
-  productivityFactor: number;
-  allocationFactor: number;
-  depreciationMethod: ServiceCompositionDepreciationMethod;
-  usefulLifeMonths: number;
-  status: string;
-  consumptionBasis: string;
-  technicalJustification: string;
-};
-
-export type ServiceCompositionMemoryItem = {
-  id: string;
-  item: string;
-  category: ServiceCompositionCategory;
-  recurrenceType: ServiceCompositionRecurrenceType;
-  serviceUnit: string;
-  periodicity: ServiceCompositionPeriodicity;
-  quantity: number;
-  unitCost: number;
-  productivityFactor: number;
-  monthlyizationFactor: number;
-  allocationFactor: number;
-  depreciationMethod: ServiceCompositionDepreciationMethod;
-  depreciationFactor: number;
-  usefulLifeMonths: number;
-  subtotal: number;
-  formula: string;
-  consumptionBasis: string;
-  technicalJustification: string;
+export type ServiceCompositionRow = SpreadsheetRow & {
+  demandType?: ServiceDemandType;
+  serviceUnit?: string;
+  periodicity?: string;
+  productivityFactor?: number;
+  monthlyFactor?: number;
+  depreciationCriteria?: string;
+  consumptionBase?: string;
+  technicalJustification?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type ServiceCompositionSummary = {
@@ -70,445 +28,290 @@ export type ServiceCompositionSummary = {
   equipmentTotal: number;
   logisticsTotal: number;
   supportTotal: number;
+  episAndUniformsTotal: number;
+  consumablesTotal: number;
   recurringTotal: number;
   eventualTotal: number;
   onDemandTotal: number;
-  totalsByCategory: Record<ServiceCompositionCategory, number>;
-  totalsByRecurrence: Record<ServiceCompositionRecurrenceType, number>;
 };
 
-export const SERVICE_COMPOSITION_CATEGORY_OPTIONS: Array<{
-  value: ServiceCompositionCategory;
-  label: string;
-}> = [
-  {
-    value: "Equipe técnica / operacional",
-    label: "Equipe técnica / operacional",
-  },
-  {
-    value: "Materiais e insumos",
-    label: "Materiais e insumos",
-  },
-  {
-    value: "Equipamentos",
-    label: "Equipamentos",
-  },
-  {
-    value: "Logística operacional",
-    label: "Logística operacional",
-  },
-  {
-    value: "Apoio operacional",
-    label: "Apoio operacional",
-  },
-];
+export type ServiceCompositionMemoryItem = {
+  rowId: string | number;
+  item: string;
+  category: string;
+  categoryKey: string;
+  demandType: ServiceDemandType;
+  quantity: number;
+  unitCost: number;
+  subtotal: number;
+  serviceUnit: string;
+  periodicity: string;
+  productivityFactor: number;
+  monthlyFactor: number;
+  depreciationCriteria: string;
+  consumptionBase: string;
+  technicalJustification: string;
+  memoryText: string;
+  source: string;
+  automatic: boolean;
+  status: string;
+};
 
-export const SERVICE_COMPOSITION_PERIODICITY_OPTIONS: Array<{
-  value: ServiceCompositionPeriodicity;
-  label: string;
-}> = [
-  { value: "mensal", label: "Mensal" },
-  { value: "bimestral", label: "Bimestral" },
-  { value: "trimestral", label: "Trimestral" },
-  { value: "quadrimestral", label: "Quadrimestral" },
-  { value: "semestral", label: "Semestral" },
-  { value: "anual", label: "Anual" },
-  { value: "sob_demanda", label: "Sob demanda" },
-];
+export type ServiceCompositionMemoryBundle = {
+  generatedAt: string;
+  editorModule: "service_composition";
+  itemCount: number;
+  totals: {
+    materials: number;
+    equipment: number;
+    logistics: number;
+    operationalSupport: number;
+    episAndUniforms: number;
+    consumables: number;
+    grandTotal: number;
+  };
+  demandBreakdown: {
+    recurring: number;
+    eventual: number;
+    onDemand: number;
+  };
+  items: ServiceCompositionMemoryItem[];
+};
 
-export const SERVICE_COMPOSITION_RECURRENCE_OPTIONS: Array<{
-  value: ServiceCompositionRecurrenceType;
-  label: string;
-}> = [
-  { value: "recorrente", label: "Recorrente" },
-  { value: "eventual", label: "Eventual" },
-  { value: "sob_demanda", label: "Sob demanda" },
-];
-
-export const SERVICE_COMPOSITION_DEPRECIATION_OPTIONS: Array<{
-  value: ServiceCompositionDepreciationMethod;
-  label: string;
-}> = [
-  { value: "nao_aplica", label: "Não se aplica" },
-  { value: "rateio_linear", label: "Rateio linear" },
-];
-
-export const SERVICE_COMPOSITION_STATUS_OPTIONS: Array<{
-  value: string;
-  label: string;
-}> = [
-  { value: "Pendente", label: "Pendente" },
-  { value: "Conferido", label: "Conferido" },
-  { value: "Exemplo do domínio", label: "Exemplo do domínio" },
-  { value: "Em elaboração", label: "Em elaboração" },
-];
-
-function round2(value: number) {
-  return Number((value || 0).toFixed(2));
+function safeString(value: unknown) {
+  return typeof value === "string" ? value : "";
 }
 
 function safeNumber(value: unknown, fallback = 0) {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : fallback;
-  }
-
-  if (typeof value === "string") {
-    const normalized = value.replace(/\./g, "").replace(",", ".");
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-
-  return fallback;
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function safeString(value: unknown, fallback = "") {
-  return typeof value === "string" ? value : fallback;
+function normalizeText(value: unknown) {
+  return safeString(value).trim().toLowerCase();
 }
 
-const VALID_PERIODICITIES = new Set<ServiceCompositionPeriodicity>([
-  "mensal",
-  "bimestral",
-  "trimestral",
-  "quadrimestral",
-  "semestral",
-  "anual",
-  "sob_demanda",
-]);
+function roundCurrency(value: number) {
+  return Number((value || 0).toFixed(2));
+}
 
-const VALID_RECURRENCES = new Set<ServiceCompositionRecurrenceType>([
-  "recorrente",
-  "eventual",
-  "sob_demanda",
-]);
+function categoryIncludes(category: string, terms: string[]) {
+  const normalized = normalizeText(category);
+  return terms.some((term) => normalized.includes(term));
+}
 
-const VALID_DEPRECIATION_METHODS = new Set<ServiceCompositionDepreciationMethod>([
-  "nao_aplica",
-  "rateio_linear",
-]);
-
-export function inferServiceCompositionCategory(
-  rawCategory?: string
-): ServiceCompositionCategory {
-  const value = String(rawCategory || "").toLowerCase();
-
+function inferDemandType(row: ServiceCompositionRow): ServiceDemandType {
+  const explicit = normalizeText(row.demandType);
   if (
-    value.includes("equipe operacional") ||
-    value.includes("equipe técnica") ||
-    value.includes("equipe tecnica") ||
-    value.includes("mão de obra") ||
-    value.includes("mao de obra")
+    explicit === "recorrente" ||
+    explicit === "eventual" ||
+    explicit === "sob_demanda" ||
+    explicit === "nao_informado"
   ) {
-    return "Equipe técnica / operacional";
+    return explicit;
   }
 
-  if (
-    value.includes("material") ||
-    value.includes("insumo") ||
-    value.includes("uniforme") ||
-    value.includes("epi")
-  ) {
-    return "Materiais e insumos";
-  }
+  const tags = Array.isArray(row.trainingTags) ? row.trainingTags : [];
 
-  if (
-    value.includes("equipamento") ||
-    value.includes("máquina") ||
-    value.includes("maquina") ||
-    value.includes("utensílio") ||
-    value.includes("utensilio")
-  ) {
-    return "Equipamentos";
-  }
+  if (tags.includes("recorrente")) return "recorrente";
+  if (tags.includes("eventual")) return "eventual";
+  if (tags.includes("sob_demanda")) return "sob_demanda";
 
-  if (value.includes("logística") || value.includes("logistica")) {
-    return "Logística operacional";
-  }
-
-  if (value.includes("apoio")) {
-    return "Apoio operacional";
-  }
-
-  return "Materiais e insumos";
+  return "nao_informado";
 }
 
-export function inferRecurrenceTypeFromPeriodicity(
-  periodicity?: string
-): ServiceCompositionRecurrenceType {
-  if (periodicity === "sob_demanda") {
-    return "sob_demanda";
-  }
+export function isServiceCompositionRow(row: SpreadsheetRow) {
+  const category = normalizeText(row.categoria);
+  const item = normalizeText(row.item);
+  const tags = Array.isArray(row.trainingTags) ? row.trainingTags : [];
 
-  return "recorrente";
-}
-
-export function getMonthlyizationFactor(
-  periodicity: ServiceCompositionPeriodicity
-) {
-  switch (periodicity) {
-    case "mensal":
-      return 1;
-    case "bimestral":
-      return 1 / 2;
-    case "trimestral":
-      return 1 / 3;
-    case "quadrimestral":
-      return 1 / 4;
-    case "semestral":
-      return 1 / 6;
-    case "anual":
-      return 1 / 12;
-    case "sob_demanda":
-      return 1;
-    default:
-      return 1;
-  }
-}
-
-export function getDepreciationFactor(row: {
-  depreciationMethod: ServiceCompositionDepreciationMethod;
-  usefulLifeMonths: number;
-}) {
-  if (row.depreciationMethod === "rateio_linear" && row.usefulLifeMonths > 0) {
-    return 1 / row.usefulLifeMonths;
-  }
-
-  return 1;
-}
-
-export function sanitizeServiceCompositionDraftRow(
-  input?: Partial<ServiceCompositionDraftRow>
-): ServiceCompositionDraftRow {
-  const rawPeriodicity = safeString(input?.periodicity, "mensal");
-  const periodicity = VALID_PERIODICITIES.has(
-    rawPeriodicity as ServiceCompositionPeriodicity
-  )
-    ? (rawPeriodicity as ServiceCompositionPeriodicity)
-    : "mensal";
-
-  const rawRecurrence = safeString(
-    input?.recurrenceType,
-    inferRecurrenceTypeFromPeriodicity(periodicity)
+  return (
+    categoryIncludes(category, [
+      "material",
+      "insumo",
+      "equipamento",
+      "logística",
+      "logistica",
+      "apoio operacional",
+      "epi",
+      "uniforme",
+      "consumo",
+    ]) ||
+    item.includes("equipamento") ||
+    item.includes("uniforme") ||
+    item.includes("epi") ||
+    tags.includes("service_composition_editable")
   );
-  const recurrenceType = VALID_RECURRENCES.has(
-    rawRecurrence as ServiceCompositionRecurrenceType
-  )
-    ? (rawRecurrence as ServiceCompositionRecurrenceType)
-    : "recorrente";
+}
 
-  const rawDepreciationMethod = safeString(
-    input?.depreciationMethod,
-    "nao_aplica"
-  );
-  const depreciationMethod = VALID_DEPRECIATION_METHODS.has(
-    rawDepreciationMethod as ServiceCompositionDepreciationMethod
-  )
-    ? (rawDepreciationMethod as ServiceCompositionDepreciationMethod)
-    : "nao_aplica";
+export function buildServiceCompositionRowId(prefix = "composition") {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
 
-  const category = inferServiceCompositionCategory(
-    safeString(input?.category) || "Materiais e insumos"
-  );
+  return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+}
 
-  const usefulLifeMonths =
-    depreciationMethod === "rateio_linear"
-      ? Math.max(1, safeNumber(input?.usefulLifeMonths, 12))
-      : 0;
+export function recalcServiceCompositionRow(
+  input: ServiceCompositionRow
+): ServiceCompositionRow {
+  const quantity = Math.max(0, safeNumber(input.quantidade));
+  const unitCost = Math.max(0, safeNumber(input.valorUnitario));
+  const productivityFactor = Math.max(0, safeNumber(input.productivityFactor, 1) || 1);
+  const monthlyFactor = Math.max(0, safeNumber(input.monthlyFactor, 1) || 1);
+
+  const subtotal = roundCurrency(quantity * unitCost * productivityFactor * monthlyFactor);
 
   return {
-    id:
-      safeString(input?.id) ||
-      `svc_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    item: safeString(input?.item) || "Novo componente",
-    category,
-    recurrenceType,
-    serviceUnit: safeString(input?.serviceUnit) || "unidade",
-    periodicity,
-    quantity: Math.max(0, safeNumber(input?.quantity, 1)),
-    unitCost: Math.max(0, safeNumber(input?.unitCost, 0)),
-    productivityFactor: Math.max(0, safeNumber(input?.productivityFactor, 1)),
-    allocationFactor: Math.max(0, safeNumber(input?.allocationFactor, 1)),
-    depreciationMethod,
-    usefulLifeMonths,
-    status: safeString(input?.status) || "Pendente",
-    consumptionBasis: safeString(input?.consumptionBasis),
-    technicalJustification: safeString(input?.technicalJustification),
+    ...input,
+    quantidade: quantity,
+    valorUnitario: unitCost,
+    productivityFactor,
+    monthlyFactor,
+    demandType: inferDemandType(input),
+    subtotal,
   };
 }
 
-export function calculateServiceCompositionItemSubtotal(
-  row: ServiceCompositionDraftRow
-) {
-  const monthlyizationFactor = getMonthlyizationFactor(row.periodicity);
-  const depreciationFactor = getDepreciationFactor(row);
-
-  const subtotal =
-    row.quantity *
-    row.unitCost *
-    row.productivityFactor *
-    monthlyizationFactor *
-    row.allocationFactor *
-    depreciationFactor;
-
-  return round2(subtotal);
+export function normalizeServiceCompositionRows(
+  rows: ServiceCompositionRow[]
+): ServiceCompositionRow[] {
+  return rows.map((row) =>
+    recalcServiceCompositionRow({
+      ...row,
+      id: row.id ?? buildServiceCompositionRowId("composition"),
+      item: safeString(row.item).trim() || "Item sem nome",
+      categoria: safeString(row.categoria).trim() || "Materiais e insumos",
+      status: safeString(row.status).trim() || "Pendente",
+      memoriaCalculo: safeString(row.memoriaCalculo),
+      origem: safeString(row.origem) || "edição local",
+      automatico: Boolean(row.automatico),
+      demandType: inferDemandType(row),
+      serviceUnit: safeString(row.serviceUnit),
+      periodicity: safeString(row.periodicity),
+      depreciationCriteria: safeString(row.depreciationCriteria),
+      consumptionBase: safeString(row.consumptionBase),
+      technicalJustification: safeString(row.technicalJustification),
+      metadata:
+        row.metadata && typeof row.metadata === "object"
+          ? { ...row.metadata }
+          : {},
+      trainingTags: Array.isArray(row.trainingTags) ? [...row.trainingTags] : [],
+    })
+  );
 }
 
-export function calculateServiceCompositionEffectiveUnitCost(
-  row: ServiceCompositionDraftRow
-) {
-  if (row.quantity <= 0) {
-    return 0;
+function getCategoryKey(category: string) {
+  const normalized = normalizeText(category);
+
+  if (categoryIncludes(normalized, ["equipamento"])) return "equipment";
+  if (categoryIncludes(normalized, ["logística", "logistica"])) return "logistics";
+  if (categoryIncludes(normalized, ["apoio operacional"])) return "support";
+  if (categoryIncludes(normalized, ["epi", "uniforme"])) return "epis_and_uniforms";
+  if (categoryIncludes(normalized, ["consumo"])) return "consumables";
+  if (categoryIncludes(normalized, ["material", "insumo"])) return "materials";
+
+  return "other";
+}
+
+export function summarizeServiceCompositionRows(
+  rows: ServiceCompositionRow[]
+): ServiceCompositionSummary {
+  const normalizedRows = normalizeServiceCompositionRows(rows);
+
+  let materialsTotal = 0;
+  let equipmentTotal = 0;
+  let logisticsTotal = 0;
+  let supportTotal = 0;
+  let episAndUniformsTotal = 0;
+  let consumablesTotal = 0;
+  let recurringTotal = 0;
+  let eventualTotal = 0;
+  let onDemandTotal = 0;
+
+  for (const row of normalizedRows) {
+    const subtotal = safeNumber(row.subtotal);
+    const categoryKey = getCategoryKey(safeString(row.categoria));
+    const demandType = inferDemandType(row);
+
+    if (categoryKey === "materials") materialsTotal += subtotal;
+    if (categoryKey === "equipment") equipmentTotal += subtotal;
+    if (categoryKey === "logistics") logisticsTotal += subtotal;
+    if (categoryKey === "support") supportTotal += subtotal;
+    if (categoryKey === "epis_and_uniforms") episAndUniformsTotal += subtotal;
+    if (categoryKey === "consumables") consumablesTotal += subtotal;
+
+    if (demandType === "recorrente") recurringTotal += subtotal;
+    if (demandType === "eventual") eventualTotal += subtotal;
+    if (demandType === "sob_demanda") onDemandTotal += subtotal;
   }
 
-  return round2(calculateServiceCompositionItemSubtotal(row) / row.quantity);
-}
-
-export function buildServiceCompositionRowFormula(
-  row: ServiceCompositionDraftRow
-) {
-  const monthlyizationFactor = getMonthlyizationFactor(row.periodicity);
-  const depreciationFactor = getDepreciationFactor(row);
-
-  return [
-    "subtotal = quantidade",
-    `x custo unitário (${round2(row.unitCost)})`,
-    `x produtividade (${round2(row.productivityFactor)})`,
-    `x fator mensal (${round2(monthlyizationFactor)})`,
-    `x rateio contratual (${round2(row.allocationFactor)})`,
-    `x depreciação/rateio (${round2(depreciationFactor)})`,
-  ].join(" ");
-}
-
-export function buildServiceCompositionRowMemory(
-  row: ServiceCompositionDraftRow
-) {
-  const monthlyizationFactor = getMonthlyizationFactor(row.periodicity);
-  const depreciationFactor = getDepreciationFactor(row);
-
-  const depreciationFragment =
-    row.depreciationMethod === "rateio_linear" && row.usefulLifeMonths > 0
-      ? `Depreciação/rateio linear em ${row.usefulLifeMonths} mês(es)`
-      : "Sem depreciação/rateio linear";
-
-  const fragments = [
-    `Recorrência: ${row.recurrenceType}`,
-    `Unidade de serviço: ${row.serviceUnit}`,
-    `Periodicidade: ${row.periodicity} (fator mensal ${round2(monthlyizationFactor)})`,
-    `Custo unitário base: ${round2(row.unitCost)}`,
-    `Fator de produtividade: ${round2(row.productivityFactor)}`,
-    `Fator de rateio contratual: ${round2(row.allocationFactor)}`,
-    `Fator de depreciação/rateio: ${round2(depreciationFactor)}`,
-    depreciationFragment,
-    buildServiceCompositionRowFormula(row),
-  ];
-
-  if (row.consumptionBasis.trim()) {
-    fragments.push(`Base de consumo: ${row.consumptionBasis.trim()}`);
-  }
-
-  if (row.technicalJustification.trim()) {
-    fragments.push(`Justificativa técnica: ${row.technicalJustification.trim()}`);
-  }
-
-  return fragments.join(" | ");
-}
-
-export function buildServiceCompositionMemoryItem(
-  row: ServiceCompositionDraftRow
-): ServiceCompositionMemoryItem {
-  const monthlyizationFactor = getMonthlyizationFactor(row.periodicity);
-  const depreciationFactor = getDepreciationFactor(row);
+  const total = normalizedRows.reduce(
+    (sum, row) => sum + safeNumber(row.subtotal),
+    0
+  );
 
   return {
-    id: row.id,
-    item: row.item,
-    category: row.category,
-    recurrenceType: row.recurrenceType,
-    serviceUnit: row.serviceUnit,
-    periodicity: row.periodicity,
-    quantity: row.quantity,
-    unitCost: round2(row.unitCost),
-    productivityFactor: round2(row.productivityFactor),
-    monthlyizationFactor: round2(monthlyizationFactor),
-    allocationFactor: round2(row.allocationFactor),
-    depreciationMethod: row.depreciationMethod,
-    depreciationFactor: round2(depreciationFactor),
-    usefulLifeMonths: row.usefulLifeMonths,
-    subtotal: calculateServiceCompositionItemSubtotal(row),
-    formula: buildServiceCompositionRowFormula(row),
-    consumptionBasis: row.consumptionBasis,
-    technicalJustification: row.technicalJustification,
+    itemCount: normalizedRows.length,
+    total: roundCurrency(total),
+    workforceTotal: 0,
+    materialsTotal: roundCurrency(materialsTotal),
+    equipmentTotal: roundCurrency(equipmentTotal),
+    logisticsTotal: roundCurrency(logisticsTotal),
+    supportTotal: roundCurrency(supportTotal),
+    episAndUniformsTotal: roundCurrency(episAndUniformsTotal),
+    consumablesTotal: roundCurrency(consumablesTotal),
+    recurringTotal: roundCurrency(recurringTotal),
+    eventualTotal: roundCurrency(eventualTotal),
+    onDemandTotal: roundCurrency(onDemandTotal),
   };
 }
 
 export function buildServiceCompositionMemoryBundle(
-  rows: ServiceCompositionDraftRow[]
-) {
-  return rows.map((row) => buildServiceCompositionMemoryItem(row));
-}
+  rows: ServiceCompositionRow[]
+): ServiceCompositionMemoryBundle {
+  const normalizedRows = normalizeServiceCompositionRows(rows);
+  const summary = summarizeServiceCompositionRows(normalizedRows);
 
-export function buildServiceCompositionSummary(
-  rows: ServiceCompositionDraftRow[]
-): ServiceCompositionSummary {
-  const totalsByCategory: Record<ServiceCompositionCategory, number> = {
-    "Equipe técnica / operacional": 0,
-    "Materiais e insumos": 0,
-    Equipamentos: 0,
-    "Logística operacional": 0,
-    "Apoio operacional": 0,
-  };
-
-  const totalsByRecurrence: Record<ServiceCompositionRecurrenceType, number> = {
-    recorrente: 0,
-    eventual: 0,
-    sob_demanda: 0,
-  };
-
-  rows.forEach((row) => {
-    const subtotal = calculateServiceCompositionItemSubtotal(row);
-    totalsByCategory[row.category] += subtotal;
-    totalsByRecurrence[row.recurrenceType] += subtotal;
-  });
-
-  const workforceTotal = round2(totalsByCategory["Equipe técnica / operacional"]);
-  const materialsTotal = round2(totalsByCategory["Materiais e insumos"]);
-  const equipmentTotal = round2(totalsByCategory["Equipamentos"]);
-  const logisticsTotal = round2(totalsByCategory["Logística operacional"]);
-  const supportTotal = round2(totalsByCategory["Apoio operacional"]);
-
-  const recurringTotal = round2(totalsByRecurrence.recorrente);
-  const eventualTotal = round2(totalsByRecurrence.eventual);
-  const onDemandTotal = round2(totalsByRecurrence.sob_demanda);
-
-  const total = round2(
-    workforceTotal +
-      materialsTotal +
-      equipmentTotal +
-      logisticsTotal +
-      supportTotal
-  );
+  const items: ServiceCompositionMemoryItem[] = normalizedRows.map((row) => ({
+    rowId: row.id ?? buildServiceCompositionRowId("composition"),
+    item: safeString(row.item),
+    category: safeString(row.categoria),
+    categoryKey: getCategoryKey(safeString(row.categoria)),
+    demandType: inferDemandType(row),
+    quantity: safeNumber(row.quantidade),
+    unitCost: safeNumber(row.valorUnitario),
+    subtotal: safeNumber(row.subtotal),
+    serviceUnit: safeString(row.serviceUnit),
+    periodicity: safeString(row.periodicity),
+    productivityFactor: safeNumber(row.productivityFactor, 1) || 1,
+    monthlyFactor: safeNumber(row.monthlyFactor, 1) || 1,
+    depreciationCriteria: safeString(row.depreciationCriteria),
+    consumptionBase: safeString(row.consumptionBase),
+    technicalJustification: safeString(row.technicalJustification),
+    memoryText: safeString(row.memoriaCalculo),
+    source: safeString(row.origem) || "edição local",
+    automatic: Boolean(row.automatico),
+    status: safeString(row.status) || "Pendente",
+  }));
 
   return {
-    itemCount: rows.length,
-    total,
-    workforceTotal,
-    materialsTotal,
-    equipmentTotal,
-    logisticsTotal,
-    supportTotal,
-    recurringTotal,
-    eventualTotal,
-    onDemandTotal,
-    totalsByCategory: {
-      "Equipe técnica / operacional": workforceTotal,
-      "Materiais e insumos": materialsTotal,
-      Equipamentos: equipmentTotal,
-      "Logística operacional": logisticsTotal,
-      "Apoio operacional": supportTotal,
+    generatedAt: new Date().toISOString(),
+    editorModule: "service_composition",
+    itemCount: summary.itemCount,
+    totals: {
+      materials: summary.materialsTotal,
+      equipment: summary.equipmentTotal,
+      logistics: summary.logisticsTotal,
+      operationalSupport: summary.supportTotal,
+      episAndUniforms: summary.episAndUniformsTotal,
+      consumables: summary.consumablesTotal,
+      grandTotal: summary.total,
     },
-    totalsByRecurrence: {
-      recorrente: recurringTotal,
-      eventual: eventualTotal,
-      sob_demanda: onDemandTotal,
+    demandBreakdown: {
+      recurring: summary.recurringTotal,
+      eventual: summary.eventualTotal,
+      onDemand: summary.onDemandTotal,
     },
+    items,
   };
 }
