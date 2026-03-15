@@ -3,7 +3,8 @@ import {
   ServiceCompositionSummary,
   buildServiceCompositionSummary,
   calculateServiceCompositionItemSubtotal,
-  sanitizeServiceCompositionDraftRow,
+  inferRecurrenceTypeFromPeriodicity,
+  inferServiceCompositionCategory,
 } from "../utils/serviceCompositionCalculator";
 
 export type ServiceCompositionChangeType =
@@ -78,11 +79,69 @@ function safeString(value: unknown, fallback = "") {
 }
 
 function safeNumber(value: unknown, fallback = 0) {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.replace(/\./g, "").replace(",", ".");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  return fallback;
 }
 
 function normalizeText(value: unknown) {
   return safeString(value).trim().toLowerCase();
+}
+
+function sanitizeServiceCompositionDraftRow(
+  input?: Partial<ServiceCompositionDraftRow>
+): ServiceCompositionDraftRow {
+  const periodicity = (
+    safeString(input?.periodicity, "mensal") || "mensal"
+  ) as ServiceCompositionDraftRow["periodicity"];
+
+  const recurrenceType = (
+    safeString(
+      input?.recurrenceType,
+      inferRecurrenceTypeFromPeriodicity(periodicity)
+    ) || "recorrente"
+  ) as ServiceCompositionDraftRow["recurrenceType"];
+
+  const depreciationMethod = (
+    safeString(input?.depreciationMethod, "nao_aplica") || "nao_aplica"
+  ) as ServiceCompositionDraftRow["depreciationMethod"];
+
+  const category = inferServiceCompositionCategory(
+    safeString(input?.category) || "Materiais e insumos"
+  );
+
+  const usefulLifeMonths =
+    depreciationMethod === "rateio_linear"
+      ? Math.max(1, safeNumber(input?.usefulLifeMonths, 12))
+      : 0;
+
+  return {
+    id:
+      safeString(input?.id) ||
+      `svc_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    item: safeString(input?.item) || "Novo componente",
+    category,
+    recurrenceType,
+    serviceUnit: safeString(input?.serviceUnit) || "unidade",
+    periodicity,
+    quantity: Math.max(0, safeNumber(input?.quantity, 1)),
+    unitCost: Math.max(0, safeNumber(input?.unitCost, 0)),
+    productivityFactor: Math.max(0, safeNumber(input?.productivityFactor, 1)),
+    allocationFactor: Math.max(0, safeNumber(input?.allocationFactor, 1)),
+    depreciationMethod,
+    usefulLifeMonths,
+    status: safeString(input?.status) || "Pendente",
+    consumptionBasis: safeString(input?.consumptionBasis),
+    technicalJustification: safeString(input?.technicalJustification),
+  };
 }
 
 function buildRowIdentityKey(row: ServiceCompositionDraftRow) {
