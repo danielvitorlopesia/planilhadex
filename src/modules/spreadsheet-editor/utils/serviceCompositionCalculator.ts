@@ -41,6 +41,27 @@ export type ServiceCompositionDraftRow = {
   technicalJustification: string;
 };
 
+export type ServiceCompositionMemoryItem = {
+  id: string;
+  item: string;
+  category: ServiceCompositionCategory;
+  recurrenceType: ServiceCompositionRecurrenceType;
+  serviceUnit: string;
+  periodicity: ServiceCompositionPeriodicity;
+  quantity: number;
+  unitCost: number;
+  productivityFactor: number;
+  monthlyizationFactor: number;
+  allocationFactor: number;
+  depreciationMethod: ServiceCompositionDepreciationMethod;
+  depreciationFactor: number;
+  usefulLifeMonths: number;
+  subtotal: number;
+  formula: string;
+  consumptionBasis: string;
+  technicalJustification: string;
+};
+
 export type ServiceCompositionSummary = {
   itemCount: number;
   total: number;
@@ -243,6 +264,17 @@ export function getMonthlyizationFactor(
   }
 }
 
+export function getDepreciationFactor(row: {
+  depreciationMethod: ServiceCompositionDepreciationMethod;
+  usefulLifeMonths: number;
+}) {
+  if (row.depreciationMethod === "rateio_linear" && row.usefulLifeMonths > 0) {
+    return 1 / row.usefulLifeMonths;
+  }
+
+  return 1;
+}
+
 export function sanitizeServiceCompositionDraftRow(
   input?: Partial<ServiceCompositionDraftRow>
 ): ServiceCompositionDraftRow {
@@ -307,11 +339,7 @@ export function calculateServiceCompositionItemSubtotal(
   row: ServiceCompositionDraftRow
 ) {
   const monthlyizationFactor = getMonthlyizationFactor(row.periodicity);
-
-  const depreciationFactor =
-    row.depreciationMethod === "rateio_linear" && row.usefulLifeMonths > 0
-      ? 1 / row.usefulLifeMonths
-      : 1;
+  const depreciationFactor = getDepreciationFactor(row);
 
   const subtotal =
     row.quantity *
@@ -334,10 +362,27 @@ export function calculateServiceCompositionEffectiveUnitCost(
   return round2(calculateServiceCompositionItemSubtotal(row) / row.quantity);
 }
 
+export function buildServiceCompositionRowFormula(
+  row: ServiceCompositionDraftRow
+) {
+  const monthlyizationFactor = getMonthlyizationFactor(row.periodicity);
+  const depreciationFactor = getDepreciationFactor(row);
+
+  return [
+    "subtotal = quantidade",
+    `x custo unitário (${round2(row.unitCost)})`,
+    `x produtividade (${round2(row.productivityFactor)})`,
+    `x fator mensal (${round2(monthlyizationFactor)})`,
+    `x rateio contratual (${round2(row.allocationFactor)})`,
+    `x depreciação/rateio (${round2(depreciationFactor)})`,
+  ].join(" ");
+}
+
 export function buildServiceCompositionRowMemory(
   row: ServiceCompositionDraftRow
 ) {
   const monthlyizationFactor = getMonthlyizationFactor(row.periodicity);
+  const depreciationFactor = getDepreciationFactor(row);
 
   const depreciationFragment =
     row.depreciationMethod === "rateio_linear" && row.usefulLifeMonths > 0
@@ -351,8 +396,9 @@ export function buildServiceCompositionRowMemory(
     `Custo unitário base: ${round2(row.unitCost)}`,
     `Fator de produtividade: ${round2(row.productivityFactor)}`,
     `Fator de rateio contratual: ${round2(row.allocationFactor)}`,
+    `Fator de depreciação/rateio: ${round2(depreciationFactor)}`,
     depreciationFragment,
-    `Fórmula: quantidade x custo unitário x produtividade x fator mensal x rateio x depreciação`,
+    buildServiceCompositionRowFormula(row),
   ];
 
   if (row.consumptionBasis.trim()) {
@@ -364,6 +410,40 @@ export function buildServiceCompositionRowMemory(
   }
 
   return fragments.join(" | ");
+}
+
+export function buildServiceCompositionMemoryItem(
+  row: ServiceCompositionDraftRow
+): ServiceCompositionMemoryItem {
+  const monthlyizationFactor = getMonthlyizationFactor(row.periodicity);
+  const depreciationFactor = getDepreciationFactor(row);
+
+  return {
+    id: row.id,
+    item: row.item,
+    category: row.category,
+    recurrenceType: row.recurrenceType,
+    serviceUnit: row.serviceUnit,
+    periodicity: row.periodicity,
+    quantity: row.quantity,
+    unitCost: round2(row.unitCost),
+    productivityFactor: round2(row.productivityFactor),
+    monthlyizationFactor: round2(monthlyizationFactor),
+    allocationFactor: round2(row.allocationFactor),
+    depreciationMethod: row.depreciationMethod,
+    depreciationFactor: round2(depreciationFactor),
+    usefulLifeMonths: row.usefulLifeMonths,
+    subtotal: calculateServiceCompositionItemSubtotal(row),
+    formula: buildServiceCompositionRowFormula(row),
+    consumptionBasis: row.consumptionBasis,
+    technicalJustification: row.technicalJustification,
+  };
+}
+
+export function buildServiceCompositionMemoryBundle(
+  rows: ServiceCompositionDraftRow[]
+) {
+  return rows.map((row) => buildServiceCompositionMemoryItem(row));
 }
 
 export function buildServiceCompositionSummary(
