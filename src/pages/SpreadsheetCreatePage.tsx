@@ -34,11 +34,14 @@ import {
   spreadsheetModelTemplates,
 } from "../mocks/modelTemplatesMocks";
 import { DOMAIN_SCENARIOS } from "../mocks/domainScenarioCatalog";
-import { SpreadsheetModelType } from "../types/spreadsheetModels";
+import {
+  DomainScenarioKey,
+  SpreadsheetModelType,
+} from "../types/spreadsheetModels";
 
 type FormState = {
   title: string;
-  domainScenario: string;
+  domainScenario: DomainScenarioKey | "";
   contractingAgency: string;
   contractReference: string;
   unitName: string;
@@ -102,25 +105,25 @@ function getModelLabel(modelType: SpreadsheetModelType) {
   }
 }
 
+function isDomainScenarioKey(value: string): value is DomainScenarioKey {
+  return value in DOMAIN_SCENARIOS;
+}
+
 function buildInitialFormState(
   modelType: SpreadsheetModelType,
-  preferredScenario?: string
+  preferredScenario?: DomainScenarioKey
 ): FormState {
-  const compatibleScenario =
+  const compatibleScenario: DomainScenarioKey | "" =
     preferredScenario &&
-    preferredScenario in DOMAIN_SCENARIOS &&
-    DOMAIN_SCENARIOS[preferredScenario as keyof typeof DOMAIN_SCENARIOS].recommendedModels.includes(
-      modelType
-    )
+    DOMAIN_SCENARIOS[preferredScenario].recommendedModels.includes(modelType)
       ? preferredScenario
-      : Object.values(DOMAIN_SCENARIOS).find((scenario) =>
+      : (Object.values(DOMAIN_SCENARIOS).find((scenario) =>
           scenario.recommendedModels.includes(modelType)
-        )?.key || "";
+        )?.key as DomainScenarioKey | undefined) || "";
 
-  const scenario =
-    compatibleScenario && compatibleScenario in DOMAIN_SCENARIOS
-      ? DOMAIN_SCENARIOS[compatibleScenario as keyof typeof DOMAIN_SCENARIOS]
-      : undefined;
+  const scenario = compatibleScenario
+    ? DOMAIN_SCENARIOS[compatibleScenario]
+    : undefined;
 
   return {
     title: "",
@@ -165,7 +168,14 @@ export default function SpreadsheetCreatePage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const requestedModel = searchParams.get("model");
-  const requestedScenario = searchParams.get("scenario");
+  const requestedScenarioRaw = searchParams.get("scenario");
+
+  const requestedScenario = useMemo<DomainScenarioKey | undefined>(() => {
+    if (requestedScenarioRaw && isDomainScenarioKey(requestedScenarioRaw)) {
+      return requestedScenarioRaw;
+    }
+    return undefined;
+  }, [requestedScenarioRaw]);
 
   const initialModel = useMemo<SpreadsheetModelType>(() => {
     if (requestedModel && requestedModel in spreadsheetModelTemplates) {
@@ -177,7 +187,7 @@ export default function SpreadsheetCreatePage() {
 
   const [modelType, setModelType] = useState<SpreadsheetModelType>(initialModel);
   const [form, setForm] = useState<FormState>(
-    buildInitialFormState(initialModel, requestedScenario || undefined)
+    buildInitialFormState(initialModel, requestedScenario)
   );
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState>({
@@ -194,7 +204,7 @@ export default function SpreadsheetCreatePage() {
     if (requestedModel && requestedModel in spreadsheetModelTemplates) {
       const nextModel = requestedModel as SpreadsheetModelType;
       setModelType(nextModel);
-      setForm(buildInitialFormState(nextModel, requestedScenario || undefined));
+      setForm(buildInitialFormState(nextModel, requestedScenario));
       return;
     }
 
@@ -220,10 +230,9 @@ export default function SpreadsheetCreatePage() {
   }, [modelType]);
 
   const selectedScenario = useMemo(() => {
-    if (form.domainScenario && form.domainScenario in DOMAIN_SCENARIOS) {
-      return DOMAIN_SCENARIOS[form.domainScenario as keyof typeof DOMAIN_SCENARIOS];
+    if (form.domainScenario) {
+      return DOMAIN_SCENARIOS[form.domainScenario];
     }
-
     return undefined;
   }, [form.domainScenario]);
 
@@ -237,6 +246,7 @@ export default function SpreadsheetCreatePage() {
   function handleModelChange(nextModel: SpreadsheetModelType) {
     setModelType(nextModel);
     setForm(buildInitialFormState(nextModel));
+
     setSearchParams(
       (current) => {
         const next = new URLSearchParams(current);
@@ -248,11 +258,8 @@ export default function SpreadsheetCreatePage() {
     );
   }
 
-  function handleScenarioChange(nextScenario: string) {
-    const scenario =
-      nextScenario && nextScenario in DOMAIN_SCENARIOS
-        ? DOMAIN_SCENARIOS[nextScenario as keyof typeof DOMAIN_SCENARIOS]
-        : undefined;
+  function handleScenarioChange(nextScenario: DomainScenarioKey | "") {
+    const scenario = nextScenario ? DOMAIN_SCENARIOS[nextScenario] : undefined;
 
     setForm((current) => ({
       ...current,
@@ -342,7 +349,7 @@ export default function SpreadsheetCreatePage() {
         mandatoryBenefitsNotes: form.mandatoryBenefitsNotes,
         notes: form.notes,
         category: selectedScenario?.defaultCategory,
-      });
+      } as any);
 
       setFeedback({
         open: true,
@@ -516,7 +523,9 @@ export default function SpreadsheetCreatePage() {
                       <TextField
                         label="Exemplo setorial de partida"
                         value={form.domainScenario}
-                        onChange={(event) => handleScenarioChange(event.target.value)}
+                        onChange={(event) =>
+                          handleScenarioChange(event.target.value as DomainScenarioKey | "")
+                        }
                         select
                         fullWidth
                       >
