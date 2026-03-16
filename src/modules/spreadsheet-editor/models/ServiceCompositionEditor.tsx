@@ -17,7 +17,6 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
 import BuildOutlinedIcon from "@mui/icons-material/BuildOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
@@ -68,6 +67,19 @@ const DEMAND_TYPE_OPTIONS: Array<{
   { value: "nao_informado", label: "Não informado" },
 ];
 
+type VersionHistoryEntry = {
+  id: string;
+  versionNumber: number;
+  label: string;
+  createdAt: string;
+  reason: string;
+  origin: string;
+  spreadsheetId: string;
+  rows: ServiceCompositionRow[];
+  isBaseline?: boolean;
+  notes?: string;
+};
+
 function safeString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
@@ -91,6 +103,14 @@ function formatCurrency(value: number) {
 }
 
 function buildRowId(prefix = "composition") {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+}
+
+function buildSnapshotId(prefix = "snapshot") {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `${prefix}_${crypto.randomUUID()}`;
   }
@@ -182,6 +202,50 @@ function mergeDemandTypeTags(
   }
 
   return cleaned;
+}
+
+function cloneRows(rows: ServiceCompositionRow[]): ServiceCompositionRow[] {
+  return rows.map((row) => ({
+    ...row,
+    trainingTags: Array.isArray(row.trainingTags) ? [...row.trainingTags] : [],
+    metadata:
+      row.metadata && typeof row.metadata === "object"
+        ? { ...(row.metadata as Record<string, unknown>) }
+        : {},
+  }));
+}
+
+function readVersionHistory(metadata: unknown): VersionHistoryEntry[] {
+  if (!metadata || typeof metadata !== "object") {
+    return [];
+  }
+
+  const raw = (metadata as Record<string, unknown>).versionHistory;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw as VersionHistoryEntry[];
+}
+
+function readCurrentVersionNumber(metadata: unknown): number {
+  if (!metadata || typeof metadata !== "object") {
+    return 1;
+  }
+
+  const raw = (metadata as Record<string, unknown>).versionNumber;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return raw;
+  }
+
+  if (typeof raw === "string" && raw.trim()) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return 1;
 }
 
 export default function ServiceCompositionEditor({
@@ -292,6 +356,14 @@ export default function ServiceCompositionEditor({
 
   function handleSave() {
     try {
+      const currentMetadata =
+        spreadsheet.metadata && typeof spreadsheet.metadata === "object"
+          ? { ...(spreadsheet.metadata as Record<string, unknown>) }
+          : {};
+
+      const previousEditableRows = extractEditableCompositionRows(spreadsheet.rows);
+      const previousEditableRowsCloned = cloneRows(previousEditableRows);
+
       const sanitizedRows = normalizedRows.map((row) => {
         const metadata = {
           ...(row.metadata && typeof row.metadata === "object"
@@ -332,15 +404,61 @@ export default function ServiceCompositionEditor({
         0
       );
 
+      const currentVersionNumber = readCurrentVersionNumber(currentMetadata);
+      const nextVersionNumber = currentVersionNumber + 1;
+      const nowIso = new Date().toISOString();
+
+      const versionHistory = readVersionHistory(currentMetadata);
+      const snapshotReason = "Snapshot pré-atualização do módulo de composição";
+      const snapshotOrigin = "auto_snapshot";
+
+      const snapshotEntry: VersionHistoryEntry = {
+        id: buildSnapshotId("service_composition_snapshot"),
+        versionNumber: currentVersionNumber,
+        label: `Versão ${currentVersionNumber}`,
+        createdAt: nowIso,
+        reason: snapshotReason,
+        origin: snapshotOrigin,
+        spreadsheetId: spreadsheet.id,
+        rows: previousEditableRowsCloned,
+        isBaseline: versionHistory.length === 0,
+        notes: "Base anterior preservada automaticamente antes do salvamento do módulo.",
+      };
+
       const updated = updateSpreadsheet(spreadsheet.id, {
         rows: rebuiltRows,
         monthlyBaseValue: Number(monthlyBaseValue.toFixed(2)),
         metadata: {
-          ...(spreadsheet.metadata ?? {}),
+          ...currentMetadata,
           editorModule: "service_composition",
           lastEditedSection: "materials_equipments_logistics",
+          versionNumber: nextVersionNumber,
+          previousSpreadsheetId: spreadsheet.id,
+          previousVersionRows: previousEditableRowsCloned,
+          lastSnapshotAt: nowIso,
+          lastSnapshotReason: snapshotReason,
+          lastSnapshotOrigin: snapshotOrigin,
           serviceCompositionSummary: summary,
           serviceCompositionMemoryBundle: memoryBundle,
+          serviceCompositionEngineSnapshot: {
+            generatedAt: nowIso,
+            itemCount: summary.itemCount,
+            total: summary.total,
+            totalByCategory: {
+              "Materiais e insumos": summary.materialsTotal,
+              Equipamentos: summary.equipmentTotal,
+              "Logística operacional": summary.logisticsTotal,
+              "Apoio operacional": summary.supportTotal,
+              "EPIs e uniformes": summary.episAndUniformsTotal,
+              "Materiais de consumo": summary.consumablesTotal,
+            },
+            totalByRecurrence: {
+              recorrente: summary.recurringTotal,
+              eventual: summary.eventualTotal,
+              sob_demanda: summary.onDemandTotal,
+            },
+          },
+          versionHistory: [...versionHistory, snapshotEntry],
         },
       });
 
@@ -351,7 +469,7 @@ export default function ServiceCompositionEditor({
       setFeedback({
         type: "success",
         message:
-          "Composição de serviços salva com cálculo, resumo técnico e memória persistida.",
+          "Composição de serviços salva com snapshot automático pré-save, cálculo, resumo técnico e memória persistida.",
       });
 
       onSpreadsheetUpdated?.(updated);
@@ -384,7 +502,8 @@ export default function ServiceCompositionEditor({
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
                 Este bloco passa a operar com cálculo estruturado, classificando
                 materiais, insumos, equipamentos, logística e apoio operacional,
-                além de persistir resumo técnico e memória de composição.
+                além de persistir resumo técnico, memória de composição e snapshot
+                automático pré-atualização.
               </Typography>
             </Box>
 
