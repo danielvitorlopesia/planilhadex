@@ -49,6 +49,37 @@ export type SpreadsheetEditorDraft = {
   notes?: string;
 };
 
+export type SpreadsheetVersionHistoryEntry = {
+  id: string;
+  versionNumber: number;
+  label: string;
+  createdAt: string;
+  reason: string;
+  origin: string;
+  spreadsheetId: string;
+  rows: SpreadsheetRow[];
+  isBaseline?: boolean;
+  notes?: string;
+};
+
+export type CreateSpreadsheetSnapshotInput = {
+  spreadsheetId: string;
+  rows?: SpreadsheetRow[];
+  reason: string;
+  origin:
+    | "auto_snapshot"
+    | "manual_snapshot"
+    | "pre_update"
+    | "restore"
+    | "baseline"
+    | "api"
+    | "local"
+    | string;
+  label?: string;
+  notes?: string;
+  isBaseline?: boolean;
+};
+
 export const STORAGE_KEY = "custopublico_spreadsheets";
 const SEEDED_FLAG_KEY = "custopublico_spreadsheets_seeded_v2";
 
@@ -124,7 +155,7 @@ function cloneRows(rows: SpreadsheetRow[]): SpreadsheetRow[] {
   return rows.map((row) => ({
     ...row,
     id: row.id ?? buildId("row"),
-    subtotal: Number((row.quantidade * row.valorUnitario).toFixed(2)),
+    subtotal: Number((Number(row.quantidade || 0) * Number(row.valorUnitario || 0)).toFixed(2)),
     trainingTags: [...(row.trainingTags ?? [])],
     metadata: isRecord(row.metadata) ? { ...row.metadata } : undefined,
   }));
@@ -224,6 +255,54 @@ function withUpdatedTimestamp(spreadsheet: SpreadsheetRecord): SpreadsheetRecord
   };
 }
 
+function readVersionHistoryFromMetadata(
+  metadata: Record<string, unknown> | undefined
+): SpreadsheetVersionHistoryEntry[] {
+  if (!metadata) {
+    return [];
+  }
+
+  const raw = metadata.versionHistory;
+  return Array.isArray(raw) ? (raw as SpreadsheetVersionHistoryEntry[]) : [];
+}
+
+function readCurrentVersionNumberFromMetadata(
+  metadata: Record<string, unknown> | undefined
+): number {
+  if (!metadata) {
+    return 1;
+  }
+
+  const raw = metadata.versionNumber;
+
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return raw;
+  }
+
+  if (typeof raw === "string" && raw.trim()) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return 1;
+}
+
+function buildVersionLabel(versionNumber: number) {
+  return `Versão ${versionNumber}`;
+}
+
+function mergeMetadata(
+  current: Record<string, unknown> | undefined,
+  patch: Record<string, unknown> | undefined
+) {
+  return {
+    ...(current ?? {}),
+    ...(patch ?? {}),
+  };
+}
+
 function buildSeedExample(domainScenarioKey: DomainScenarioKey): SpreadsheetRecord {
   const scenario = DOMAIN_SCENARIOS[domainScenarioKey];
   const rows = cloneRows((scenario.seedRows ?? []) as SpreadsheetRow[]);
@@ -252,10 +331,12 @@ function buildSeedExample(domainScenarioKey: DomainScenarioKey): SpreadsheetReco
     trainingProfile: buildTrainingProfile(domainScenarioKey),
     metadata: {
       origin: "native_domain_example",
-      serviceFamily: scenario.serviceFamily,
       recommendedModels: [...scenario.recommendedModels],
+      serviceFamily: scenario.serviceFamily,
       sortTimestamp: buildSortTimestamp(),
       localDraftOverride: false,
+      versionNumber: 1,
+      versionHistory: [],
     },
   };
 }
@@ -446,10 +527,144 @@ export function createSpreadsheetFromModel(
       sortTimestamp: buildSortTimestamp(),
       localDraftOverride: false,
       editorDraft: buildInitialEditorDraftFromCreation(mergedDraft, rows),
+      versionNumber: 1,
+      versionHistory: [],
     },
   };
 
   return saveSpreadsheet(spreadsheet);
+}
+
+export function getSpreadsheetVersionHistory(
+  spreadsheetId: string
+): SpreadsheetVersionHistoryEntry[] {
+  const current = getSpreadsheetById(spreadsheetId);
+
+  if (!current) {
+    return [];
+  }
+
+  return readVersionHistoryFromMetadata(current.metadata);
+}
+
+export function getSpreadsheetCurrentVersionNumber(spreadsheetId: string): number {
+  const current = getSpreadsheetById(spreadsheetId);
+
+  if (!current) {
+    return 1;
+  }
+
+  return readCurrentVersionNumberFromMetadata(current.metadata);
+}
+
+export function createSpreadsheetSnapshot(
+  input: CreateSpreadsheetSnapshotInput
+): SpreadsheetRecord | null {
+  const current = getSpreadsheetById(input.spreadsheetId);
+
+  if (!current) {
+    return null;
+  }
+
+  const currentMetadata = mergeMetadata(current.metadata, undefined);
+  const currentVersionNumber = readCurrentVersionNumberFromMetadata(currentMetadata);
+  const versionHistory = readVersionHistoryFromMetadata(currentMetadata);
+  const snapshotRows = cloneRows(input.rows ?? current.rows);
+  const nowIso = new Date().toISOString();
+
+  const entry: SpreadsheetVersionHistoryEntry = {
+    id: buildId("snapshot"),
+    versionNumber: currentVersionNumber,
+    label: input.label || buildVersionLabel(currentVersionNumber),
+    createdAt: nowIso,
+    reason: input.reason,
+    origin: input.origin,
+    spreadsheetId: current.id,
+    rows: snapshotRows,
+    isBaseline: input.isBaseline ?? versionHistory.length === 0,
+    notes: input.notes,
+  };
+
+  const nextMetadata: Record<string, unknown> = {
+    ...currentMetadata,
+    previousSpreadsheetId: current.id,
+    previousVersionRows: snapshotRows,
+    lastSnapshotAt: nowIso,
+    lastSnapshotReason: input.reason,
+    lastSnapshotOrigin: input.origin,
+    versionHistory: [...versionHistory, entry],
+  };
+
+  return updateSpreadsheet(current.id, {
+    metadata: nextMetadata,
+  });
+}
+
+export function restoreSpreadsheetVersion(
+  spreadsheetId: string,
+  versionEntryId: string
+): SpreadsheetRecord | null {
+  const current = getSpreadsheetById(spreadsheetId);
+
+  if (!current) {
+    return null;
+  }
+
+  const versionHistory = readVersionHistoryFromMetadata(current.metadata);
+  const target = versionHistory.find((entry) => entry.id === versionEntryId);
+
+  if (!target || !Array.isArray(target.rows)) {
+    return null;
+  }
+
+  const currentVersionNumber = readCurrentVersionNumberFromMetadata(current.metadata);
+  const nextVersionNumber = currentVersionNumber + 1;
+  const nowIso = new Date().toISOString();
+
+  const restoredRows = cloneRows(target.rows);
+
+  return updateSpreadsheet(spreadsheetId, {
+    rows: restoredRows,
+    monthlyBaseValue: restoredRows.reduce(
+      (sum, row) => sum + Number(row.subtotal || 0),
+      0
+    ),
+    metadata: {
+      ...(current.metadata ?? {}),
+      versionNumber: nextVersionNumber,
+      previousSpreadsheetId: current.id,
+      previousVersionRows: cloneRows(current.rows),
+      lastSnapshotAt: nowIso,
+      lastSnapshotReason: `Restauração da ${target.label}`,
+      lastSnapshotOrigin: "restore",
+    },
+  });
+}
+
+export function markSpreadsheetVersionAsBaseline(
+  spreadsheetId: string,
+  versionEntryId: string
+): SpreadsheetRecord | null {
+  const current = getSpreadsheetById(spreadsheetId);
+
+  if (!current) {
+    return null;
+  }
+
+  const versionHistory = readVersionHistoryFromMetadata(current.metadata);
+
+  const updatedHistory = versionHistory.map((entry) => ({
+    ...entry,
+    isBaseline: entry.id === versionEntryId,
+  }));
+
+  return updateSpreadsheet(spreadsheetId, {
+    metadata: {
+      ...(current.metadata ?? {}),
+      versionHistory: updatedHistory,
+      baselineVersionEntryId: versionEntryId,
+    },
+  });
 }
 
 export function updateSpreadsheet(
