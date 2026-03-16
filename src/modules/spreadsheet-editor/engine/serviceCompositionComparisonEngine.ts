@@ -1,8 +1,6 @@
 import {
   ServiceCompositionDraftRow,
   ServiceCompositionSummary,
-  buildServiceCompositionSummary,
-  calculateServiceCompositionItemSubtotal,
 } from "../utils/serviceCompositionCalculator";
 
 export type ServiceCompositionChangeType =
@@ -149,6 +147,54 @@ function inferRecurrenceTypeFromPeriodicity(
   return "recorrente";
 }
 
+function getMonthlyizationFactor(
+  periodicity: ServiceCompositionDraftRow["periodicity"]
+) {
+  switch (periodicity) {
+    case "mensal":
+      return 1;
+    case "bimestral":
+      return 1 / 2;
+    case "trimestral":
+      return 1 / 3;
+    case "quadrimestral":
+      return 1 / 4;
+    case "semestral":
+      return 1 / 6;
+    case "anual":
+      return 1 / 12;
+    case "sob_demanda":
+      return 1;
+    default:
+      return 1;
+  }
+}
+
+function getDepreciationFactor(row: {
+  depreciationMethod: ServiceCompositionDraftRow["depreciationMethod"];
+  usefulLifeMonths: number;
+}) {
+  if (row.depreciationMethod === "rateio_linear" && row.usefulLifeMonths > 0) {
+    return 1 / row.usefulLifeMonths;
+  }
+
+  return 1;
+}
+
+function calculateServiceCompositionItemSubtotal(row: ServiceCompositionDraftRow) {
+  const monthlyizationFactor = getMonthlyizationFactor(row.periodicity);
+  const depreciationFactor = getDepreciationFactor(row);
+
+  return round2(
+    row.quantity *
+      row.unitCost *
+      row.productivityFactor *
+      monthlyizationFactor *
+      row.allocationFactor *
+      depreciationFactor
+  );
+}
+
 function sanitizeServiceCompositionDraftRow(
   input?: Partial<ServiceCompositionDraftRow>
 ): ServiceCompositionDraftRow {
@@ -194,6 +240,75 @@ function sanitizeServiceCompositionDraftRow(
     status: safeString(input?.status) || "Pendente",
     consumptionBasis: safeString(input?.consumptionBasis),
     technicalJustification: safeString(input?.technicalJustification),
+  };
+}
+
+function buildServiceCompositionSummary(
+  rows: ServiceCompositionDraftRow[]
+): ServiceCompositionSummary {
+  const totalsByCategory: Record<string, number> = {
+    "Equipe técnica / operacional": 0,
+    "Materiais e insumos": 0,
+    Equipamentos: 0,
+    "Logística operacional": 0,
+    "Apoio operacional": 0,
+  };
+
+  const totalsByRecurrence: Record<string, number> = {
+    recorrente: 0,
+    eventual: 0,
+    sob_demanda: 0,
+  };
+
+  rows.forEach((row) => {
+    const subtotal = calculateServiceCompositionItemSubtotal(row);
+    totalsByCategory[row.category] =
+      round2((totalsByCategory[row.category] || 0) + subtotal);
+    totalsByRecurrence[row.recurrenceType] =
+      round2((totalsByRecurrence[row.recurrenceType] || 0) + subtotal);
+  });
+
+  const workforceTotal = round2(totalsByCategory["Equipe técnica / operacional"] || 0);
+  const materialsTotal = round2(totalsByCategory["Materiais e insumos"] || 0);
+  const equipmentTotal = round2(totalsByCategory["Equipamentos"] || 0);
+  const logisticsTotal = round2(totalsByCategory["Logística operacional"] || 0);
+  const supportTotal = round2(totalsByCategory["Apoio operacional"] || 0);
+
+  const recurringTotal = round2(totalsByRecurrence["recorrente"] || 0);
+  const eventualTotal = round2(totalsByRecurrence["eventual"] || 0);
+  const onDemandTotal = round2(totalsByRecurrence["sob_demanda"] || 0);
+
+  const total = round2(
+    workforceTotal +
+      materialsTotal +
+      equipmentTotal +
+      logisticsTotal +
+      supportTotal
+  );
+
+  return {
+    itemCount: rows.length,
+    total,
+    workforceTotal,
+    materialsTotal,
+    equipmentTotal,
+    logisticsTotal,
+    supportTotal,
+    recurringTotal,
+    eventualTotal,
+    onDemandTotal,
+    totalsByCategory: {
+      "Equipe técnica / operacional": workforceTotal,
+      "Materiais e insumos": materialsTotal,
+      Equipamentos: equipmentTotal,
+      "Logística operacional": logisticsTotal,
+      "Apoio operacional": supportTotal,
+    },
+    totalsByRecurrence: {
+      recorrente: recurringTotal,
+      eventual: eventualTotal,
+      sob_demanda: onDemandTotal,
+    },
   };
 }
 
