@@ -40,10 +40,14 @@ import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import PrecisionManufacturingOutlinedIcon from "@mui/icons-material/PrecisionManufacturingOutlined";
-import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import SummarizeOutlinedIcon from "@mui/icons-material/SummarizeOutlined";
 import MemoryOutlinedIcon from "@mui/icons-material/MemoryOutlined";
 import FunctionsOutlinedIcon from "@mui/icons-material/FunctionsOutlined";
+import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
+import RestoreOutlinedIcon from "@mui/icons-material/RestoreOutlined";
+import FlagOutlinedIcon from "@mui/icons-material/FlagOutlined";
+import TimelineOutlinedIcon from "@mui/icons-material/TimelineOutlined";
+import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import SpreadsheetEditor from "../modules/spreadsheet-editor/SpreadsheetEditor";
 import ServiceCompositionComparisonPanel from "../components/service-composition/ServiceCompositionComparisonPanel";
@@ -201,6 +205,20 @@ type ServiceCompositionEngineSnapshot = {
   totalByRecurrence?: Record<string, number>;
 };
 
+type VersionHistoryItem = {
+  id: string;
+  versionNumber: number | null;
+  label: string;
+  createdAt?: string;
+  reason?: string;
+  origin?: string;
+  isBaseline?: boolean;
+  isCurrent?: boolean;
+  spreadsheetId?: string;
+  rows?: SpreadsheetDetailRow[];
+  notes?: string;
+};
+
 const DOMAIN_SCENARIO_LABELS: Record<string, string> = {
   reception_administrative_support: "Recepção e apoio administrativo",
   cleaning_conservation: "Limpeza e conservação",
@@ -312,6 +330,264 @@ function safeStringArray(value: unknown): string[] {
   return value
     .map((item) => (typeof item === "string" ? item : ""))
     .filter(Boolean);
+}
+
+function safeRowsArray(value: unknown): SpreadsheetDetailRow[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  return value as SpreadsheetDetailRow[];
+}
+
+function normalizeVersionNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatDateTime(value?: string) {
+  if (!value) {
+    return "Não informado";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString("pt-BR");
+}
+
+function getVersionLabel(item: VersionHistoryItem) {
+  if (item.versionNumber !== null) {
+    return `Versão ${item.versionNumber}`;
+  }
+  return item.label || "Versão sem número";
+}
+
+function getOriginLabel(origin?: string) {
+  switch (origin) {
+    case "auto_snapshot":
+      return "Snapshot automático";
+    case "manual_snapshot":
+      return "Snapshot manual";
+    case "pre_update":
+      return "Pré-atualização";
+    case "restore":
+      return "Restauração";
+    case "baseline":
+      return "Baseline";
+    case "api":
+      return "API";
+    case "local":
+      return "Local";
+    default:
+      return origin || "Não informado";
+  }
+}
+
+function buildVersionHistoryItemFromRecord(
+  record: SpreadsheetDetailRecord,
+  options?: Partial<VersionHistoryItem>
+): VersionHistoryItem {
+  const rawVersion =
+    isRecord(record.metadata) && record.metadata["versionNumber"] !== undefined
+      ? record.metadata["versionNumber"]
+      : undefined;
+
+  return {
+    id: options?.id ?? `current-${record.id}`,
+    versionNumber: options?.versionNumber ?? normalizeVersionNumber(rawVersion),
+    label: options?.label ?? record.title ?? "Versão atual",
+    createdAt: options?.createdAt ?? record.updatedAt,
+    reason: options?.reason,
+    origin: options?.origin,
+    isBaseline: options?.isBaseline,
+    isCurrent: options?.isCurrent ?? false,
+    spreadsheetId: options?.spreadsheetId ?? record.id,
+    rows: options?.rows ?? record.rows,
+    notes: options?.notes,
+  };
+}
+
+function readVersionHistoryFromMetadata(
+  spreadsheet: SpreadsheetDetailRecord | null,
+  previousSpreadsheetCandidate: SpreadsheetRecord | null
+): VersionHistoryItem[] {
+  if (!spreadsheet) {
+    return [];
+  }
+
+  const items: VersionHistoryItem[] = [];
+  const seen = new Set<string>();
+
+  const pushUnique = (item: VersionHistoryItem | null) => {
+    if (!item) return;
+    if (seen.has(item.id)) return;
+    seen.add(item.id);
+    items.push(item);
+  };
+
+  pushUnique(
+    buildVersionHistoryItemFromRecord(spreadsheet, {
+      id: `current-${spreadsheet.id}`,
+      label: spreadsheet.title || "Versão atual",
+      createdAt: spreadsheet.updatedAt,
+      origin: "local",
+      isCurrent: true,
+      rows: spreadsheet.rows,
+      spreadsheetId: spreadsheet.id,
+    })
+  );
+
+  if (previousSpreadsheetCandidate) {
+    const previousAsDetail = previousSpreadsheetCandidate as SpreadsheetDetailRecord;
+    pushUnique(
+      buildVersionHistoryItemFromRecord(previousAsDetail, {
+        id: `previous-${previousSpreadsheetCandidate.id}`,
+        label: previousSpreadsheetCandidate.title || "Versão anterior",
+        createdAt: previousAsDetail.updatedAt,
+        reason: "Base anterior disponível para comparação",
+        origin: "baseline",
+        isBaseline: true,
+        spreadsheetId: previousSpreadsheetCandidate.id,
+        rows: previousSpreadsheetCandidate.rows as SpreadsheetDetailRow[],
+      })
+    );
+  }
+
+  if (!spreadsheet.metadata || !isRecord(spreadsheet.metadata)) {
+    return items.sort(sortVersionHistoryDesc);
+  }
+
+  const candidateKeys = [
+    "versionHistory",
+    "versionTimeline",
+    "spreadsheetVersions",
+    "versions",
+    "history",
+  ];
+
+  candidateKeys.forEach((key) => {
+    const raw = spreadsheet.metadata?.[key];
+    if (!Array.isArray(raw)) {
+      return;
+    }
+
+    raw.forEach((entry, index) => {
+      if (!isRecord(entry)) {
+        return;
+      }
+
+      const id =
+        safeString(entry.id) ||
+        safeString(entry.versionId) ||
+        safeString(entry.spreadsheetVersionId) ||
+        safeString(entry.spreadsheet_id) ||
+        `${key}-${index}`;
+
+      const versionNumber =
+        normalizeVersionNumber(entry.versionNumber) ??
+        normalizeVersionNumber(entry.version) ??
+        normalizeVersionNumber(entry.number);
+
+      const createdAt =
+        safeString(entry.createdAt) ||
+        safeString(entry.created_at) ||
+        safeString(entry.timestamp) ||
+        safeString(entry.updatedAt);
+
+      const reason =
+        safeString(entry.reason) ||
+        safeString(entry.snapshotReason) ||
+        safeString(entry.description) ||
+        safeString(entry.changeReason);
+
+      const origin =
+        safeString(entry.origin) ||
+        safeString(entry.snapshotOrigin) ||
+        safeString(entry.source);
+
+      const label =
+        safeString(entry.label) ||
+        safeString(entry.title) ||
+        (versionNumber !== null ? `Versão ${versionNumber}` : `Snapshot ${index + 1}`);
+
+      const spreadsheetId =
+        safeString(entry.spreadsheetId) ||
+        safeString(entry.spreadsheet_id) ||
+        safeString(entry.sourceSpreadsheetId);
+
+      const rows =
+        safeRowsArray(entry.rows) ||
+        safeRowsArray(entry.snapshotRows) ||
+        safeRowsArray(entry.previousVersionRows);
+
+      const isBaseline =
+        entry.isBaseline === true ||
+        entry.baseline === true ||
+        safeString(entry.role) === "baseline";
+
+      pushUnique({
+        id,
+        versionNumber,
+        label,
+        createdAt,
+        reason,
+        origin,
+        isBaseline,
+        isCurrent: false,
+        spreadsheetId,
+        rows,
+        notes: safeString(entry.notes),
+      });
+    });
+  });
+
+  return items.sort(sortVersionHistoryDesc);
+}
+
+function sortVersionHistoryDesc(a: VersionHistoryItem, b: VersionHistoryItem) {
+  const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+  const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+
+  if (aTime !== bTime) {
+    return bTime - aTime;
+  }
+
+  const aVersion = a.versionNumber ?? -1;
+  const bVersion = b.versionNumber ?? -1;
+  return bVersion - aVersion;
+}
+
+function resolveVersionHistoryRecord(
+  item: VersionHistoryItem,
+  currentSpreadsheet: SpreadsheetDetailRecord
+): SpreadsheetRecord | null {
+  if (item.isCurrent) {
+    return currentSpreadsheet;
+  }
+
+  if (item.spreadsheetId) {
+    const existing = getSpreadsheetById(item.spreadsheetId);
+    if (existing) {
+      return existing;
+    }
+  }
+
+  if (item.rows && item.rows.length > 0) {
+    return {
+      ...currentSpreadsheet,
+      id: item.spreadsheetId || item.id,
+      title: item.label || currentSpreadsheet.title,
+      rows: item.rows,
+    };
+  }
+
+  return null;
 }
 
 function getModelLabel(modelType?: string) {
@@ -730,7 +1006,6 @@ function CompactInfoCard({
     </Card>
   );
 }
-
 function ModuleSummaryCard({ module }: { module: PcfpModuleGroup }) {
   return (
     <Card
@@ -1125,6 +1400,8 @@ export default function SpreadsheetDetail() {
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveMessage, setSaveMessage] = useState("");
+  const [selectedVersionId, setSelectedVersionId] = useState("");
+  const [baselineVersionId, setBaselineVersionId] = useState("");
 
   useEffect(() => {
     document.title = "CustoPúblico — Detalhe da Planilha";
@@ -1255,6 +1532,54 @@ export default function SpreadsheetDetail() {
     [spreadsheet]
   );
 
+  const versionHistory = useMemo(
+    () => readVersionHistoryFromMetadata(spreadsheet, previousSpreadsheetCandidate),
+    [spreadsheet, previousSpreadsheetCandidate]
+  );
+
+  useEffect(() => {
+    if (versionHistory.length === 0) {
+      setSelectedVersionId("");
+      setBaselineVersionId("");
+      return;
+    }
+
+    const defaultBaseline =
+      versionHistory.find((item) => item.isBaseline && !item.isCurrent) ??
+      versionHistory.find((item) => !item.isCurrent) ??
+      versionHistory[0];
+
+    const defaultSelected =
+      versionHistory.find((item) => !item.isCurrent) ?? versionHistory[0];
+
+    setBaselineVersionId(defaultBaseline?.id ?? "");
+    setSelectedVersionId(defaultSelected?.id ?? "");
+  }, [versionHistory]);
+
+  const selectedVersionItem = useMemo(
+    () => versionHistory.find((item) => item.id === selectedVersionId) ?? null,
+    [versionHistory, selectedVersionId]
+  );
+
+  const baselineVersionItem = useMemo(
+    () => versionHistory.find((item) => item.id === baselineVersionId) ?? null,
+    [versionHistory, baselineVersionId]
+  );
+
+  const resolvedSelectedVersionRecord = useMemo(() => {
+    if (!spreadsheet || !selectedVersionItem) {
+      return null;
+    }
+    return resolveVersionHistoryRecord(selectedVersionItem, spreadsheet);
+  }, [selectedVersionItem, spreadsheet]);
+
+  const resolvedBaselineVersionRecord = useMemo(() => {
+    if (!spreadsheet || !baselineVersionItem) {
+      return null;
+    }
+    return resolveVersionHistoryRecord(baselineVersionItem, spreadsheet);
+  }, [baselineVersionItem, spreadsheet]);
+
   const serviceCompositionComparisonContext = useMemo(() => {
     if (!spreadsheet) {
       return null;
@@ -1271,6 +1596,28 @@ export default function SpreadsheetDetail() {
 
     return context;
   }, [previousSpreadsheetCandidate, spreadsheet]);
+
+  const selectedVersionComparison = useMemo(() => {
+    if (
+      !spreadsheet ||
+      spreadsheet.modelType !== "service_composition" ||
+      !resolvedSelectedVersionRecord ||
+      resolvedSelectedVersionRecord.id === spreadsheet.id
+    ) {
+      return null;
+    }
+
+    try {
+      const comparison = compareServiceCompositionSpreadsheets({
+        previousSpreadsheet: resolvedSelectedVersionRecord,
+        currentSpreadsheet: spreadsheet,
+      });
+
+      return comparison;
+    } catch {
+      return null;
+    }
+  }, [resolvedSelectedVersionRecord, spreadsheet]);
 
   const mandatoryCostTotal = useMemo(() => {
     if (!spreadsheet) return 0;
@@ -1431,6 +1778,28 @@ export default function SpreadsheetDetail() {
           : "Erro inesperado ao salvar a edição local."
       );
     }
+  }
+
+  function handleRestoreVersion(item: VersionHistoryItem) {
+    if (!spreadsheet) {
+      return;
+    }
+
+    const resolved = resolveVersionHistoryRecord(item, spreadsheet);
+    if (!resolved) {
+      setSaveState("error");
+      setSaveMessage(
+        "Não foi possível restaurar esta versão com os dados atualmente disponíveis."
+      );
+      return;
+    }
+
+    const next = resolved as SpreadsheetDetailRecord;
+    setSpreadsheet(next);
+    setEditor(buildInitialEditorState(next));
+    setDataSource("local");
+    setSaveState("success");
+    setSaveMessage(`${getVersionLabel(item)} restaurada localmente para análise.`);
   }
 
   if (state === "loading") {
@@ -1670,6 +2039,345 @@ export default function SpreadsheetDetail() {
             />
           </Box>
 
+          <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+            <CardContent>
+              <Stack spacing={2}>
+                <Stack direction="row" spacing={1.25} alignItems="center">
+                  <HistoryOutlinedIcon sx={{ color: "#5E35B1" }} />
+                  <Typography variant="h6" fontWeight={700}>
+                    Histórico e versionamento da planilha
+                  </Typography>
+                </Stack>
+
+                <Typography variant="body2" color="text.secondary">
+                  Este painel consolida as versões já visíveis localmente, snapshots
+                  identificados em metadados, baseline de comparação e restauração
+                  operacional quando houver dados suficientes disponíveis no cliente.
+                </Typography>
+
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "1fr",
+                      lg: "repeat(3, minmax(0, 1fr))",
+                    },
+                    gap: 2,
+                  }}
+                >
+                  <ExecutiveMetricCard
+                    label="Versões identificadas"
+                    value={versionHistory.length}
+                  />
+                  <ExecutiveMetricCard
+                    label="Baseline atual"
+                    value={baselineVersionItem ? getVersionLabel(baselineVersionItem) : "—"}
+                  />
+                  <ExecutiveMetricCard
+                    label="Versão selecionada"
+                    value={selectedVersionItem ? getVersionLabel(selectedVersionItem) : "—"}
+                  />
+                </Box>
+                              <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "1fr",
+                      xl: "minmax(0, 1.3fr) minmax(360px, 0.9fr)",
+                    },
+                    gap: 2,
+                    alignItems: "start",
+                  }}
+                >
+                  <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+                    <CardContent>
+                      <Stack spacing={2}>
+                        <Stack direction="row" spacing={1.25} alignItems="center">
+                          <LayersOutlinedIcon sx={{ color: "#1565C0" }} />
+                          <Typography variant="subtitle1" fontWeight={700}>
+                            Versões disponíveis
+                          </Typography>
+                        </Stack>
+
+                        <Box sx={{ overflowX: "auto", width: "100%" }}>
+                          <Table size="small" sx={{ minWidth: 940 }}>
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>
+                                  <strong>Versão</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>Data / hora</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>Motivo</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>Origem</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>Status</strong>
+                                </TableCell>
+                                <TableCell align="right">
+                                  <strong>Ações</strong>
+                                </TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {versionHistory.length > 0 ? (
+                                versionHistory.map((item) => {
+                                  const isBaseline = baselineVersionId === item.id;
+                                  const isSelected = selectedVersionId === item.id;
+
+                                  return (
+                                    <TableRow key={item.id}>
+                                      <TableCell sx={{ minWidth: 150 }}>
+                                        <Stack spacing={0.4}>
+                                          <Typography variant="body2" fontWeight={700}>
+                                            {getVersionLabel(item)}
+                                          </Typography>
+                                          <Typography variant="caption" color="text.secondary">
+                                            {item.label}
+                                          </Typography>
+                                        </Stack>
+                                      </TableCell>
+
+                                      <TableCell sx={{ minWidth: 160 }}>
+                                        {formatDateTime(item.createdAt)}
+                                      </TableCell>
+
+                                      <TableCell sx={{ minWidth: 220 }}>
+                                        <Typography variant="body2" color="text.secondary">
+                                          {item.reason || "Sem motivo registrado"}
+                                        </Typography>
+                                      </TableCell>
+
+                                      <TableCell>{getOriginLabel(item.origin)}</TableCell>
+
+                                      <TableCell sx={{ minWidth: 170 }}>
+                                        <Stack
+                                          direction="row"
+                                          spacing={0.75}
+                                          flexWrap="wrap"
+                                          useFlexGap
+                                        >
+                                          {item.isCurrent ? (
+                                            <Chip
+                                              size="small"
+                                              label="Atual"
+                                              color="primary"
+                                              variant="outlined"
+                                            />
+                                          ) : null}
+                                          {isBaseline ? (
+                                            <Chip
+                                              size="small"
+                                              label="Baseline ativa"
+                                              color="secondary"
+                                              variant="outlined"
+                                            />
+                                          ) : null}
+                                          {isSelected ? (
+                                            <Chip
+                                              size="small"
+                                              label="Selecionada"
+                                              variant="outlined"
+                                            />
+                                          ) : null}
+                                        </Stack>
+                                      </TableCell>
+
+                                      <TableCell align="right" sx={{ minWidth: 280 }}>
+                                        <Stack
+                                          direction="row"
+                                          spacing={1}
+                                          justifyContent="flex-end"
+                                          flexWrap="wrap"
+                                          useFlexGap
+                                        >
+                                          <Button
+                                            size="small"
+                                            variant={isSelected ? "contained" : "outlined"}
+                                            startIcon={<CompareArrowsOutlinedIcon />}
+                                            onClick={() => setSelectedVersionId(item.id)}
+                                          >
+                                            Comparar
+                                          </Button>
+
+                                          <Button
+                                            size="small"
+                                            variant={isBaseline ? "contained" : "outlined"}
+                                            color="secondary"
+                                            startIcon={<FlagOutlinedIcon />}
+                                            onClick={() => setBaselineVersionId(item.id)}
+                                          >
+                                            Baseline
+                                          </Button>
+
+                                          <Button
+                                            size="small"
+                                            variant="outlined"
+                                            startIcon={<RestoreOutlinedIcon />}
+                                            onClick={() => handleRestoreVersion(item)}
+                                            disabled={!item.rows && !item.spreadsheetId}
+                                          >
+                                            Restaurar
+                                          </Button>
+                                        </Stack>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })
+                              ) : (
+                                <TableRow>
+                                  <TableCell colSpan={6}>
+                                    <Typography variant="body2" color="text.secondary">
+                                      Nenhuma versão adicional foi identificada nos metadados
+                                      ou no repositório local desta planilha.
+                                    </Typography>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </Box>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+
+                  <Stack spacing={2}>
+                    <CompactInfoCard title="Controles de comparação">
+                      <TextField
+                        label="Selecionar versão para comparação"
+                        value={selectedVersionId}
+                        onChange={(event) => setSelectedVersionId(event.target.value)}
+                        select
+                        fullWidth
+                      >
+                        {versionHistory.length === 0 ? (
+                          <MenuItem value="">Nenhuma versão disponível</MenuItem>
+                        ) : (
+                          versionHistory.map((item) => (
+                            <MenuItem key={`compare-${item.id}`} value={item.id}>
+                              {getVersionLabel(item)} — {formatDateTime(item.createdAt)}
+                            </MenuItem>
+                          ))
+                        )}
+                      </TextField>
+
+                      <TextField
+                        label="Selecionar baseline"
+                        value={baselineVersionId}
+                        onChange={(event) => setBaselineVersionId(event.target.value)}
+                        select
+                        fullWidth
+                      >
+                        {versionHistory.length === 0 ? (
+                          <MenuItem value="">Nenhuma baseline disponível</MenuItem>
+                        ) : (
+                          versionHistory.map((item) => (
+                            <MenuItem key={`baseline-${item.id}`} value={item.id}>
+                              {getVersionLabel(item)} — {formatDateTime(item.createdAt)}
+                            </MenuItem>
+                          ))
+                        )}
+                      </TextField>
+
+                      <Typography variant="body2" color="text.secondary">
+                        <strong>Baseline ativa:</strong>{" "}
+                        {baselineVersionItem
+                          ? `${getVersionLabel(baselineVersionItem)} (${getOriginLabel(
+                              baselineVersionItem.origin
+                            )})`
+                          : "Não definida"}
+                      </Typography>
+
+                      <Typography variant="body2" color="text.secondary">
+                        <strong>Versão para comparar:</strong>{" "}
+                        {selectedVersionItem
+                          ? `${getVersionLabel(selectedVersionItem)} (${getOriginLabel(
+                              selectedVersionItem.origin
+                            )})`
+                          : "Não definida"}
+                      </Typography>
+                    </CompactInfoCard>
+
+                    <CompactInfoCard title="Linha do tempo resumida">
+                      <Stack spacing={1}>
+                        {versionHistory.length > 0 ? (
+                          versionHistory.map((item) => (
+                            <Box
+                              key={`timeline-${item.id}`}
+                              sx={{
+                                p: 1.5,
+                                borderRadius: 3,
+                                border: "1px solid #ECE7F1",
+                                backgroundColor: item.isCurrent ? "#F4EEFB" : "#FFFFFF",
+                              }}
+                            >
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <TimelineOutlinedIcon sx={{ fontSize: 18, color: "#7A708D" }} />
+                                <Typography variant="body2" fontWeight={700}>
+                                  {getVersionLabel(item)}
+                                </Typography>
+                              </Stack>
+
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                display="block"
+                              >
+                                {formatDateTime(item.createdAt)}
+                              </Typography>
+
+                              <Typography variant="body2" color="text.secondary">
+                                {item.reason || "Sem motivo registrado"}
+                              </Typography>
+
+                              <Stack
+                                direction="row"
+                                spacing={0.75}
+                                mt={1}
+                                flexWrap="wrap"
+                                useFlexGap
+                              >
+                                <Chip
+                                  size="small"
+                                  label={getOriginLabel(item.origin)}
+                                  variant="outlined"
+                                />
+                                {item.isCurrent ? (
+                                  <Chip
+                                    size="small"
+                                    label="Versão atual"
+                                    color="primary"
+                                    variant="outlined"
+                                  />
+                                ) : null}
+                                {baselineVersionId === item.id ? (
+                                  <Chip
+                                    size="small"
+                                    label="Baseline"
+                                    color="secondary"
+                                    variant="outlined"
+                                  />
+                                ) : null}
+                              </Stack>
+                            </Box>
+                          ))
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Ainda não há eventos de linha do tempo suficientes para exibição.
+                          </Typography>
+                        )}
+                      </Stack>
+                    </CompactInfoCard>
+                  </Stack>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+
           <Box
             sx={{
               display: "grid",
@@ -1699,6 +2407,17 @@ export default function SpreadsheetDetail() {
                 <ServiceCompositionComparisonPanel
                   comparison={serviceCompositionComparisonContext.comparison}
                   title="Comparação entre versões da composição"
+                />
+              ) : null}
+
+              {selectedVersionComparison && spreadsheet.modelType === "service_composition" ? (
+                <ServiceCompositionComparisonPanel
+                  comparison={selectedVersionComparison}
+                  title={`Comparação da versão atual com ${
+                    selectedVersionItem
+                      ? getVersionLabel(selectedVersionItem)
+                      : "versão selecionada"
+                  }`}
                 />
               ) : null}
 
@@ -1996,7 +2715,9 @@ export default function SpreadsheetDetail() {
                         <TableBody>
                           {laborRows.map((row, index) => (
                             <TableRow key={`${String(row.item)}-${index}`}>
-                              <TableCell sx={{ minWidth: 200 }}>{String(row.item || "")}</TableCell>
+                              <TableCell sx={{ minWidth: 200 }}>
+                                {String(row.item || "")}
+                              </TableCell>
                               <TableCell>{String(row.categoria || "")}</TableCell>
                               <TableCell align="right">{Number(row.quantidade || 0)}</TableCell>
                               <TableCell align="right">
@@ -2102,8 +2823,7 @@ export default function SpreadsheetDetail() {
                   </Stack>
                 </CardContent>
               </Card>
-
-              <SpreadsheetEditor
+                            <SpreadsheetEditor
                 spreadsheet={spreadsheet}
                 onSpreadsheetUpdated={(updated) => {
                   const next = updated as SpreadsheetDetailRecord;
@@ -2344,6 +3064,36 @@ export default function SpreadsheetDetail() {
                 </Stack>
               </CompactInfoCard>
 
+              <CompactInfoCard title="Resumo de versionamento">
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <HistoryOutlinedIcon sx={{ fontSize: 18 }} />
+                  <Typography variant="body2" fontWeight={700}>
+                    Fluxo visível de histórico
+                  </Typography>
+                </Stack>
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Versões identificadas:</strong> {versionHistory.length}
+                </Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Baseline ativa:</strong>{" "}
+                  {baselineVersionItem ? getVersionLabel(baselineVersionItem) : "Não definida"}
+                </Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Versão em foco:</strong>{" "}
+                  {selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Não definida"}
+                </Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Restauração local:</strong>{" "}
+                  {selectedVersionItem && (selectedVersionItem.rows || selectedVersionItem.spreadsheetId)
+                    ? "Disponível"
+                    : "Dependente de dados adicionais"}
+                </Typography>
+              </CompactInfoCard>
+
               <CompactInfoCard title="Quadro preliminar de exequibilidade">
                 <Box
                   sx={{
@@ -2475,7 +3225,35 @@ export default function SpreadsheetDetail() {
                 </CompactInfoCard>
               ) : null}
 
-              <CompactInfoCard title="Painel modular">
+              {selectedVersionComparison && spreadsheet.modelType === "service_composition" ? (
+                <CompactInfoCard title="Comparativo com versão selecionada">
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Base:</strong>{" "}
+                    {selectedVersionItem ? getVersionLabel(selectedVersionItem) : "—"}
+                  </Typography>
+
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Incluídos:</strong>{" "}
+                    {selectedVersionComparison.summary.addedCount}
+                  </Typography>
+
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Removidos:</strong>{" "}
+                    {selectedVersionComparison.summary.removedCount}
+                  </Typography>
+
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Alterados:</strong>{" "}
+                    {selectedVersionComparison.summary.changedCount}
+                  </Typography>
+
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Impacto total:</strong>{" "}
+                    {formatCurrency(selectedVersionComparison.summary.totalDelta)}
+                  </Typography>
+                </CompactInfoCard>
+              ) : null}
+                            <CompactInfoCard title="Painel modular">
                 {pcfpModules.map((module) => (
                   <Box
                     key={module.key}
