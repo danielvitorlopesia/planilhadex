@@ -51,18 +51,16 @@ import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import { Link as RouterLink, useParams } from "react-router-dom";
-
 import SpreadsheetEditor from "../modules/spreadsheet-editor/SpreadsheetEditor";
 import SpreadsheetVersionComparisonPanel from "../components/versioning/SpreadsheetVersionComparisonPanel";
 import ServiceCompositionComparisonPanel from "../components/service-composition/ServiceCompositionComparisonPanel";
-import DedicatedLaborComparisonPanel from "../components/labor/DedicatedLaborComparisonPanel";
-
+import LaborVersionComparisonPanel from "../modules/spreadsheet-editor/components/LaborVersionComparisonPanel";
 import {
   SpreadsheetRecord,
   getSpreadsheetById,
+  restoreSpreadsheetVersion,
   updateSpreadsheetEditorDraft,
 } from "../services/spreadsheetService";
-
 import {
   buildServiceCompositionComparisonContext,
   compareServiceCompositionSpreadsheets,
@@ -155,6 +153,17 @@ type LaborCostBreakdown = {
   monthlyLaborTotal?: number;
   mealAllowanceTotal?: number;
   transportAllowanceTotal?: number;
+  employerInss?: number;
+  fgts?: number;
+  rat?: number;
+  thirdPartyCharges?: number;
+  feriasProvision?: number;
+  thirteenthProvision?: number;
+  valeTransporte?: number;
+  valeAlimentacao?: number;
+  otherBenefits?: number;
+  total?: number;
+  quantity?: number;
 };
 
 type LaborChargesConfig = {
@@ -179,6 +188,8 @@ type ServiceCompositionSummary = {
   recurringTotal?: number;
   eventualTotal?: number;
   onDemandTotal?: number;
+  episAndUniformsTotal?: number;
+  consumablesTotal?: number;
   totalsByCategory?: Record<string, number>;
   totalsByRecurrence?: Record<string, number>;
 };
@@ -295,6 +306,7 @@ const PCFP_MODULES: PcfpModuleDefinition[] = [
     backgroundColor: "#F8ECFB",
   },
 ];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -568,7 +580,6 @@ function sortVersionHistoryDesc(a: VersionHistoryItem, b: VersionHistoryItem) {
   const bVersion = b.versionNumber ?? -1;
   return bVersion - aVersion;
 }
-
 function resolveVersionHistoryRecord(
   item: VersionHistoryItem,
   currentSpreadsheet: SpreadsheetDetailRecord
@@ -728,21 +739,21 @@ function readLaborCostBreakdown(
   record: SpreadsheetDetailRecord | null | undefined
 ): LaborCostBreakdown | null {
   const raw = readMetadataRecord(record, "laborCostBreakdown");
-  return raw ? raw as LaborCostBreakdown : null;
+  return raw ? (raw as LaborCostBreakdown) : null;
 }
 
 function readLaborChargesConfig(
   record: SpreadsheetDetailRecord | null | undefined
 ): LaborChargesConfig | null {
   const raw = readMetadataRecord(record, "laborChargesConfig");
-  return raw ? raw as LaborChargesConfig : null;
+  return raw ? (raw as LaborChargesConfig) : null;
 }
 
 function readServiceCompositionSummary(
   record: SpreadsheetDetailRecord | null | undefined
 ): ServiceCompositionSummary | null {
   const raw = readMetadataRecord(record, "serviceCompositionSummary");
-  return raw ? raw as ServiceCompositionSummary : null;
+  return raw ? (raw as ServiceCompositionSummary) : null;
 }
 
 function readServiceCompositionMemoryBundle(
@@ -758,8 +769,9 @@ function readServiceCompositionEngineSnapshot(
   record: SpreadsheetDetailRecord | null | undefined
 ): ServiceCompositionEngineSnapshot | null {
   const raw = readMetadataRecord(record, "serviceCompositionEngineSnapshot");
-  return raw ? raw as ServiceCompositionEngineSnapshot : null;
+  return raw ? (raw as ServiceCompositionEngineSnapshot) : null;
 }
+
 function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
   const storedDraft = extractStoredEditorDraft(record);
 
@@ -880,494 +892,318 @@ function getExequibilityRisk(
     backgroundColor: "#FDECEC",
   };
 }
-
-function classifyRowToModule(row: SpreadsheetDetailRow): PcfpModuleKey {
-  const category = String(row.categoria || "").toLowerCase();
-  const item = String(row.item || "").toLowerCase();
-
-  if (
-    category.includes("encargos") ||
-    item.includes("encargos") ||
-    item.includes("fgts") ||
-    item.includes("inss") ||
-    item.includes("férias") ||
-    item.includes("ferias") ||
-    item.includes("13º") ||
-    item.includes("13o")
-  ) {
-    return "module_2";
+function resolveVersionHistoryRecord(
+  item: VersionHistoryItem,
+  currentSpreadsheet: SpreadsheetDetailRecord
+): SpreadsheetRecord | null {
+  if (item.isCurrent) {
+    return currentSpreadsheet;
   }
 
-  if (
-    category.includes("benefícios") ||
-    category.includes("beneficios") ||
-    item.includes("vale") ||
-    item.includes("alimentação") ||
-    item.includes("alimentacao") ||
-    item.includes("transporte")
-  ) {
-    return "module_3";
-  }
-
-  if (
-    category.includes("insumos") ||
-    category.includes("materiais") ||
-    item.includes("uniforme") ||
-    item.includes("epi") ||
-    item.includes("saneante")
-  ) {
-    return "module_4";
-  }
-
-  if (
-    category.includes("equipamentos") ||
-    category.includes("logística") ||
-    category.includes("logistica") ||
-    category.includes("apoio operacional") ||
-    item.includes("equipamento") ||
-    item.includes("aspirador") ||
-    item.includes("enceradeira") ||
-    item.includes("rádio") ||
-    item.includes("radio") ||
-    item.includes("lanterna")
-  ) {
-    return "module_5";
-  }
-
-  if (
-    category.includes("mão de obra") ||
-    category.includes("mao de obra") ||
-    category.includes("equipe operacional")
-  ) {
-    return "module_1";
-  }
-
-  return "module_5";
-}
-
-function buildPcfpModuleGroups(rows: SpreadsheetDetailRow[]): PcfpModuleGroup[] {
-  const groups = PCFP_MODULES.map((moduleDef) => ({
-    ...moduleDef,
-    rows: [] as SpreadsheetDetailRow[],
-    total: 0,
-  }));
-
-  rows.forEach((row) => {
-    const moduleKey = classifyRowToModule(row);
-    const target = groups.find((group) => group.key === moduleKey);
-
-    if (target) {
-      target.rows.push(row);
-      target.total += Number(row.subtotal || 0);
+  if (item.spreadsheetId) {
+    const existing = getSpreadsheetById(item.spreadsheetId);
+    if (existing) {
+      return existing;
     }
-  });
+  }
 
-  return groups;
+  if (item.rows && item.rows.length > 0) {
+    return {
+      ...currentSpreadsheet,
+      id: item.spreadsheetId || item.id,
+      title: item.label || currentSpreadsheet.title,
+      rows: item.rows,
+    };
+  }
+
+  return null;
 }
 
-function ExecutiveMetricCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <Card variant="outlined" sx={{ borderRadius: 4, height: "100%", minWidth: 0 }}>
-      <CardContent>
-        <Typography variant="body2" color="text.secondary">
-          {label}
-        </Typography>
-        <Typography
-          variant="h4"
-          fontWeight={800}
-          color="#241B3A"
-          sx={{ wordBreak: "break-word" }}
-        >
-          {value}
-        </Typography>
-      </CardContent>
-    </Card>
-  );
+function getModelLabel(modelType?: string) {
+  switch (modelType) {
+    case "dedicated_labor":
+      return "Terceirização com dedicação exclusiva";
+    case "non_dedicated_labor":
+      return "Terceirização sem dedicação exclusiva";
+    case "service_composition":
+      return "Serviços por composição";
+    case "economic_rebalance":
+      return "Repactuação / revisão";
+    default:
+      return "Planilha";
+  }
 }
 
-function CompactInfoCard({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card variant="outlined" sx={{ borderRadius: 4, height: "100%", minWidth: 0 }}>
-      <CardContent>
-        <Stack spacing={1.25} sx={{ minWidth: 0 }}>
-          <Typography variant="h6" fontWeight={700}>
-            {title}
-          </Typography>
-          {children}
-        </Stack>
-      </CardContent>
-    </Card>
-  );
+function getModelIcon(modelType?: string) {
+  switch (modelType) {
+    case "dedicated_labor":
+      return <Groups2OutlinedIcon sx={{ fontSize: 18 }} />;
+    case "non_dedicated_labor":
+      return <TableChartOutlinedIcon sx={{ fontSize: 18 }} />;
+    case "service_composition":
+      return <AccountTreeOutlinedIcon sx={{ fontSize: 18 }} />;
+    case "economic_rebalance":
+      return <CompareArrowsOutlinedIcon sx={{ fontSize: 18 }} />;
+    default:
+      return <TableChartIcon sx={{ fontSize: 18 }} />;
+  }
 }
 
-function ModuleSummaryCard({ module }: { module: PcfpModuleGroup }) {
-  return (
-    <Card
-      variant="outlined"
-      sx={{
-        borderRadius: 4,
-        borderColor: module.borderColor,
-        backgroundColor: module.backgroundColor,
-        minWidth: 0,
-      }}
-    >
-      <CardContent>
-        <Stack spacing={1.2} sx={{ minWidth: 0 }}>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
-            {module.icon}
-            <Typography variant="subtitle1" fontWeight={800} noWrap>
-              {module.shortTitle}
-            </Typography>
-          </Stack>
-
-          <Typography variant="body2" color="text.secondary">
-            {module.rows.length} item(ns)
-          </Typography>
-
-          <Typography variant="h6" fontWeight={800} color="#241B3A">
-            {formatCurrency(module.total)}
-          </Typography>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
+function getModelChipStyles(modelType?: string) {
+  switch (modelType) {
+    case "dedicated_labor":
+      return { backgroundColor: "#EDE7F6", color: "#5E35B1" };
+    case "non_dedicated_labor":
+      return { backgroundColor: "#E3F2FD", color: "#1565C0" };
+    case "service_composition":
+      return { backgroundColor: "#E8F5E9", color: "#2E7D32" };
+    case "economic_rebalance":
+      return { backgroundColor: "#FFF3E0", color: "#EF6C00" };
+    default:
+      return { backgroundColor: "#EDE7F6", color: "#5E35B1" };
+  }
 }
 
-function ModuleDetailCard({ module }: { module: PcfpModuleGroup }) {
-  return (
-    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
-      <CardContent sx={{ p: 0 }}>
-        <Box
-          sx={{
-            px: 2.25,
-            py: 2,
-            backgroundColor: module.backgroundColor,
-            borderBottom: `1px solid ${module.borderColor}`,
-            minWidth: 0,
-          }}
-        >
-          <Stack spacing={0.8} sx={{ minWidth: 0 }}>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
-              {module.icon}
-              <Typography variant="h6" fontWeight={800}>
-                {module.title}
-              </Typography>
-            </Stack>
-
-            <Typography variant="body2" color="text.secondary">
-              {module.description}
-            </Typography>
-
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Chip size="small" label={`${module.rows.length} item(ns)`} variant="outlined" />
-              <Chip size="small" label={formatCurrency(module.total)} variant="outlined" />
-            </Stack>
-          </Stack>
-        </Box>
-
-        <Box sx={{ overflowX: "auto", width: "100%" }}>
-          <Table size="small" sx={{ minWidth: 680 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>
-                  <strong>Item</strong>
-                </TableCell>
-                <TableCell>
-                  <strong>Categoria</strong>
-                </TableCell>
-                <TableCell align="right">
-                  <strong>Quantidade</strong>
-                </TableCell>
-                <TableCell align="right">
-                  <strong>Valor unitário</strong>
-                </TableCell>
-                <TableCell align="right">
-                  <strong>Subtotal</strong>
-                </TableCell>
-              </TableRow>
-            </TableHead>
-
-            <TableBody>
-              {module.rows.length > 0 ? (
-                module.rows.map((row, index) => (
-                  <TableRow key={`${module.key}-${String(row.item)}-${index}`}>
-                    <TableCell sx={{ minWidth: 220 }}>
-                      <Stack spacing={0.35}>
-                        <Typography variant="body2">{String(row.item || "")}</Typography>
-                        {row.memoriaCalculo ? (
-                          <Typography variant="caption" color="text.secondary">
-                            {String(row.memoriaCalculo)}
-                          </Typography>
-                        ) : null}
-                      </Stack>
-                    </TableCell>
-                    <TableCell>{String(row.categoria || "")}</TableCell>
-                    <TableCell align="right">{Number(row.quantidade || 0)}</TableCell>
-                    <TableCell align="right">
-                      {formatCurrency(Number(row.valorUnitario || 0))}
-                    </TableCell>
-                    <TableCell align="right">
-                      {formatCurrency(Number(row.subtotal || 0))}
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5}>
-                    <Typography variant="body2" color="text.secondary">
-                      Nenhum item ainda identificado neste módulo preliminar.
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </Box>
-      </CardContent>
-    </Card>
-  );
+function getStatusChipStyles(status?: string) {
+  switch (status) {
+    case "Em elaboração":
+      return { backgroundColor: "#EFE7F6", color: "#8E5AB5" };
+    case "Concluída":
+      return { backgroundColor: "#E7F6EC", color: "#2E7D32" };
+    case "Em revisão":
+      return { backgroundColor: "#FFF3E0", color: "#ED6C02" };
+    case "Exemplo nativo":
+      return { backgroundColor: "#E3F2FD", color: "#1565C0" };
+    default:
+      return { backgroundColor: "#EFE7F6", color: "#8E5AB5" };
+  }
 }
 
-function PersistedCompositionCard({
-  summary,
-  memoryItems,
-  engineSnapshot,
-}: {
-  summary: ServiceCompositionSummary | null;
-  memoryItems: ServiceCompositionMemoryItem[];
-  engineSnapshot: ServiceCompositionEngineSnapshot | null;
-}) {
-  if (!summary && !engineSnapshot && memoryItems.length === 0) {
+function categoryMatches(category: string, terms: string[]) {
+  const normalized = category.toLowerCase();
+  return terms.some((term) => normalized.includes(term.toLowerCase()));
+}
+
+function itemMatches(item: string, terms: string[]) {
+  const normalized = item.toLowerCase();
+  return terms.some((term) => normalized.includes(term.toLowerCase()));
+}
+
+function sumRowsByCategory(rows: SpreadsheetDetailRow[], terms: string[]) {
+  return rows.reduce((sum, row) => {
+    if (categoryMatches(String(row.categoria || ""), terms)) {
+      return sum + Number(row.subtotal || 0);
+    }
+    return sum;
+  }, 0);
+}
+
+function findFirstRowByItem(rows: SpreadsheetDetailRow[], terms: string[]) {
+  return rows.find((row) => itemMatches(String(row.item || ""), terms));
+}
+
+function getDomainScenarioLabel(record?: SpreadsheetDetailRecord | null) {
+  const key = record?.domainScenario;
+  if (key && DOMAIN_SCENARIO_LABELS[key]) {
+    return DOMAIN_SCENARIO_LABELS[key];
+  }
+  if (record?.trainingProfile?.domainScenarioLabel) {
+    return record.trainingProfile.domainScenarioLabel;
+  }
+  return "Não classificado";
+}
+
+function extractStoredEditorDraft(record: SpreadsheetDetailRecord) {
+  const metadata = record.metadata;
+  if (!isRecord(metadata)) {
+    return {};
+  }
+  const raw = metadata["editorDraft"];
+  if (!isRecord(raw)) {
+    return {};
+  }
+  return raw as Partial<EditorState>;
+}
+
+function readMetadataRecord(
+  record: SpreadsheetDetailRecord | null | undefined,
+  key: string
+): Record<string, unknown> | null {
+  if (!record || !isRecord(record.metadata)) {
     return null;
   }
+  const raw = record.metadata[key];
+  return isRecord(raw) ? raw : null;
+}
 
-  const totalByCategory = summary?.totalsByCategory ?? engineSnapshot?.totalByCategory ?? {};
-  const totalByRecurrence =
-    summary?.totalsByRecurrence ?? engineSnapshot?.totalByRecurrence ?? {};
+function readMetadataArray<T>(
+  record: SpreadsheetDetailRecord | null | undefined,
+  key: string
+): T[] {
+  if (!record || !isRecord(record.metadata)) {
+    return [];
+  }
+  const raw = record.metadata[key];
+  return Array.isArray(raw) ? (raw as T[]) : [];
+}
 
-  return (
-    <Card
-      variant="outlined"
-      sx={{
-        borderRadius: 4,
-        borderColor: "rgba(46, 125, 50, 0.18)",
-        background:
-          "linear-gradient(180deg, rgba(239,248,240,1) 0%, rgba(255,255,255,1) 100%)",
-        minWidth: 0,
-      }}
-    >
-      <CardContent>
-        <Stack spacing={2.25} sx={{ minWidth: 0 }}>
-          <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
-            <MemoryOutlinedIcon sx={{ color: "#2E7D32" }} />
-            <Typography variant="h6" fontWeight={700}>
-              Composição de serviços persistida
-            </Typography>
-          </Stack>
+function readLaborCostBreakdown(
+  record: SpreadsheetDetailRecord | null | undefined
+): LaborCostBreakdown | null {
+  const raw = readMetadataRecord(record, "laborCostBreakdown");
+  return raw ? (raw as LaborCostBreakdown) : null;
+}
 
-          <Typography variant="body2" color="text.secondary">
-            Esta seção lê diretamente os blocos persistidos pelo motor de composição,
-            priorizando o resumo consolidado, a memória técnica por item e o snapshot
-            executivo da rodada de cálculo.
-          </Typography>
-                    <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "repeat(2, minmax(0, 1fr))",
-                xl: "repeat(4, minmax(0, 1fr))",
-              },
-              gap: 2,
-              minWidth: 0,
-            }}
-          >
-            <ExecutiveMetricCard
-              label="Itens persistidos"
-              value={summary?.itemCount ?? engineSnapshot?.itemCount ?? memoryItems.length}
-            />
-            <ExecutiveMetricCard
-              label="Total persistido"
-              value={formatCurrency(Number(summary?.total ?? engineSnapshot?.total ?? 0))}
-            />
-            <CompactInfoCard title="Resumo por recorrência">
-              <Typography variant="body2" color="text.secondary">
-                Recorrente:{" "}
-                <strong>{formatCurrency(Number(totalByRecurrence["recorrente"] || 0))}</strong>
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Eventual:{" "}
-                <strong>{formatCurrency(Number(totalByRecurrence["eventual"] || 0))}</strong>
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Sob demanda:{" "}
-                <strong>{formatCurrency(Number(totalByRecurrence["sob_demanda"] || 0))}</strong>
-              </Typography>
-            </CompactInfoCard>
-            <CompactInfoCard title="Snapshot do motor">
-              <Typography variant="body2" color="text.secondary">
-                Gerado em:
-              </Typography>
-              <Typography variant="body2" fontWeight={700}>
-                {engineSnapshot?.generatedAt
-                  ? new Date(engineSnapshot.generatedAt).toLocaleString("pt-BR")
-                  : "Não informado"}
-              </Typography>
-            </CompactInfoCard>
-          </Box>
+function readLaborChargesConfig(
+  record: SpreadsheetDetailRecord | null | undefined
+): LaborChargesConfig | null {
+  const raw = readMetadataRecord(record, "laborChargesConfig");
+  return raw ? (raw as LaborChargesConfig) : null;
+}
 
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "repeat(2, minmax(0, 1fr))",
-                xl: "repeat(5, minmax(0, 1fr))",
-              },
-              gap: 2,
-              minWidth: 0,
-            }}
-          >
-            <ExecutiveMetricCard
-              label="Equipe técnica / operacional"
-              value={formatCurrency(Number(totalByCategory["Equipe técnica / operacional"] || 0))}
-            />
-            <ExecutiveMetricCard
-              label="Materiais e insumos"
-              value={formatCurrency(Number(totalByCategory["Materiais e insumos"] || 0))}
-            />
-            <ExecutiveMetricCard
-              label="Equipamentos"
-              value={formatCurrency(Number(totalByCategory["Equipamentos"] || 0))}
-            />
-            <ExecutiveMetricCard
-              label="Logística operacional"
-              value={formatCurrency(Number(totalByCategory["Logística operacional"] || 0))}
-            />
-            <ExecutiveMetricCard
-              label="Apoio operacional"
-              value={formatCurrency(Number(totalByCategory["Apoio operacional"] || 0))}
-            />
-          </Box>
+function readServiceCompositionSummary(
+  record: SpreadsheetDetailRecord | null | undefined
+): ServiceCompositionSummary | null {
+  const raw = readMetadataRecord(record, "serviceCompositionSummary");
+  return raw ? (raw as ServiceCompositionSummary) : null;
+}
 
-          <CompactInfoCard title="Leitura técnica consolidada">
-            <Typography variant="body2" color="text.secondary">
-              O motor consolidou <strong>{memoryItems.length}</strong> item(ns) com
-              fórmula, fatores de produtividade, rateio, periodicidade e técnica
-              declarada.
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Este bloco já está apto a sustentar comparação entre versões,
-              explicabilidade e parecer automatizado.
-            </Typography>
-          </CompactInfoCard>
-
-          <Box sx={{ overflowX: "auto", width: "100%" }}>
-            <Table size="small" sx={{ minWidth: 1180 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>
-                    <strong>Item</strong>
-                  </TableCell>
-                  <TableCell>
-                    <strong>Categoria</strong>
-                  </TableCell>
-                  <TableCell>
-                    <strong>Recorrência</strong>
-                  </TableCell>
-                  <TableCell>
-                    <strong>Periodicidade</strong>
-                  </TableCell>
-                  <TableCell align="right">
-                    <strong>Qtd.</strong>
-                  </TableCell>
-                  <TableCell align="right">
-                    <strong>Unitário</strong>
-                  </TableCell>
-                  <TableCell align="right">
-                    <strong>Subtotal</strong>
-                  </TableCell>
-                  <TableCell>
-                    <strong>Fórmula</strong>
-                  </TableCell>
-                  <TableCell>
-                    <strong>Base / justificativa</strong>
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-
-              <TableBody>
-                {memoryItems.length > 0 ? (
-                  memoryItems.map((item, index) => (
-                    <TableRow key={`${String(item.id)}-${index}`}>
-                      <TableCell sx={{ minWidth: 200 }}>
-                        {safeString(item.item) || "Item sem nome"}
-                      </TableCell>
-                      <TableCell>{safeString(item.category)}</TableCell>
-                      <TableCell>{safeString(item.recurrenceType)}</TableCell>
-                      <TableCell>{safeString(item.periodicity)}</TableCell>
-                      <TableCell align="right">{Number(item.quantity || 0)}</TableCell>
-                      <TableCell align="right">
-                        {formatCurrency(Number(item.unitCost || 0))}
-                      </TableCell>
-                      <TableCell align="right">
-                        {formatCurrency(Number(item.subtotal || 0))}
-                      </TableCell>
-                      <TableCell sx={{ minWidth: 280 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {safeString(item.formula) || "Sem fórmula registrada"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell sx={{ minWidth: 260 }}>
-                        <Stack spacing={0.35}>
-                          {safeString(item.consumptionBasis) ? (
-                            <Typography variant="caption" color="text.secondary">
-                              Base: {safeString(item.consumptionBasis)}
-                            </Typography>
-                          ) : null}
-                          {safeString(item.technicalJustification) ? (
-                            <Typography variant="caption" color="text.secondary">
-                              Justificativa: {safeString(item.technicalJustification)}
-                            </Typography>
-                          ) : (
-                            <Typography variant="caption" color="text.secondary">
-                              Sem justificativa técnica registrada.
-                            </Typography>
-                          )}
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={9}>
-                      <Typography variant="body2" color="text.secondary">
-                        Nenhum item estruturado foi encontrado no bundle persistido.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </Box>
-        </Stack>
-      </CardContent>
-    </Card>
+function readServiceCompositionMemoryBundle(
+  record: SpreadsheetDetailRecord | null | undefined
+): ServiceCompositionMemoryItem[] {
+  return readMetadataArray<ServiceCompositionMemoryItem>(
+    record,
+    "serviceCompositionMemoryBundle"
   );
 }
 
+function readServiceCompositionEngineSnapshot(
+  record: SpreadsheetDetailRecord | null | undefined
+): ServiceCompositionEngineSnapshot | null {
+  const raw = readMetadataRecord(record, "serviceCompositionEngineSnapshot");
+  return raw ? (raw as ServiceCompositionEngineSnapshot) : null;
+}
+
+function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
+  const storedDraft = extractStoredEditorDraft(record);
+
+  const laborRows = record.rows.filter((row) =>
+    categoryMatches(String(row.categoria || ""), ["mão de obra", "equipe operacional"])
+  );
+
+  const firstLaborRow = laborRows[0];
+  const mealAllowanceRow = findFirstRowByItem(record.rows, [
+    "vale-alimentação",
+    "vale alimentação",
+    "alimentação",
+  ]);
+  const transportAllowanceRow = findFirstRowByItem(record.rows, [
+    "vale-transporte",
+    "vale transporte",
+    "transporte",
+  ]);
+
+  const laborBreakdown = readLaborCostBreakdown(record);
+
+  const inferredHeadcount =
+    laborBreakdown?.headcount ??
+    record.headcount ??
+    laborRows.reduce((sum, row) => sum + Number(row.quantidade || 0), 0);
+
+  const inferredMonthlyBaseValue =
+    record.monthlyBaseValue ??
+    laborBreakdown?.monthlyLaborTotal ??
+    record.rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
+
+  const inferredSalaryBase =
+    laborBreakdown?.salaryBaseTotal && inferredHeadcount > 0
+      ? laborBreakdown.salaryBaseTotal / inferredHeadcount
+      : Number(firstLaborRow?.valorUnitario || 0);
+
+  const inferredMealAllowance =
+    laborBreakdown?.mealAllowanceTotal && inferredHeadcount > 0
+      ? laborBreakdown.mealAllowanceTotal / inferredHeadcount
+      : Number(mealAllowanceRow?.valorUnitario || 0);
+
+  const inferredTransportAllowance =
+    laborBreakdown?.transportAllowanceTotal && inferredHeadcount > 0
+      ? laborBreakdown.transportAllowanceTotal / inferredHeadcount
+      : Number(transportAllowanceRow?.valorUnitario || 0);
+
+  return {
+    contractingAgency:
+      storedDraft.contractingAgency ?? safeString(record.contractingAgency),
+    contractReference:
+      storedDraft.contractReference ?? safeString(record.contractReference),
+    unitName: storedDraft.unitName ?? safeString(record.unitName),
+    lotName: storedDraft.lotName ?? safeString(record.lotName),
+    referenceDate: storedDraft.referenceDate ?? safeString(record.referenceDate),
+    municipality: storedDraft.municipality ?? "",
+    state: storedDraft.state ?? "",
+    cboCode: storedDraft.cboCode ?? "",
+    professionalCategory:
+      storedDraft.professionalCategory ?? safeString(firstLaborRow?.item),
+    cctReference: storedDraft.cctReference ?? "",
+    taxRegime: storedDraft.taxRegime ?? "lucro_presumido",
+    objectDescription: storedDraft.objectDescription ?? record.description ?? "",
+    domainScenario: storedDraft.domainScenario ?? safeString(record.domainScenario),
+    headcount: storedDraft.headcount ?? stringifyNumber(inferredHeadcount),
+    monthlyBaseValue:
+      storedDraft.monthlyBaseValue ?? stringifyNumber(inferredMonthlyBaseValue),
+    mainShift: storedDraft.mainShift ?? (laborRows.length > 0 ? "Postos contínuos" : ""),
+    workScale: storedDraft.workScale ?? "",
+    weeklyHours: storedDraft.weeklyHours ?? "",
+    monthlyHours: storedDraft.monthlyHours ?? "",
+    salaryBase: storedDraft.salaryBase ?? stringifyNumber(inferredSalaryBase),
+    nightAdditional: storedDraft.nightAdditional ?? "",
+    hazardAdditional: storedDraft.hazardAdditional ?? "",
+    mealAllowance:
+      storedDraft.mealAllowance ?? stringifyNumber(inferredMealAllowance),
+    transportAllowance:
+      storedDraft.transportAllowance ?? stringifyNumber(inferredTransportAllowance),
+    mandatoryBenefitsNotes: storedDraft.mandatoryBenefitsNotes ?? "",
+    notes: storedDraft.notes ?? safeString(record.notes),
+  };
+}
+
+function getExequibilityRisk(
+  mandatoryCostTotal: number,
+  referenceValue: number,
+  totalRowsValue: number
+) {
+  const base = referenceValue > 0 ? referenceValue : totalRowsValue;
+  if (base <= 0) {
+    return {
+      label: "Sem base suficiente",
+      color: "#6D6186",
+      backgroundColor: "#F3EAF7",
+    };
+  }
+
+  const ratio = mandatoryCostTotal / base;
+
+  if (ratio <= 0.75) {
+    return {
+      label: "Baixo risco preliminar",
+      color: "#2E7D32",
+      backgroundColor: "#E7F6EC",
+    };
+  }
+
+  if (ratio <= 0.9) {
+    return {
+      label: "Atenção moderada",
+      color: "#ED6C02",
+      backgroundColor: "#FFF3E0",
+    };
+  }
+
+  return {
+    label: "Alto risco preliminar",
+    color: "#C62828",
+    backgroundColor: "#FDECEC",
+  };
+}
 function readPreviousSpreadsheetCandidate(
   spreadsheet: SpreadsheetDetailRecord | null
 ): SpreadsheetRecord | null {
@@ -1585,24 +1421,14 @@ export default function SpreadsheetDetail() {
     return resolveVersionHistoryRecord(baselineVersionItem, spreadsheet);
   }, [baselineVersionItem, spreadsheet]);
 
-  const selectedVersionLaborBreakdown = useMemo(
-    () => readLaborCostBreakdown(resolvedSelectedVersionRecord as SpreadsheetDetailRecord | null),
-    [resolvedSelectedVersionRecord]
-  );
-
   const baselineVersionLaborBreakdown = useMemo(
     () => readLaborCostBreakdown(resolvedBaselineVersionRecord as SpreadsheetDetailRecord | null),
     [resolvedBaselineVersionRecord]
   );
 
-  const selectedVersionLaborChargesConfig = useMemo(
-    () => readLaborChargesConfig(resolvedSelectedVersionRecord as SpreadsheetDetailRecord | null),
+  const selectedVersionLaborBreakdown = useMemo(
+    () => readLaborCostBreakdown(resolvedSelectedVersionRecord as SpreadsheetDetailRecord | null),
     [resolvedSelectedVersionRecord]
-  );
-
-  const baselineVersionLaborChargesConfig = useMemo(
-    () => readLaborChargesConfig(resolvedBaselineVersionRecord as SpreadsheetDetailRecord | null),
-    [resolvedBaselineVersionRecord]
   );
 
   const serviceCompositionComparisonContext = useMemo(() => {
@@ -1705,7 +1531,8 @@ export default function SpreadsheetDetail() {
       "uniforme",
     ]);
   }, [spreadsheet, serviceCompositionSummary, serviceCompositionEngineSnapshot]);
-    const analysisReferenceValue = useMemo(() => {
+
+  const analysisReferenceValue = useMemo(() => {
     if (!editor) return 0;
     return parseNumber(editor.monthlyBaseValue);
   }, [editor]);
@@ -1828,8 +1655,9 @@ export default function SpreadsheetDetail() {
       return;
     }
 
-    const resolved = resolveVersionHistoryRecord(item, spreadsheet);
-    if (!resolved) {
+    const restored = restoreSpreadsheetVersion(spreadsheet.id, item.id);
+
+    if (!restored) {
       setSaveState("error");
       setSaveMessage(
         "Não foi possível restaurar esta versão com os dados atualmente disponíveis."
@@ -1837,7 +1665,7 @@ export default function SpreadsheetDetail() {
       return;
     }
 
-    const next = resolved as SpreadsheetDetailRecord;
+    const next = restored as SpreadsheetDetailRecord;
     setSpreadsheet(next);
     setEditor(buildInitialEditorState(next));
     setDataSource("local");
@@ -1904,9 +1732,8 @@ export default function SpreadsheetDetail() {
   const expectedDocuments = safeStringArray(spreadsheet.trainingProfile?.expectedDocuments);
   const expectedCostDrivers = safeStringArray(spreadsheet.trainingProfile?.expectedCostDrivers);
   const validationFocus = safeStringArray(spreadsheet.trainingProfile?.validationFocus);
-  const readingHints = safeStringArray(spreadsheet.trainingProfile?.readingHints);
-
-  return (
+  const readingHints = safeStringArray(spreadsheet.trainingProfile?.readingHints);v
+    return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#F7F3F8", py: 1 }}>
       <Container
         maxWidth={false}
@@ -1946,7 +1773,9 @@ export default function SpreadsheetDetail() {
                 >
                   <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                      <AutoAwesomeOutlinedIcon sx={{ fontSize: 16, color: "#9C6BC0" }} />
+                      <AutoAwesomeOutlinedIcon
+                        sx={{ fontSize: 16, color: "#9C6BC0" }}
+                      />
                       <Typography
                         variant="caption"
                         sx={{
@@ -2060,8 +1889,8 @@ export default function SpreadsheetDetail() {
             severity="info"
             sx={{ borderRadius: 3 }}
           >
-            Esta tela já consome histórico/versionamento, comparação executiva,
-            leitura persistida da composição e comparação técnica do bloco laboral.
+            Esta tela já consome o resumo, a memória técnica, o snapshot do motor e,
+            quando existir uma base anterior, o comparativo entre versões da composição.
           </Alert>
 
           <Box
@@ -2091,8 +1920,9 @@ export default function SpreadsheetDetail() {
                 </Stack>
 
                 <Typography variant="body2" color="text.secondary">
-                  Este painel consolida as versões visíveis localmente, baseline de
-                  comparação, restauração operacional e leitura executiva entre versões.
+                  Este painel consolida as versões já visíveis localmente, snapshots
+                  identificados em metadados, baseline de comparação e restauração
+                  operacional quando houver dados suficientes disponíveis no cliente.
                 </Typography>
 
                 <Box
@@ -2105,7 +1935,10 @@ export default function SpreadsheetDetail() {
                     gap: 2,
                   }}
                 >
-                  <ExecutiveMetricCard label="Versões identificadas" value={versionHistory.length} />
+                  <ExecutiveMetricCard
+                    label="Versões identificadas"
+                    value={versionHistory.length}
+                  />
                   <ExecutiveMetricCard
                     label="Baseline atual"
                     value={baselineVersionItem ? getVersionLabel(baselineVersionItem) : "—"}
@@ -2141,12 +1974,24 @@ export default function SpreadsheetDetail() {
                           <Table size="small" sx={{ minWidth: 940 }}>
                             <TableHead>
                               <TableRow>
-                                <TableCell><strong>Versão</strong></TableCell>
-                                <TableCell><strong>Data / hora</strong></TableCell>
-                                <TableCell><strong>Motivo</strong></TableCell>
-                                <TableCell><strong>Origem</strong></TableCell>
-                                <TableCell><strong>Status</strong></TableCell>
-                                <TableCell align="right"><strong>Ações</strong></TableCell>
+                                <TableCell>
+                                  <strong>Versão</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>Data / hora</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>Motivo</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>Origem</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>Status</strong>
+                                </TableCell>
+                                <TableCell align="right">
+                                  <strong>Ações</strong>
+                                </TableCell>
                               </TableRow>
                             </TableHead>
                             <TableBody>
@@ -2181,15 +2026,34 @@ export default function SpreadsheetDetail() {
                                       <TableCell>{getOriginLabel(item.origin)}</TableCell>
 
                                       <TableCell sx={{ minWidth: 170 }}>
-                                        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                                        <Stack
+                                          direction="row"
+                                          spacing={0.75}
+                                          flexWrap="wrap"
+                                          useFlexGap
+                                        >
                                           {item.isCurrent ? (
-                                            <Chip size="small" label="Atual" color="primary" variant="outlined" />
+                                            <Chip
+                                              size="small"
+                                              label="Atual"
+                                              color="primary"
+                                              variant="outlined"
+                                            />
                                           ) : null}
                                           {isBaseline ? (
-                                            <Chip size="small" label="Baseline ativa" color="secondary" variant="outlined" />
+                                            <Chip
+                                              size="small"
+                                              label="Baseline ativa"
+                                              color="secondary"
+                                              variant="outlined"
+                                            />
                                           ) : null}
                                           {isSelected ? (
-                                            <Chip size="small" label="Selecionada" variant="outlined" />
+                                            <Chip
+                                              size="small"
+                                              label="Selecionada"
+                                              variant="outlined"
+                                            />
                                           ) : null}
                                         </Stack>
                                       </TableCell>
@@ -2239,7 +2103,8 @@ export default function SpreadsheetDetail() {
                                 <TableRow>
                                   <TableCell colSpan={6}>
                                     <Typography variant="body2" color="text.secondary">
-                                      Nenhuma versão adicional foi identificada.
+                                      Nenhuma versão adicional foi identificada nos metadados
+                                      ou no repositório local desta planilha.
                                     </Typography>
                                   </TableCell>
                                 </TableRow>
@@ -2328,7 +2193,11 @@ export default function SpreadsheetDetail() {
                                 </Typography>
                               </Stack>
 
-                              <Typography variant="caption" color="text.secondary" display="block">
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                display="block"
+                              >
                                 {formatDateTime(item.createdAt)}
                               </Typography>
 
@@ -2336,13 +2205,33 @@ export default function SpreadsheetDetail() {
                                 {item.reason || "Sem motivo registrado"}
                               </Typography>
 
-                              <Stack direction="row" spacing={0.75} mt={1} flexWrap="wrap" useFlexGap>
-                                <Chip size="small" label={getOriginLabel(item.origin)} variant="outlined" />
+                              <Stack
+                                direction="row"
+                                spacing={0.75}
+                                mt={1}
+                                flexWrap="wrap"
+                                useFlexGap
+                              >
+                                <Chip
+                                  size="small"
+                                  label={getOriginLabel(item.origin)}
+                                  variant="outlined"
+                                />
                                 {item.isCurrent ? (
-                                  <Chip size="small" label="Versão atual" color="primary" variant="outlined" />
+                                  <Chip
+                                    size="small"
+                                    label="Versão atual"
+                                    color="primary"
+                                    variant="outlined"
+                                  />
                                 ) : null}
                                 {baselineVersionId === item.id ? (
-                                  <Chip size="small" label="Baseline" color="secondary" variant="outlined" />
+                                  <Chip
+                                    size="small"
+                                    label="Baseline"
+                                    color="secondary"
+                                    variant="outlined"
+                                  />
                                 ) : null}
                               </Stack>
                             </Box>
@@ -2383,522 +2272,215 @@ export default function SpreadsheetDetail() {
               </Stack>
             </CardContent>
           </Card>
-
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                xl: "minmax(0, 1.55fr) minmax(320px, 0.95fr)",
-              },
-              gap: 2,
-              alignItems: "start",
-              minWidth: 0,
-            }}
-          >
-            <Stack spacing={2} sx={{ minWidth: 0 }}>
-              {(serviceCompositionSummary ||
-                serviceCompositionEngineSnapshot ||
-                serviceCompositionMemoryBundle.length > 0) &&
-              spreadsheet.modelType === "service_composition" ? (
-                <PersistedCompositionCard
-                  summary={serviceCompositionSummary}
-                  memoryItems={serviceCompositionMemoryBundle}
-                  engineSnapshot={serviceCompositionEngineSnapshot}
-                />
-              ) : null}
-
-              {serviceCompositionComparisonContext &&
-              spreadsheet.modelType === "service_composition" ? (
-                <ServiceCompositionComparisonPanel
-                  comparison={serviceCompositionComparisonContext.comparison}
-                  title="Comparação técnica: versão atual x versão anterior"
-                />
-              ) : null}
-
-              {selectedVersionComparison && spreadsheet.modelType === "service_composition" ? (
-                <ServiceCompositionComparisonPanel
-                  comparison={selectedVersionComparison}
-                  title={`Comparação técnica: versão atual x ${
-                    selectedVersionItem ? getVersionLabel(selectedVersionItem) : "versão selecionada"
-                  }`}
-                />
-              ) : null}
-
-              {(baselineVersionLaborBreakdown || selectedVersionLaborBreakdown) ? (
-                <DedicatedLaborComparisonPanel
-                  title="Comparação técnica do bloco laboral"
-                  data={{
-                    versionA: baselineVersionItem
-                      ? {
-                          label: getVersionLabel(baselineVersionItem),
-                          origin: baselineVersionItem.origin,
-                          createdAt: baselineVersionItem.createdAt,
-                        }
-                      : null,
-                    versionB: selectedVersionItem
-                      ? {
-                          label: getVersionLabel(selectedVersionItem),
-                          origin: selectedVersionItem.origin,
-                          createdAt: selectedVersionItem.createdAt,
-                        }
-                      : null,
-                    laborA: baselineVersionLaborBreakdown,
-                    laborB: selectedVersionLaborBreakdown,
-                    chargesConfigA: baselineVersionLaborChargesConfig,
-                    chargesConfigB: selectedVersionLaborChargesConfig,
-                  }}
-                  emptyMessage="Não há dados laborais suficientes nas versões selecionadas."
-                />
-              ) : null}
-
-              <SpreadsheetEditor
-                spreadsheet={spreadsheet}
-                onSpreadsheetUpdated={(updated) => {
-                  const next = updated as SpreadsheetDetailRecord;
-                  setSpreadsheet(next);
-                  setEditor(buildInitialEditorState(next));
-                  setDataSource("local");
-                }}
+                    {spreadsheet.modelType === "service_composition" ? (
+            <Stack spacing={2.5}>
+              <PersistedCompositionCard
+                summary={serviceCompositionSummary}
+                memoryItems={serviceCompositionMemoryBundle}
+                engineSnapshot={serviceCompositionEngineSnapshot}
               />
 
-              <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
-                <CardContent>
-                  <Stack spacing={2} sx={{ minWidth: 0 }}>
-                    <Stack direction="row" spacing={1.25} alignItems="center">
-                      <ViewAgendaOutlinedIcon sx={{ color: "#7B1FA2" }} />
-                      <Typography variant="h6" fontWeight={700}>
-                        Estrutura modular preliminar da PCFP
-                      </Typography>
-                    </Stack>
+              {serviceCompositionComparisonContext ? (
+                <ServiceCompositionComparisonPanel
+                  title="Comparação — versão anterior x atual"
+                  previousLabel={serviceCompositionComparisonContext.previousLabel}
+                  currentLabel={serviceCompositionComparisonContext.currentLabel}
+                  comparison={serviceCompositionComparisonContext.comparison}
+                />
+              ) : null}
 
-                    <Box
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: {
-                          xs: "1fr",
-                          sm: "repeat(2, minmax(0, 1fr))",
-                          xl: "repeat(3, minmax(0, 1fr))",
-                        },
-                        gap: 2,
-                        minWidth: 0,
-                      }}
-                    >
-                      {pcfpModules.map((module) => (
-                        <ModuleSummaryCard key={module.key} module={module} />
-                      ))}
-                    </Box>
-
-                    <Stack spacing={2} sx={{ minWidth: 0 }}>
-                      {pcfpModules
-                        .filter((module) => module.key !== "module_6")
-                        .map((module) => (
-                          <ModuleDetailCard key={module.key} module={module} />
-                        ))}
-
-                      <Card
-                        variant="outlined"
-                        sx={{
-                          borderRadius: 4,
-                          borderColor: "rgba(123, 31, 162, 0.16)",
-                          backgroundColor: "#F8ECFB",
-                          minWidth: 0,
-                        }}
-                      >
-                        <CardContent>
-                          <Stack spacing={1.5} sx={{ minWidth: 0 }}>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <SummarizeOutlinedIcon sx={{ fontSize: 18 }} />
-                              <Typography variant="h6" fontWeight={800}>
-                                Módulo 6 — Síntese preliminar
-                              </Typography>
-                            </Stack>
-
-                            <Box
-                              sx={{
-                                display: "grid",
-                                gridTemplateColumns: {
-                                  xs: "1fr",
-                                  md: "repeat(3, minmax(0, 1fr))",
-                                },
-                                gap: 2,
-                                minWidth: 0,
-                              }}
-                            >
-                              <ExecutiveMetricCard
-                                label="Total dos módulos 1 a 5"
-                                value={formatCurrency(
-                                  pcfpModules
-                                    .filter((module) => module.key !== "module_6")
-                                    .reduce((sum, module) => sum + module.total, 0)
-                                )}
-                              />
-                              <ExecutiveMetricCard
-                                label="Base mensal declarada"
-                                value={formatCurrency(effectiveMonthlyReference)}
-                              />
-                              <ExecutiveMetricCard
-                                label="Saldo preliminar"
-                                value={formatCurrency(executabilityBalance)}
-                              />
-                            </Box>
-                          </Stack>
-                        </CardContent>
-                      </Card>
-                    </Stack>
-                  </Stack>
-                </CardContent>
-              </Card>
-
-              <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
-                <CardContent sx={{ p: 0 }}>
-                  <Box sx={{ px: 2.25, py: 2 }}>
-                    <Typography variant="h6" fontWeight={700}>
-                      Estrutura inicial da planilha
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-                      Itens-base identificados nesta versão da planilha.
-                    </Typography>
-                  </Box>
-
-                  <Divider />
-
-                  <Box sx={{ overflowX: "auto", width: "100%" }}>
-                    <Table sx={{ minWidth: 820 }}>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell><strong>Item</strong></TableCell>
-                          <TableCell><strong>Categoria</strong></TableCell>
-                          <TableCell align="right"><strong>Quantidade</strong></TableCell>
-                          <TableCell align="right"><strong>Valor unitário</strong></TableCell>
-                          <TableCell align="right"><strong>Subtotal</strong></TableCell>
-                          <TableCell><strong>Status</strong></TableCell>
-                        </TableRow>
-                      </TableHead>
-
-                      <TableBody>
-                        {spreadsheet.rows.map((row, index) => (
-                          <TableRow key={`${String(row.item)}-${index}`}>
-                            <TableCell sx={{ minWidth: 240 }}>
-                              <Stack spacing={0.4}>
-                                <Typography variant="body2">{String(row.item || "")}</Typography>
-                                {row.memoriaCalculo ? (
-                                  <Typography variant="caption" color="text.secondary">
-                                    {String(row.memoriaCalculo)}
-                                  </Typography>
-                                ) : null}
-                              </Stack>
-                            </TableCell>
-                            <TableCell>{String(row.categoria || "")}</TableCell>
-                            <TableCell align="right">{Number(row.quantidade || 0)}</TableCell>
-                            <TableCell align="right">
-                              {formatCurrency(Number(row.valorUnitario || 0))}
-                            </TableCell>
-                            <TableCell align="right">
-                              {formatCurrency(Number(row.subtotal || 0))}
-                            </TableCell>
-                            <TableCell>
-                              <Chip
-                                size="small"
-                                label={String(row.status || "")}
-                                sx={{
-                                  backgroundColor:
-                                    String(row.status || "") === "Pendente"
-                                      ? "#FFF3E0"
-                                      : String(row.status || "") === "Exemplo do domínio"
-                                      ? "#E3F2FD"
-                                      : "#E7F6EC",
-                                  color:
-                                    String(row.status || "") === "Pendente"
-                                      ? "#EF6C00"
-                                      : String(row.status || "") === "Exemplo do domínio"
-                                      ? "#1565C0"
-                                      : "#2E7D32",
-                                  fontWeight: 700,
-                                }}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-
-                        {spreadsheet.rows.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={6}>
-                              <Typography variant="body2" color="text.secondary">
-                                Nenhum item encontrado nesta planilha.
-                              </Typography>
-                            </TableCell>
-                          </TableRow>
-                        ) : null}
-                      </TableBody>
-                    </Table>
-                  </Box>
-                </CardContent>
-              </Card>
+              {selectedVersionComparison ? (
+                <ServiceCompositionComparisonPanel
+                  title="Comparação — versão selecionada x atual"
+                  previousLabel={
+                    selectedVersionItem
+                      ? getVersionLabel(selectedVersionItem)
+                      : "Versão selecionada"
+                  }
+                  currentLabel="Versão atual"
+                  comparison={selectedVersionComparison}
+                />
+              ) : null}
             </Stack>
+          ) : null}
 
-            <Stack
-              spacing={2}
-              sx={{
-                minWidth: 0,
-                position: { xl: "sticky" },
-                top: { xl: 20 },
-              }}
-            >
-              <CompactInfoCard title="Resumo executivo">
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Tipo do modelo:</strong> {getModelLabel(spreadsheet.modelType)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Status:</strong> {spreadsheet.status}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Categoria:</strong> {spreadsheet.category}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Domínio:</strong>{" "}
-                  {DOMAIN_SCENARIO_LABELS[editor.domainScenario] || domainScenarioLabel}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Quantidade estimada:</strong> {effectiveHeadcount}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Referência mensal:</strong> {formatCurrency(effectiveMonthlyReference)}
-                </Typography>
+          <LaborVersionComparisonPanel
+            versionA={baselineVersionLaborBreakdown}
+            versionB={selectedVersionLaborBreakdown}
+            labelA={
+              baselineVersionItem ? getVersionLabel(baselineVersionItem) : "Baseline"
+            }
+            labelB={
+              selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Versão selecionada"
+            }
+          />
 
-                <Stack direction="row" spacing={0.75} alignItems="center">
-                  <AccessTimeIcon sx={{ fontSize: 16, color: "#7A708D" }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Atualizado em {spreadsheet.updatedAt}
-                  </Typography>
-                </Stack>
-              </CompactInfoCard>
-
-              <CompactInfoCard title="Resumo de versionamento">
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <HistoryOutlinedIcon sx={{ fontSize: 18 }} />
-                  <Typography variant="body2" fontWeight={700}>
-                    Fluxo visível de histórico
+          <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+            <CardContent>
+              <Stack spacing={2}>
+                <Stack direction="row" spacing={1.25} alignItems="center">
+                  <FunctionsOutlinedIcon sx={{ color: "#5E35B1" }} />
+                  <Typography variant="h6" fontWeight={700}>
+                    Estrutura preliminar da planilha
                   </Typography>
                 </Stack>
 
                 <Typography variant="body2" color="text.secondary">
-                  <strong>Versões identificadas:</strong> {versionHistory.length}
+                  Os itens abaixo são classificados automaticamente nos módulos
+                  preliminares da planilha de custos para apoiar leitura técnica,
+                  auditoria e preparação de memória de cálculo.
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Baseline ativa:</strong>{" "}
-                  {baselineVersionItem ? getVersionLabel(baselineVersionItem) : "Não definida"}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Versão em foco:</strong>{" "}
-                  {selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Não definida"}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Restauração local:</strong>{" "}
-                  {selectedVersionItem && (selectedVersionItem.rows || selectedVersionItem.spreadsheetId)
-                    ? "Disponível"
-                    : "Dependente de dados adicionais"}
-                </Typography>
-              </CompactInfoCard>
 
-              <CompactInfoCard title="Quadro preliminar de exequibilidade">
                 <Box
                   sx={{
-                    p: 2,
-                    borderRadius: 3,
-                    bgcolor: exequibilityRisk.backgroundColor,
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "1fr",
+                      sm: "repeat(2, minmax(0, 1fr))",
+                      xl: "repeat(3, minmax(0, 1fr))",
+                    },
+                    gap: 2,
+                    minWidth: 0,
                   }}
                 >
-                  <Typography
-                    variant="body2"
-                    sx={{ color: exequibilityRisk.color, fontWeight: 800 }}
-                  >
-                    {exequibilityRisk.label}
-                  </Typography>
+                  {pcfpModules.map((module) => (
+                    <ModuleSummaryCard key={module.key} module={module} />
+                  ))}
                 </Box>
 
+                <Divider />
+
+                <Stack spacing={2}>
+                  {pcfpModules.map((module) => (
+                    <ModuleDetailCard key={`detail-${module.key}`} module={module} />
+                  ))}
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+            <CardContent>
+              <Stack spacing={2}>
+                <Stack direction="row" spacing={1.25} alignItems="center">
+                  <InsightsOutlinedIcon sx={{ color: "#1565C0" }} />
+                  <Typography variant="h6" fontWeight={700}>
+                    Leitura preliminar de exequibilidade
+                  </Typography>
+                </Stack>
+
                 <Typography variant="body2" color="text.secondary">
-                  <strong>Custos obrigatórios estimados:</strong> {formatCurrency(mandatoryCostTotal)}
+                  Esta leitura utiliza parâmetros preliminares da planilha e
+                  blocos persistidos para sinalizar equilíbrio ou risco de
+                  exequibilidade contratual.
                 </Typography>
+
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "1fr",
+                      sm: "repeat(2, minmax(0, 1fr))",
+                      xl: "repeat(4, minmax(0, 1fr))",
+                    },
+                    gap: 2,
+                  }}
+                >
+                  <ExecutiveMetricCard
+                    label="Custo obrigatório estimado"
+                    value={formatCurrency(mandatoryCostTotal)}
+                  />
+
+                  <ExecutiveMetricCard
+                    label="Custo evidenciável"
+                    value={formatCurrency(evidentiaryCostTotal)}
+                  />
+
+                  <ExecutiveMetricCard
+                    label="Referência mensal"
+                    value={formatCurrency(effectiveMonthlyReference)}
+                  />
+
+                  <ExecutiveMetricCard
+                    label="Saldo preliminar"
+                    value={formatCurrency(executabilityBalance)}
+                  />
+                </Box>
+
+                <Alert
+                  severity={
+                    exequibilityRisk.color === "#C62828"
+                      ? "error"
+                      : exequibilityRisk.color === "#ED6C02"
+                      ? "warning"
+                      : "success"
+                  }
+                  sx={{ borderRadius: 3 }}
+                >
+                  <strong>{exequibilityRisk.label}</strong> — A proporção entre
+                  custos obrigatórios e valor de referência indica o nível
+                  preliminar de risco de exequibilidade.
+                </Alert>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          <Card variant="outlined" sx={{ borderRadius: 4 }}>
+            <CardContent>
+              <Stack spacing={2}>
+                <Stack direction="row" spacing={1.25} alignItems="center">
+                  <ManageSearchOutlinedIcon sx={{ color: "#5E35B1" }} />
+                  <Typography variant="h6" fontWeight={700}>
+                    Contexto interpretativo da planilha
+                  </Typography>
+                </Stack>
+
                 <Typography variant="body2" color="text.secondary">
-                  <strong>Custos comprobatórios / materiais:</strong> {formatCurrency(evidentiaryCostTotal)}
+                  Informações auxiliares usadas pela IA do sistema para leitura
+                  técnica, validação documental e preparação de parecer.
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Saldo preliminar de exequibilidade:</strong> {formatCurrency(executabilityBalance)}
-                </Typography>
-              </CompactInfoCard>
 
-              {laborCostBreakdown || laborChargesConfig ? (
-                <CompactInfoCard title="Bloco laboral persistido">
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Headcount:</strong> {Number(laborCostBreakdown?.headcount || 0)}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Total salarial:</strong> {formatCurrency(Number(laborCostBreakdown?.salaryBaseTotal || 0))}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Benefícios obrigatórios:</strong>{" "}
-                    {formatCurrency(Number(laborCostBreakdown?.mandatoryBenefitsTotal || 0))}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Adicionais:</strong> {formatCurrency(Number(laborCostBreakdown?.additionalTotal || 0))}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Total laboral mensal:</strong>{" "}
-                    {formatCurrency(Number(laborCostBreakdown?.monthlyLaborTotal || 0))}
-                  </Typography>
-                </CompactInfoCard>
-              ) : null}
-
-              {spreadsheet.trainingProfile ? (
-                <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                  <CardContent>
-                    <Stack spacing={2}>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <InsightsOutlinedIcon sx={{ color: "#1565C0" }} />
-                        <Typography variant="h6" fontWeight={700}>
-                          Perfil técnico da planilha
-                        </Typography>
-                      </Stack>
-
-                      <Typography variant="body2" color="text.secondary">
-                        Este bloco descreve o contexto técnico utilizado pelo motor
-                        de análise para interpretar esta planilha.
-                      </Typography>
-
-                      <Divider />
-
-                      <Stack spacing={1}>
-                        <Typography variant="body2" fontWeight={700}>
-                          Documentos esperados
-                        </Typography>
-                        {expectedDocuments.length > 0 ? (
-                          expectedDocuments.map((doc) => (
-                            <Typography key={doc} variant="body2" color="text.secondary">
-                              • {doc}
-                            </Typography>
-                          ))
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            Nenhum documento definido.
-                          </Typography>
-                        )}
-                      </Stack>
-
-                      <Stack spacing={1}>
-                        <Typography variant="body2" fontWeight={700}>
-                          Vetores de custo esperados
-                        </Typography>
-                        {expectedCostDrivers.length > 0 ? (
-                          expectedCostDrivers.map((driver) => (
-                            <Typography key={driver} variant="body2" color="text.secondary">
-                              • {driver}
-                            </Typography>
-                          ))
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            Nenhum vetor de custo configurado.
-                          </Typography>
-                        )}
-                      </Stack>
-
-                      <Stack spacing={1}>
-                        <Typography variant="body2" fontWeight={700}>
-                          Pontos de validação
-                        </Typography>
-                        {validationFocus.length > 0 ? (
-                          validationFocus.map((focus) => (
-                            <Typography key={focus} variant="body2" color="text.secondary">
-                              • {focus}
-                            </Typography>
-                          ))
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            Nenhum foco de validação configurado.
-                          </Typography>
-                        )}
-                      </Stack>
-
-                      <Stack spacing={1}>
-                        <Typography variant="body2" fontWeight={700}>
-                          Sugestões de leitura
-                        </Typography>
-                        {readingHints.length > 0 ? (
-                          readingHints.map((hint) => (
-                            <Typography key={hint} variant="body2" color="text.secondary">
-                              • {hint}
-                            </Typography>
-                          ))
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            Nenhuma sugestão de leitura configurada.
-                          </Typography>
-                        )}
-                      </Stack>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              ) : null}
-
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                <CardContent>
-                  <Stack spacing={1.5}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <AttachFileIcon sx={{ color: "#5E35B1" }} />
-                      <Typography variant="subtitle1" fontWeight={700}>
-                        Metadados técnicos
-                      </Typography>
-                    </Stack>
-
-                    <Typography variant="body2" color="text.secondary">
-                      Categoria: {spreadsheet.category}
+                <Stack spacing={1}>
+                  {expectedDocuments.length > 0 ? (
+                    <Typography variant="body2">
+                      <strong>Documentos esperados:</strong>{" "}
+                      {expectedDocuments.join(", ")}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Modelo: {spreadsheet.modelType}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Status: {spreadsheet.status}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Atualizado em: {spreadsheet.updatedAt}
-                    </Typography>
-                  </Stack>
-                </CardContent>
-              </Card>
+                  ) : null}
 
-              <CompactInfoCard title="Observações internas">
-                <TextField
-                  label="Anotações preparatórias"
-                  value={editor.notes}
-                  onChange={(event) => updateEditorField("notes", event.target.value)}
-                  multiline
-                  minRows={4}
-                  fullWidth
-                />
-                <Typography variant="caption" color="text.secondary">
-                  Este campo já prepara a futura integração com histórico analítico,
-                  decisão interna, parecer consolidado e trilha de auditoria.
-                </Typography>
-              </CompactInfoCard>
-            </Stack>
-          </Box>
+                  {expectedCostDrivers.length > 0 ? (
+                    <Typography variant="body2">
+                      <strong>Drivers de custo:</strong>{" "}
+                      {expectedCostDrivers.join(", ")}
+                    </Typography>
+                  ) : null}
+
+                  {validationFocus.length > 0 ? (
+                    <Typography variant="body2">
+                      <strong>Pontos de validação:</strong>{" "}
+                      {validationFocus.join(", ")}
+                    </Typography>
+                  ) : null}
+
+                  {readingHints.length > 0 ? (
+                    <Typography variant="body2">
+                      <strong>Dicas de leitura:</strong>{" "}
+                      {readingHints.join(", ")}
+                    </Typography>
+                  ) : null}
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          <Snackbar
+            open={saveState === "success" || saveState === "error"}
+            autoHideDuration={4000}
+            onClose={() => setSaveState("idle")}
+            message={saveMessage}
+          />
         </Stack>
       </Container>
-
-      <Snackbar
-        open={saveState === "success" || saveState === "error"}
-        autoHideDuration={3500}
-        onClose={() => setSaveState("idle")}
-      >
-        <Alert
-          onClose={() => setSaveState("idle")}
-          severity={saveState === "success" ? "success" : "error"}
-          variant="filled"
-          sx={{ width: "100%" }}
-        >
-          {saveMessage}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 }
