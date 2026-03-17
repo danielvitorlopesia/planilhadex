@@ -50,6 +50,7 @@ import TimelineOutlinedIcon from "@mui/icons-material/TimelineOutlined";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import SpreadsheetEditor from "../modules/spreadsheet-editor/SpreadsheetEditor";
+import SpreadsheetVersionComparisonPanel from "../components/versioning/SpreadsheetVersionComparisonPanel";
 import ServiceCompositionComparisonPanel from "../components/service-composition/ServiceCompositionComparisonPanel";
 import {
   SpreadsheetRecord,
@@ -1619,6 +1620,27 @@ export default function SpreadsheetDetail() {
     }
   }, [resolvedSelectedVersionRecord, spreadsheet]);
 
+  const baselineToSelectedComparison = useMemo(() => {
+    if (
+      !spreadsheet ||
+      spreadsheet.modelType !== "service_composition" ||
+      !resolvedBaselineVersionRecord ||
+      !resolvedSelectedVersionRecord ||
+      resolvedBaselineVersionRecord.id === resolvedSelectedVersionRecord.id
+    ) {
+      return null;
+    }
+
+    try {
+      return compareServiceCompositionSpreadsheets({
+        previousSpreadsheet: resolvedBaselineVersionRecord,
+        currentSpreadsheet: resolvedSelectedVersionRecord,
+      });
+    } catch {
+      return null;
+    }
+  }, [resolvedBaselineVersionRecord, resolvedSelectedVersionRecord, spreadsheet]);
+
   const mandatoryCostTotal = useMemo(() => {
     if (!spreadsheet) return 0;
 
@@ -1801,8 +1823,7 @@ export default function SpreadsheetDetail() {
     setSaveState("success");
     setSaveMessage(`${getVersionLabel(item)} restaurada localmente para análise.`);
   }
-
-  if (state === "loading") {
+    if (state === "loading") {
     return (
       <Box
         sx={{
@@ -2078,7 +2099,8 @@ export default function SpreadsheetDetail() {
                     value={selectedVersionItem ? getVersionLabel(selectedVersionItem) : "—"}
                   />
                 </Box>
-                              <Box
+
+                <Box
                   sx={{
                     display: "grid",
                     gridTemplateColumns: {
@@ -2374,6 +2396,30 @@ export default function SpreadsheetDetail() {
                     </CompactInfoCard>
                   </Stack>
                 </Box>
+
+                <SpreadsheetVersionComparisonPanel
+                  title="Comparação executiva entre baseline e versão selecionada"
+                  versionA={
+                    baselineVersionItem
+                      ? {
+                          label: getVersionLabel(baselineVersionItem),
+                          origin: baselineVersionItem.origin,
+                          createdAt: baselineVersionItem.createdAt,
+                        }
+                      : null
+                  }
+                  versionB={
+                    selectedVersionItem
+                      ? {
+                          label: getVersionLabel(selectedVersionItem),
+                          origin: selectedVersionItem.origin,
+                          createdAt: selectedVersionItem.createdAt,
+                        }
+                      : null
+                  }
+                  comparison={baselineToSelectedComparison}
+                  emptyMessage="Selecione uma baseline e uma versão comparável para ativar a leitura executiva A × B."
+                />
               </Stack>
             </CardContent>
           </Card>
@@ -2406,981 +2452,198 @@ export default function SpreadsheetDetail() {
               spreadsheet.modelType === "service_composition" ? (
                 <ServiceCompositionComparisonPanel
                   comparison={serviceCompositionComparisonContext.comparison}
-                  title="Comparação entre versões da composição"
+                  title="Comparação técnica: versão atual x versão anterior"
                 />
               ) : null}
 
               {selectedVersionComparison && spreadsheet.modelType === "service_composition" ? (
                 <ServiceCompositionComparisonPanel
                   comparison={selectedVersionComparison}
-                  title={`Comparação da versão atual com ${
+                  title={`Comparação técnica: versão atual x ${
                     selectedVersionItem
                       ? getVersionLabel(selectedVersionItem)
                       : "versão selecionada"
                   }`}
                 />
               ) : null}
+                            {editor.type === "service_composition" ? (
+                <ServiceCompositionEditor
+                  spreadsheetId={spreadsheet.id}
+                  rows={editor.rows}
+                  onChange={(rows) => {
+                    setEditor((prev) =>
+                      prev.type === "service_composition"
+                        ? { ...prev, rows }
+                        : prev
+                    );
+                  }}
+                />
+              ) : null}
 
-              <CompactInfoCard title="Leitura persistida de cálculo">
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Labor breakdown persistido:</strong>{" "}
-                  {laborCostBreakdown ? "Sim" : "Não"}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Configuração de encargos persistida:</strong>{" "}
-                  {laborChargesConfig ? "Sim" : "Não"}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Resumo da composição persistido:</strong>{" "}
-                  {serviceCompositionSummary ? "Sim" : "Não"}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Memória técnica da composição:</strong>{" "}
-                  {serviceCompositionMemoryBundle.length > 0 ? "Sim" : "Não"}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Snapshot do motor:</strong>{" "}
-                  {serviceCompositionEngineSnapshot ? "Sim" : "Não"}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Base comparativa anterior:</strong>{" "}
-                  {serviceCompositionComparisonContext ? "Sim" : "Não"}
-                </Typography>
-              </CompactInfoCard>
-
-              <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
-                <CardContent>
-                  <Stack spacing={2} sx={{ minWidth: 0 }}>
-                    <Stack direction="row" spacing={1.25} alignItems="center">
-                      <PlaylistAddCheckCircleOutlinedIcon sx={{ color: "#5E35B1" }} />
-                      <Typography variant="h6" fontWeight={700}>
-                        Dados iniciais da contratação
-                      </Typography>
-                    </Stack>
-
-                    <Box
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" },
-                        gap: 2,
-                        minWidth: 0,
-                      }}
-                    >
-                      <TextField
-                        label="Órgão ou entidade"
-                        value={editor.contractingAgency}
-                        onChange={(event) =>
-                          updateEditorField("contractingAgency", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Referência contratual / processo"
-                        value={editor.contractReference}
-                        onChange={(event) =>
-                          updateEditorField("contractReference", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Unidade principal"
-                        value={editor.unitName}
-                        onChange={(event) =>
-                          updateEditorField("unitName", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Lote / grupo"
-                        value={editor.lotName}
-                        onChange={(event) =>
-                          updateEditorField("lotName", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Data-base"
-                        type="date"
-                        value={editor.referenceDate}
-                        onChange={(event) =>
-                          updateEditorField("referenceDate", event.target.value)
-                        }
-                        InputLabelProps={{ shrink: true }}
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Exemplo setorial"
-                        value={editor.domainScenario}
-                        onChange={(event) =>
-                          updateEditorField("domainScenario", event.target.value)
-                        }
-                        select
-                        fullWidth
-                      >
-                        <MenuItem value="">Não definido</MenuItem>
-                        <MenuItem value="reception_administrative_support">
-                          Recepção e apoio administrativo
-                        </MenuItem>
-                        <MenuItem value="cleaning_conservation">
-                          Limpeza e conservação
-                        </MenuItem>
-                        <MenuItem value="concierge_access_control">
-                          Portaria e controle de acesso
-                        </MenuItem>
-                        <MenuItem value="property_security">
-                          Vigilância patrimonial
-                        </MenuItem>
-                      </TextField>
-
-                      <TextField
-                        label="Município"
-                        value={editor.municipality}
-                        onChange={(event) =>
-                          updateEditorField("municipality", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="UF"
-                        value={editor.state}
-                        onChange={(event) => updateEditorField("state", event.target.value)}
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Código CBO"
-                        value={editor.cboCode}
-                        onChange={(event) =>
-                          updateEditorField("cboCode", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Categoria profissional"
-                        value={editor.professionalCategory}
-                        onChange={(event) =>
-                          updateEditorField("professionalCategory", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="CCT / ACT / Dissídio paradigma"
-                        value={editor.cctReference}
-                        onChange={(event) =>
-                          updateEditorField("cctReference", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Regime tributário"
-                        value={editor.taxRegime}
-                        onChange={(event) =>
-                          updateEditorField("taxRegime", event.target.value)
-                        }
-                        select
-                        fullWidth
-                      >
-                        <MenuItem value="lucro_presumido">Lucro presumido</MenuItem>
-                        <MenuItem value="lucro_real">Lucro real</MenuItem>
-                        <MenuItem value="simples_nacional">Simples nacional</MenuItem>
-                        <MenuItem value="nao_informado">Não informado</MenuItem>
-                      </TextField>
-                    </Box>
-
-                    <TextField
-                      label="Descrição resumida do objeto"
-                      value={editor.objectDescription}
-                      onChange={(event) =>
-                        updateEditorField("objectDescription", event.target.value)
-                      }
-                      multiline
-                      minRows={3}
-                      fullWidth
-                    />
-                  </Stack>
-                </CardContent>
-              </Card>
-
-              <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
-                <CardContent>
-                  <Stack spacing={2} sx={{ minWidth: 0 }}>
-                    <Stack direction="row" spacing={1.25} alignItems="center">
-                      <ManageSearchOutlinedIcon sx={{ color: "#1565C0" }} />
-                      <Typography variant="h6" fontWeight={700}>
-                        Postos e jornadas
-                      </Typography>
-                    </Stack>
-
-                    <Box
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" },
-                        gap: 2,
-                        minWidth: 0,
-                      }}
-                    >
-                      <TextField
-                        label="Quantidade total estimada"
-                        value={editor.headcount}
-                        onChange={(event) =>
-                          updateEditorField("headcount", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Valor mensal de referência"
-                        value={editor.monthlyBaseValue}
-                        onChange={(event) =>
-                          updateEditorField("monthlyBaseValue", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Turno / arranjo predominante"
-                        value={editor.mainShift}
-                        onChange={(event) =>
-                          updateEditorField("mainShift", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Escala"
-                        value={editor.workScale}
-                        onChange={(event) =>
-                          updateEditorField("workScale", event.target.value)
-                        }
-                        placeholder="Ex.: 12x36, comercial, 44h"
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Jornada semanal"
-                        value={editor.weeklyHours}
-                        onChange={(event) =>
-                          updateEditorField("weeklyHours", event.target.value)
-                        }
-                        placeholder="Ex.: 44"
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Horas mensais"
-                        value={editor.monthlyHours}
-                        onChange={(event) =>
-                          updateEditorField("monthlyHours", event.target.value)
-                        }
-                        placeholder="Ex.: 220"
-                        fullWidth
-                      />
-                    </Box>
-
-                    <Box sx={{ overflowX: "auto", borderRadius: 3, border: "1px solid #ECE7F1" }}>
-                      <Table size="small" sx={{ minWidth: 680 }}>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>
-                              <strong>Posto / função</strong>
-                            </TableCell>
-                            <TableCell>
-                              <strong>Categoria</strong>
-                            </TableCell>
-                            <TableCell align="right">
-                              <strong>Quantidade</strong>
-                            </TableCell>
-                            <TableCell align="right">
-                              <strong>Valor unitário</strong>
-                            </TableCell>
-                            <TableCell align="right">
-                              <strong>Subtotal</strong>
-                            </TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {laborRows.map((row, index) => (
-                            <TableRow key={`${String(row.item)}-${index}`}>
-                              <TableCell sx={{ minWidth: 200 }}>
-                                {String(row.item || "")}
-                              </TableCell>
-                              <TableCell>{String(row.categoria || "")}</TableCell>
-                              <TableCell align="right">{Number(row.quantidade || 0)}</TableCell>
-                              <TableCell align="right">
-                                {formatCurrency(Number(row.valorUnitario || 0))}
-                              </TableCell>
-                              <TableCell align="right">
-                                {formatCurrency(Number(row.subtotal || 0))}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-
-                          {laborRows.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={5}>
-                                <Typography variant="body2" color="text.secondary">
-                                  Nenhum posto de trabalho foi identificado automaticamente
-                                  na estrutura atual desta planilha.
-                                </Typography>
-                              </TableCell>
-                            </TableRow>
-                          ) : null}
-                        </TableBody>
-                      </Table>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
-
-              <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
-                <CardContent>
-                  <Stack spacing={2} sx={{ minWidth: 0 }}>
-                    <Stack direction="row" spacing={1.25} alignItems="center">
-                      <AttachMoneyOutlinedIcon sx={{ color: "#2E7D32" }} />
-                      <Typography variant="h6" fontWeight={700}>
-                        Custos mínimos relevantes
-                      </Typography>
-                    </Stack>
-
-                    <Box
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" },
-                        gap: 2,
-                        minWidth: 0,
-                      }}
-                    >
-                      <TextField
-                        label="Salário-base"
-                        value={editor.salaryBase}
-                        onChange={(event) =>
-                          updateEditorField("salaryBase", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Adicional noturno"
-                        value={editor.nightAdditional}
-                        onChange={(event) =>
-                          updateEditorField("nightAdditional", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Adicional de insalubridade/periculosidade"
-                        value={editor.hazardAdditional}
-                        onChange={(event) =>
-                          updateEditorField("hazardAdditional", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Auxílio-alimentação"
-                        value={editor.mealAllowance}
-                        onChange={(event) =>
-                          updateEditorField("mealAllowance", event.target.value)
-                        }
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Vale-transporte"
-                        value={editor.transportAllowance}
-                        onChange={(event) =>
-                          updateEditorField("transportAllowance", event.target.value)
-                        }
-                        fullWidth
-                      />
-                    </Box>
-
-                    <TextField
-                      label="Observações sobre benefícios obrigatórios"
-                      value={editor.mandatoryBenefitsNotes}
-                      onChange={(event) =>
-                        updateEditorField("mandatoryBenefitsNotes", event.target.value)
-                      }
-                      multiline
-                      minRows={3}
-                      fullWidth
-                    />
-                  </Stack>
-                </CardContent>
-              </Card>
-                            <SpreadsheetEditor
-                spreadsheet={spreadsheet}
-                onSpreadsheetUpdated={(updated) => {
-                  const next = updated as SpreadsheetDetailRecord;
-                  setSpreadsheet(next);
-                  setEditor(buildInitialEditorState(next));
-                  setDataSource("local");
-                }}
-              />
-
-              <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
-                <CardContent>
-                  <Stack spacing={2} sx={{ minWidth: 0 }}>
-                    <Stack direction="row" spacing={1.25} alignItems="center">
-                      <ViewAgendaOutlinedIcon sx={{ color: "#7B1FA2" }} />
-                      <Typography variant="h6" fontWeight={700}>
-                        Estrutura modular preliminar da PCFP
-                      </Typography>
-                    </Stack>
-
-                    <Box
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: {
-                          xs: "1fr",
-                          sm: "repeat(2, minmax(0, 1fr))",
-                          xl: "repeat(3, minmax(0, 1fr))",
-                        },
-                        gap: 2,
-                        minWidth: 0,
-                      }}
-                    >
-                      {pcfpModules.map((module) => (
-                        <ModuleSummaryCard key={module.key} module={module} />
-                      ))}
-                    </Box>
-
-                    <Stack spacing={2} sx={{ minWidth: 0 }}>
-                      {pcfpModules
-                        .filter((module) => module.key !== "module_6")
-                        .map((module) => (
-                          <ModuleDetailCard key={module.key} module={module} />
-                        ))}
-
-                      <Card
-                        variant="outlined"
-                        sx={{
-                          borderRadius: 4,
-                          borderColor: "rgba(123, 31, 162, 0.16)",
-                          backgroundColor: "#F8ECFB",
-                          minWidth: 0,
-                        }}
-                      >
-                        <CardContent>
-                          <Stack spacing={1.5} sx={{ minWidth: 0 }}>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <SummarizeOutlinedIcon sx={{ fontSize: 18 }} />
-                              <Typography variant="h6" fontWeight={800}>
-                                Módulo 6 — Síntese preliminar
-                              </Typography>
-                            </Stack>
-
-                            <Box
-                              sx={{
-                                display: "grid",
-                                gridTemplateColumns: {
-                                  xs: "1fr",
-                                  md: "repeat(3, minmax(0, 1fr))",
-                                },
-                                gap: 2,
-                                minWidth: 0,
-                              }}
-                            >
-                              <ExecutiveMetricCard
-                                label="Total dos módulos 1 a 5"
-                                value={formatCurrency(
-                                  pcfpModules
-                                    .filter((module) => module.key !== "module_6")
-                                    .reduce((sum, module) => sum + module.total, 0)
-                                )}
-                              />
-                              <ExecutiveMetricCard
-                                label="Base mensal declarada"
-                                value={formatCurrency(effectiveMonthlyReference)}
-                              />
-                              <ExecutiveMetricCard
-                                label="Saldo preliminar"
-                                value={formatCurrency(executabilityBalance)}
-                              />
-                            </Box>
-                          </Stack>
-                        </CardContent>
-                      </Card>
-                    </Stack>
-                  </Stack>
-                </CardContent>
-              </Card>
-
-              <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
-                <CardContent sx={{ p: 0 }}>
-                  <Box sx={{ px: 2.25, py: 2 }}>
-                    <Typography variant="h6" fontWeight={700}>
-                      Estrutura inicial da planilha
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-                      Itens-base identificados nesta versão da planilha.
-                    </Typography>
-                  </Box>
-
-                  <Divider />
-
-                  <Box sx={{ overflowX: "auto", width: "100%" }}>
-                    <Table sx={{ minWidth: 820 }}>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>
-                            <strong>Item</strong>
-                          </TableCell>
-                          <TableCell>
-                            <strong>Categoria</strong>
-                          </TableCell>
-                          <TableCell align="right">
-                            <strong>Quantidade</strong>
-                          </TableCell>
-                          <TableCell align="right">
-                            <strong>Valor unitário</strong>
-                          </TableCell>
-                          <TableCell align="right">
-                            <strong>Subtotal</strong>
-                          </TableCell>
-                          <TableCell>
-                            <strong>Status</strong>
-                          </TableCell>
-                        </TableRow>
-                      </TableHead>
-
-                      <TableBody>
-                        {spreadsheet.rows.map((row, index) => (
-                          <TableRow key={`${String(row.item)}-${index}`}>
-                            <TableCell sx={{ minWidth: 240 }}>
-                              <Stack spacing={0.4}>
-                                <Typography variant="body2">{String(row.item || "")}</Typography>
-                                {row.memoriaCalculo ? (
-                                  <Typography variant="caption" color="text.secondary">
-                                    {String(row.memoriaCalculo)}
-                                  </Typography>
-                                ) : null}
-                              </Stack>
-                            </TableCell>
-                            <TableCell>{String(row.categoria || "")}</TableCell>
-                            <TableCell align="right">{Number(row.quantidade || 0)}</TableCell>
-                            <TableCell align="right">
-                              {formatCurrency(Number(row.valorUnitario || 0))}
-                            </TableCell>
-                            <TableCell align="right">
-                              {formatCurrency(Number(row.subtotal || 0))}
-                            </TableCell>
-                            <TableCell>
-                              <Chip
-                                size="small"
-                                label={String(row.status || "")}
-                                sx={{
-                                  backgroundColor:
-                                    String(row.status || "") === "Pendente"
-                                      ? "#FFF3E0"
-                                      : String(row.status || "") === "Exemplo do domínio"
-                                      ? "#E3F2FD"
-                                      : "#E7F6EC",
-                                  color:
-                                    String(row.status || "") === "Pendente"
-                                      ? "#EF6C00"
-                                      : String(row.status || "") === "Exemplo do domínio"
-                                      ? "#1565C0"
-                                      : "#2E7D32",
-                                  fontWeight: 700,
-                                }}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-
-                        {spreadsheet.rows.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={6}>
-                              <Typography variant="body2" color="text.secondary">
-                                Nenhum item encontrado nesta planilha.
-                              </Typography>
-                            </TableCell>
-                          </TableRow>
-                        ) : null}
-                      </TableBody>
-                    </Table>
-                  </Box>
-                </CardContent>
-              </Card>
+              {editor.type === "dedicated_labor" ? (
+                <DedicatedLaborEditor
+                  spreadsheetId={spreadsheet.id}
+                  rows={editor.rows}
+                  onChange={(rows) => {
+                    setEditor((prev) =>
+                      prev.type === "dedicated_labor"
+                        ? { ...prev, rows }
+                        : prev
+                    );
+                  }}
+                />
+              ) : null}
             </Stack>
 
-            <Stack
-              spacing={2}
-              sx={{
-                minWidth: 0,
-                position: { xl: "sticky" },
-                top: { xl: 20 },
-              }}
-            >
-              <CompactInfoCard title="Resumo executivo">
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Tipo do modelo:</strong>{" "}
-                  {getModelLabel(spreadsheet.modelType)}
-                </Typography>
+            <Stack spacing={2}>
+              {spreadsheet.trainingProfile ? (
+                <Card variant="outlined" sx={{ borderRadius: 4 }}>
+                  <CardContent>
+                    <Stack spacing={2}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <InsightsOutlinedIcon sx={{ color: "#1565C0" }} />
+                        <Typography variant="h6" fontWeight={700}>
+                          Perfil técnico da planilha
+                        </Typography>
+                      </Stack>
 
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Status:</strong> {spreadsheet.status}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Categoria:</strong> {spreadsheet.category}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Domínio:</strong>{" "}
-                  {DOMAIN_SCENARIO_LABELS[editor.domainScenario] || domainScenarioLabel}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Quantidade estimada:</strong> {effectiveHeadcount}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Referência mensal:</strong>{" "}
-                  {formatCurrency(effectiveMonthlyReference)}
-                </Typography>
-
-                <Stack direction="row" spacing={0.75} alignItems="center">
-                  <AccessTimeIcon sx={{ fontSize: 16, color: "#7A708D" }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Atualizado em {spreadsheet.updatedAt}
-                  </Typography>
-                </Stack>
-              </CompactInfoCard>
-
-              <CompactInfoCard title="Resumo de versionamento">
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <HistoryOutlinedIcon sx={{ fontSize: 18 }} />
-                  <Typography variant="body2" fontWeight={700}>
-                    Fluxo visível de histórico
-                  </Typography>
-                </Stack>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Versões identificadas:</strong> {versionHistory.length}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Baseline ativa:</strong>{" "}
-                  {baselineVersionItem ? getVersionLabel(baselineVersionItem) : "Não definida"}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Versão em foco:</strong>{" "}
-                  {selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Não definida"}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Restauração local:</strong>{" "}
-                  {selectedVersionItem && (selectedVersionItem.rows || selectedVersionItem.spreadsheetId)
-                    ? "Disponível"
-                    : "Dependente de dados adicionais"}
-                </Typography>
-              </CompactInfoCard>
-
-              <CompactInfoCard title="Quadro preliminar de exequibilidade">
-                <Box
-                  sx={{
-                    p: 2,
-                    borderRadius: 3,
-                    bgcolor: exequibilityRisk.backgroundColor,
-                  }}
-                >
-                  <Typography
-                    variant="body2"
-                    sx={{ color: exequibilityRisk.color, fontWeight: 800 }}
-                  >
-                    {exequibilityRisk.label}
-                  </Typography>
-                </Box>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Custos obrigatórios estimados:</strong>{" "}
-                  {formatCurrency(mandatoryCostTotal)}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Custos comprobatórios / materiais:</strong>{" "}
-                  {formatCurrency(evidentiaryCostTotal)}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Saldo preliminar de exequibilidade:</strong>{" "}
-                  {formatCurrency(executabilityBalance)}
-                </Typography>
-              </CompactInfoCard>
-
-              {laborCostBreakdown || laborChargesConfig ? (
-                <CompactInfoCard title="Bloco laboral persistido">
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Headcount:</strong>{" "}
-                    {Number(laborCostBreakdown?.headcount || 0)}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Total salarial:</strong>{" "}
-                    {formatCurrency(Number(laborCostBreakdown?.salaryBaseTotal || 0))}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Benefícios obrigatórios:</strong>{" "}
-                    {formatCurrency(
-                      Number(laborCostBreakdown?.mandatoryBenefitsTotal || 0)
-                    )}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Adicionais:</strong>{" "}
-                    {formatCurrency(Number(laborCostBreakdown?.additionalTotal || 0))}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Total laboral mensal:</strong>{" "}
-                    {formatCurrency(Number(laborCostBreakdown?.monthlyLaborTotal || 0))}
-                  </Typography>
-                </CompactInfoCard>
-              ) : null}
-
-              {(serviceCompositionEngineSnapshot || serviceCompositionMemoryBundle.length > 0) &&
-              spreadsheet.modelType === "service_composition" ? (
-                <CompactInfoCard title="Snapshot do motor de composição">
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <FunctionsOutlinedIcon sx={{ fontSize: 18 }} />
-                    <Typography variant="body2" fontWeight={700}>
-                      Rodada consolidada de cálculo
-                    </Typography>
-                  </Stack>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Itens:</strong>{" "}
-                    {serviceCompositionEngineSnapshot?.itemCount ??
-                      serviceCompositionMemoryBundle.length}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Total:</strong>{" "}
-                    {formatCurrency(
-                      Number(serviceCompositionEngineSnapshot?.total ?? 0)
-                    )}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Gerado em:</strong>{" "}
-                    {serviceCompositionEngineSnapshot?.generatedAt
-                      ? new Date(
-                          serviceCompositionEngineSnapshot.generatedAt
-                        ).toLocaleString("pt-BR")
-                      : "Não informado"}
-                  </Typography>
-                </CompactInfoCard>
-              ) : null}
-
-              {serviceCompositionComparisonContext &&
-              spreadsheet.modelType === "service_composition" ? (
-                <CompactInfoCard title="Comparativo resumido">
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <CompareArrowsOutlinedIcon sx={{ fontSize: 18 }} />
-                    <Typography variant="body2" fontWeight={700}>
-                      Versão atual x versão anterior
-                    </Typography>
-                  </Stack>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Incluídos:</strong>{" "}
-                    {serviceCompositionComparisonContext.comparison.summary.addedCount}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Removidos:</strong>{" "}
-                    {serviceCompositionComparisonContext.comparison.summary.removedCount}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Alterados:</strong>{" "}
-                    {serviceCompositionComparisonContext.comparison.summary.changedCount}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Impacto total:</strong>{" "}
-                    {formatCurrency(
-                      serviceCompositionComparisonContext.comparison.summary.totalDelta
-                    )}
-                  </Typography>
-                </CompactInfoCard>
-              ) : null}
-
-              {selectedVersionComparison && spreadsheet.modelType === "service_composition" ? (
-                <CompactInfoCard title="Comparativo com versão selecionada">
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Base:</strong>{" "}
-                    {selectedVersionItem ? getVersionLabel(selectedVersionItem) : "—"}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Incluídos:</strong>{" "}
-                    {selectedVersionComparison.summary.addedCount}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Removidos:</strong>{" "}
-                    {selectedVersionComparison.summary.removedCount}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Alterados:</strong>{" "}
-                    {selectedVersionComparison.summary.changedCount}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Impacto total:</strong>{" "}
-                    {formatCurrency(selectedVersionComparison.summary.totalDelta)}
-                  </Typography>
-                </CompactInfoCard>
-              ) : null}
-                            <CompactInfoCard title="Painel modular">
-                {pcfpModules.map((module) => (
-                  <Box
-                    key={module.key}
-                    sx={{
-                      p: 1.5,
-                      borderRadius: 3,
-                      border: `1px solid ${module.borderColor}`,
-                      backgroundColor: module.backgroundColor,
-                    }}
-                  >
-                    <Stack
-                      direction="row"
-                      justifyContent="space-between"
-                      alignItems="center"
-                      spacing={1}
-                    >
-                      <Typography variant="body2" fontWeight={700}>
-                        {module.shortTitle}
+                      <Typography variant="body2" color="text.secondary">
+                        Este bloco descreve o contexto técnico utilizado pelo
+                        motor de análise para interpretar esta planilha.
                       </Typography>
-                      <Typography variant="body2" fontWeight={800}>
-                        {formatCurrency(module.total)}
+
+                      <Divider />
+
+                      <Stack spacing={1}>
+                        <Typography variant="body2" fontWeight={700}>
+                          Documentos esperados
+                        </Typography>
+
+                        {expectedDocuments.length > 0 ? (
+                          expectedDocuments.map((doc) => (
+                            <Typography
+                              key={doc}
+                              variant="body2"
+                              color="text.secondary"
+                            >
+                              • {doc}
+                            </Typography>
+                          ))
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Nenhum documento definido.
+                          </Typography>
+                        )}
+                      </Stack>
+
+                      <Stack spacing={1}>
+                        <Typography variant="body2" fontWeight={700}>
+                          Vetores de custo esperados
+                        </Typography>
+
+                        {expectedCostDrivers.length > 0 ? (
+                          expectedCostDrivers.map((driver) => (
+                            <Typography
+                              key={driver}
+                              variant="body2"
+                              color="text.secondary"
+                            >
+                              • {driver}
+                            </Typography>
+                          ))
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Nenhum vetor de custo configurado.
+                          </Typography>
+                        )}
+                      </Stack>
+
+                      <Stack spacing={1}>
+                        <Typography variant="body2" fontWeight={700}>
+                          Pontos de validação
+                        </Typography>
+
+                        {validationFocus.length > 0 ? (
+                          validationFocus.map((focus) => (
+                            <Typography
+                              key={focus}
+                              variant="body2"
+                              color="text.secondary"
+                            >
+                              • {focus}
+                            </Typography>
+                          ))
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Nenhum foco de validação configurado.
+                          </Typography>
+                        )}
+                      </Stack>
+
+                      <Stack spacing={1}>
+                        <Typography variant="body2" fontWeight={700}>
+                          Sugestões de leitura
+                        </Typography>
+
+                        {readingHints.length > 0 ? (
+                          readingHints.map((hint) => (
+                            <Typography
+                              key={hint}
+                              variant="body2"
+                              color="text.secondary"
+                            >
+                              • {hint}
+                            </Typography>
+                          ))
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Nenhuma sugestão de leitura configurada.
+                          </Typography>
+                        )}
+                      </Stack>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+                <CardContent>
+                  <Stack spacing={1.5}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <AttachFileIcon sx={{ color: "#5E35B1" }} />
+                      <Typography variant="subtitle1" fontWeight={700}>
+                        Metadados técnicos
                       </Typography>
                     </Stack>
-                  </Box>
-                ))}
-              </CompactInfoCard>
 
-              <CompactInfoCard title="Leitura e análise do domínio">
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Cenário identificado:</strong> {domainScenarioLabel}
-                </Typography>
-
-                {expectedDocuments.length > 0 ? (
-                  <Box>
-                    <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
-                      Documentos esperados
+                    <Typography variant="body2" color="text.secondary">
+                      Categoria: {spreadsheet.category}
                     </Typography>
-                    <Stack spacing={0.6}>
-                      {expectedDocuments.map((item, index) => (
-                        <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
-                          • {item}
-                        </Typography>
-                      ))}
-                    </Stack>
-                  </Box>
-                ) : null}
 
-                {expectedCostDrivers.length > 0 ? (
-                  <Box>
-                    <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
-                      Vetores de custo esperados
+                    <Typography variant="body2" color="text.secondary">
+                      Modelo: {spreadsheet.modelType}
                     </Typography>
-                    <Stack spacing={0.6}>
-                      {expectedCostDrivers.map((item, index) => (
-                        <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
-                          • {item}
-                        </Typography>
-                      ))}
-                    </Stack>
-                  </Box>
-                ) : null}
 
-                {validationFocus.length > 0 ? (
-                  <Box>
-                    <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
-                      Focos de validação
+                    <Typography variant="body2" color="text.secondary">
+                      Status: {spreadsheet.status}
                     </Typography>
-                    <Stack spacing={0.6}>
-                      {validationFocus.map((item, index) => (
-                        <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
-                          • {item}
-                        </Typography>
-                      ))}
-                    </Stack>
-                  </Box>
-                ) : null}
 
-                {readingHints.length > 0 ? (
-                  <Box>
-                    <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
-                      Pistas de leitura
+                    <Typography variant="body2" color="text.secondary">
+                      Atualizado em: {spreadsheet.updatedAt}
                     </Typography>
-                    <Stack spacing={0.6}>
-                      {readingHints.map((item, index) => (
-                        <Typography key={`${item}-${index}`} variant="body2" color="text.secondary">
-                          • {item}
-                        </Typography>
-                      ))}
-                    </Stack>
-                  </Box>
-                ) : null}
-              </CompactInfoCard>
 
-              <CompactInfoCard title="Observações internas">
-                <TextField
-                  label="Anotações preparatórias"
-                  value={editor.notes}
-                  onChange={(event) => updateEditorField("notes", event.target.value)}
-                  multiline
-                  minRows={4}
-                  fullWidth
-                />
-
-                <Typography variant="caption" color="text.secondary">
-                  Este campo já prepara a futura integração com histórico analítico,
-                  decisão interna, parecer consolidado e trilha de auditoria.
-                </Typography>
-              </CompactInfoCard>
+                    {spreadsheet.contractId ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Contratação vinculada: {spreadsheet.contractId}
+                      </Typography>
+                    ) : null}
+                  </Stack>
+                </CardContent>
+              </Card>
             </Stack>
           </Box>
         </Stack>
       </Container>
-
-      <Snackbar
-        open={saveState === "success" || saveState === "error"}
-        autoHideDuration={3500}
-        onClose={() => setSaveState("idle")}
-      >
-        <Alert
-          onClose={() => setSaveState("idle")}
-          severity={saveState === "success" ? "success" : "error"}
-          variant="filled"
-          sx={{ width: "100%" }}
-        >
-          {saveMessage}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 }
