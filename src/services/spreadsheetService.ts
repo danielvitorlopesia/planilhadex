@@ -57,14 +57,16 @@ export type SpreadsheetVersionHistoryEntry = {
   reason: string;
   origin: string;
   spreadsheetId: string;
+  previousSpreadsheetId?: string;
   rows: SpreadsheetRow[];
-  isBaseline?: boolean;
+  monthlyBaseValue?: number;
+  headcount?: number;
   notes?: string;
+  editorModule?: string;
+  lastEditedSection?: string;
 };
 
-export type CreateSpreadsheetSnapshotInput = {
-  spreadsheetId: string;
-  rows?: SpreadsheetRow[];
+export type SpreadsheetSnapshotOptions = {
   reason: string;
   origin:
     | "auto_snapshot"
@@ -72,16 +74,22 @@ export type CreateSpreadsheetSnapshotInput = {
     | "pre_update"
     | "restore"
     | "baseline"
-    | "api"
     | "local"
-    | string;
+    | "api";
   label?: string;
   notes?: string;
-  isBaseline?: boolean;
+  editorModule?: string;
+  lastEditedSection?: string;
+};
+
+export type UpdateSpreadsheetOptions = {
+  createSnapshot?: boolean;
+  snapshot?: SpreadsheetSnapshotOptions;
 };
 
 export const STORAGE_KEY = "custopublico_spreadsheets";
 const SEEDED_FLAG_KEY = "custopublico_spreadsheets_seeded_v2";
+const MAX_VERSION_HISTORY = 30;
 
 function hasBrowserStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -125,6 +133,10 @@ function buildId(prefix = "sheet") {
   return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`;
 }
 
+function isoNow() {
+  return new Date().toISOString();
+}
+
 function isoToday() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -159,6 +171,46 @@ function cloneRows(rows: SpreadsheetRow[]): SpreadsheetRow[] {
     trainingTags: [...(row.trainingTags ?? [])],
     metadata: isRecord(row.metadata) ? { ...row.metadata } : undefined,
   }));
+}
+
+function cloneVersionHistory(
+  history: SpreadsheetVersionHistoryEntry[] | undefined
+): SpreadsheetVersionHistoryEntry[] {
+  if (!Array.isArray(history)) {
+    return [];
+  }
+
+  return history.map((entry) => ({
+    ...entry,
+    rows: cloneRows(entry.rows ?? []),
+  }));
+}
+
+function readVersionHistory(spreadsheet: SpreadsheetRecord): SpreadsheetVersionHistoryEntry[] {
+  const raw = spreadsheet.metadata?.versionHistory;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return cloneVersionHistory(raw as SpreadsheetVersionHistoryEntry[]);
+}
+
+function getCurrentVersionNumber(spreadsheet: SpreadsheetRecord): number {
+  const explicit = spreadsheet.metadata?.versionNumber;
+  if (typeof explicit === "number" && Number.isFinite(explicit)) {
+    return explicit;
+  }
+
+  const history = readVersionHistory(spreadsheet);
+  const maxFromHistory = history.reduce((max, item) => {
+    const value =
+      typeof item.versionNumber === "number" && Number.isFinite(item.versionNumber)
+        ? item.versionNumber
+        : 0;
+    return Math.max(max, value);
+  }, 0);
+
+  return maxFromHistory > 0 ? maxFromHistory + 1 : 1;
 }
 
 function buildTrainingProfile(domainScenarioKey: DomainScenarioKey): SpreadsheetTrainingProfile {
@@ -232,13 +284,13 @@ function buildRowsForDraft(draft: SpreadsheetCreationDraft): SpreadsheetRow[] {
         row.categoria === "Insumos";
 
       const quantity = isScaledByHeadcount
-        ? Math.max(1, Math.round(row.quantidade * factor))
-        : row.quantidade;
+        ? Math.max(1, Math.round(Number(row.quantidade || 0) * factor))
+        : Number(row.quantidade || 0);
 
       return {
         ...row,
         quantidade: quantity,
-        subtotal: Number((quantity * row.valorUnitario).toFixed(2)),
+        subtotal: Number((quantity * Number(row.valorUnitario || 0)).toFixed(2)),
       };
     })
   );
@@ -252,54 +304,6 @@ function withUpdatedTimestamp(spreadsheet: SpreadsheetRecord): SpreadsheetRecord
       ...(spreadsheet.metadata ?? {}),
       sortTimestamp: buildSortTimestamp(),
     },
-  };
-}
-
-function readVersionHistoryFromMetadata(
-  metadata: Record<string, unknown> | undefined
-): SpreadsheetVersionHistoryEntry[] {
-  if (!metadata) {
-    return [];
-  }
-
-  const raw = metadata.versionHistory;
-  return Array.isArray(raw) ? (raw as SpreadsheetVersionHistoryEntry[]) : [];
-}
-
-function readCurrentVersionNumberFromMetadata(
-  metadata: Record<string, unknown> | undefined
-): number {
-  if (!metadata) {
-    return 1;
-  }
-
-  const raw = metadata.versionNumber;
-
-  if (typeof raw === "number" && Number.isFinite(raw)) {
-    return raw;
-  }
-
-  if (typeof raw === "string" && raw.trim()) {
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-
-  return 1;
-}
-
-function buildVersionLabel(versionNumber: number) {
-  return `Versão ${versionNumber}`;
-}
-
-function mergeMetadata(
-  current: Record<string, unknown> | undefined,
-  patch: Record<string, unknown> | undefined
-) {
-  return {
-    ...(current ?? {}),
-    ...(patch ?? {}),
   };
 }
 
@@ -325,7 +329,7 @@ function buildSeedExample(domainScenarioKey: DomainScenarioKey): SpreadsheetReco
     lotName: "Lote de referência",
     referenceDate: isoToday(),
     headcount: Number(scenario.defaultDraftValues.headcount || 1),
-    monthlyBaseValue: rows.reduce((sum, row) => sum + row.subtotal, 0),
+    monthlyBaseValue: rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0),
     notes:
       "Exemplo inicial do domínio para uso em demonstração, criação de novas planilhas, leitura comparativa e evolução da lógica analítica do sistema.",
     trainingProfile: buildTrainingProfile(domainScenarioKey),
@@ -378,11 +382,11 @@ function buildInitialEditorDraftFromCreation(
     headcount:
       draft.headcount !== undefined
         ? draft.headcount
-        : rows.reduce((sum, row) => sum + row.quantidade, 0),
+        : rows.reduce((sum, row) => sum + Number(row.quantidade || 0), 0),
     monthlyBaseValue:
       draft.monthlyBaseValue !== undefined
         ? draft.monthlyBaseValue
-        : rows.reduce((sum, row) => sum + row.subtotal, 0),
+        : rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0),
     mainShift: String(draft.mainShift || ""),
     workScale: String(draft.workScale || ""),
     weeklyHours: String(draft.weeklyHours || ""),
@@ -406,6 +410,126 @@ function buildInitialEditorDraftFromCreation(
   };
 }
 
+function buildSnapshotEntry(
+  spreadsheet: SpreadsheetRecord,
+  options: SpreadsheetSnapshotOptions
+): SpreadsheetVersionHistoryEntry {
+  const currentVersionNumber = getCurrentVersionNumber(spreadsheet);
+
+  return {
+    id: buildId("version"),
+    versionNumber: currentVersionNumber,
+    label:
+      options.label ||
+      `Versão ${currentVersionNumber}`,
+    createdAt: isoNow(),
+    reason: options.reason,
+    origin: options.origin,
+    spreadsheetId: spreadsheet.id,
+    previousSpreadsheetId: safeString(spreadsheet.metadata?.previousSpreadsheetId) || undefined,
+    rows: cloneRows(spreadsheet.rows),
+    monthlyBaseValue:
+      typeof spreadsheet.monthlyBaseValue === "number"
+        ? spreadsheet.monthlyBaseValue
+        : undefined,
+    headcount:
+      typeof spreadsheet.headcount === "number"
+        ? spreadsheet.headcount
+        : undefined,
+    notes: options.notes,
+    editorModule: options.editorModule,
+    lastEditedSection: options.lastEditedSection,
+  };
+}
+
+function appendSnapshotToSpreadsheet(
+  spreadsheet: SpreadsheetRecord,
+  options: SpreadsheetSnapshotOptions
+): SpreadsheetRecord {
+  const existingHistory = readVersionHistory(spreadsheet);
+  const snapshot = buildSnapshotEntry(spreadsheet, options);
+  const nextHistory = [snapshot, ...existingHistory].slice(0, MAX_VERSION_HISTORY);
+
+  return {
+    ...spreadsheet,
+    metadata: {
+      ...(spreadsheet.metadata ?? {}),
+      versionNumber: snapshot.versionNumber + 1,
+      previousSpreadsheetId: spreadsheet.id,
+      previousVersionRows: cloneRows(spreadsheet.rows),
+      versionHistory: nextHistory,
+      lastSnapshotAt: snapshot.createdAt,
+      lastSnapshotReason: options.reason,
+      lastSnapshotOrigin: options.origin,
+      baselineVersionId:
+        spreadsheet.metadata?.baselineVersionId ?? snapshot.id,
+    },
+  };
+}
+
+export function createSpreadsheetSnapshot(
+  id: string,
+  options: SpreadsheetSnapshotOptions
+): SpreadsheetRecord | null {
+  const current = getSpreadsheetById(id);
+
+  if (!current) {
+    return null;
+  }
+
+  const withSnapshot = appendSnapshotToSpreadsheet(current, options);
+  return saveSpreadsheet(withSnapshot);
+}
+
+export function restoreSpreadsheetVersion(
+  spreadsheetId: string,
+  versionId: string
+): SpreadsheetRecord | null {
+  const current = getSpreadsheetById(spreadsheetId);
+
+  if (!current) {
+    return null;
+  }
+
+  const history = readVersionHistory(current);
+  const target = history.find((item) => item.id === versionId);
+
+  if (!target) {
+    return null;
+  }
+
+  const currentWithRestoreSnapshot = appendSnapshotToSpreadsheet(current, {
+    reason: `Snapshot automático antes da restauração da ${target.label}`,
+    origin: "restore",
+    label: `Pré-restauração de ${target.label}`,
+    notes: "Snapshot gerado automaticamente antes da restauração local.",
+  });
+
+  const restored: SpreadsheetRecord = {
+    ...currentWithRestoreSnapshot,
+    rows: cloneRows(target.rows),
+    monthlyBaseValue:
+      typeof target.monthlyBaseValue === "number"
+        ? target.monthlyBaseValue
+        : currentWithRestoreSnapshot.monthlyBaseValue,
+    headcount:
+      typeof target.headcount === "number"
+        ? target.headcount
+        : currentWithRestoreSnapshot.headcount,
+    updatedAt: humanDateTime(),
+    metadata: {
+      ...(currentWithRestoreSnapshot.metadata ?? {}),
+      restoredFromVersionId: target.id,
+      restoredFromVersionNumber: target.versionNumber,
+      restoredAt: isoNow(),
+      sortTimestamp: buildSortTimestamp(),
+      localDraftOverride: true,
+    },
+  };
+
+  return saveSpreadsheet(restored);
+}
+
 export function ensureSeedExamples(): SpreadsheetRecord[] {
   const existing = safeReadStorage();
 
@@ -413,8 +537,7 @@ export function ensureSeedExamples(): SpreadsheetRecord[] {
     return existing;
   }
 
-  const alreadySeeded =
-    window.localStorage.getItem(SEEDED_FLAG_KEY) === "true";
+  const alreadySeeded = window.localStorage.getItem(SEEDED_FLAG_KEY) === "true";
   const existingIds = new Set(existing.map((sheet) => sheet.id));
 
   const missingSeeds = (Object.keys(DOMAIN_SCENARIOS) as DomainScenarioKey[])
@@ -465,9 +588,7 @@ export function getSpreadsheetById(id: string): SpreadsheetRecord | undefined {
 export function saveSpreadsheet(
   spreadsheet: SpreadsheetRecord
 ): SpreadsheetRecord {
-  const current = getStoredSpreadsheets().filter(
-    (item) => item.id !== spreadsheet.id
-  );
+  const current = getStoredSpreadsheets().filter((item) => item.id !== spreadsheet.id);
   const persisted = withUpdatedTimestamp(spreadsheet);
   const next = [persisted, ...current];
   safeWriteStorage(next);
@@ -492,7 +613,7 @@ export function createSpreadsheetFromModel(
   const rows = buildRowsForDraft(mergedDraft);
   const monthlyBaseValue =
     parseNumericInput(mergedDraft.monthlyBaseValue) ||
-    rows.reduce((sum, row) => sum + row.subtotal, 0);
+    rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
 
   const spreadsheet: SpreadsheetRecord = {
     id: buildId("sheet"),
@@ -535,141 +656,10 @@ export function createSpreadsheetFromModel(
   return saveSpreadsheet(spreadsheet);
 }
 
-export function getSpreadsheetVersionHistory(
-  spreadsheetId: string
-): SpreadsheetVersionHistoryEntry[] {
-  const current = getSpreadsheetById(spreadsheetId);
-
-  if (!current) {
-    return [];
-  }
-
-  return readVersionHistoryFromMetadata(current.metadata);
-}
-
-export function getSpreadsheetCurrentVersionNumber(spreadsheetId: string): number {
-  const current = getSpreadsheetById(spreadsheetId);
-
-  if (!current) {
-    return 1;
-  }
-
-  return readCurrentVersionNumberFromMetadata(current.metadata);
-}
-
-export function createSpreadsheetSnapshot(
-  input: CreateSpreadsheetSnapshotInput
-): SpreadsheetRecord | null {
-  const current = getSpreadsheetById(input.spreadsheetId);
-
-  if (!current) {
-    return null;
-  }
-
-  const currentMetadata = mergeMetadata(current.metadata, undefined);
-  const currentVersionNumber = readCurrentVersionNumberFromMetadata(currentMetadata);
-  const versionHistory = readVersionHistoryFromMetadata(currentMetadata);
-  const snapshotRows = cloneRows(input.rows ?? current.rows);
-  const nowIso = new Date().toISOString();
-
-  const entry: SpreadsheetVersionHistoryEntry = {
-    id: buildId("snapshot"),
-    versionNumber: currentVersionNumber,
-    label: input.label || buildVersionLabel(currentVersionNumber),
-    createdAt: nowIso,
-    reason: input.reason,
-    origin: input.origin,
-    spreadsheetId: current.id,
-    rows: snapshotRows,
-    isBaseline: input.isBaseline ?? versionHistory.length === 0,
-    notes: input.notes,
-  };
-
-  const nextMetadata: Record<string, unknown> = {
-    ...currentMetadata,
-    previousSpreadsheetId: current.id,
-    previousVersionRows: snapshotRows,
-    lastSnapshotAt: nowIso,
-    lastSnapshotReason: input.reason,
-    lastSnapshotOrigin: input.origin,
-    versionHistory: [...versionHistory, entry],
-  };
-
-  return updateSpreadsheet(current.id, {
-    metadata: nextMetadata,
-  });
-}
-
-export function restoreSpreadsheetVersion(
-  spreadsheetId: string,
-  versionEntryId: string
-): SpreadsheetRecord | null {
-  const current = getSpreadsheetById(spreadsheetId);
-
-  if (!current) {
-    return null;
-  }
-
-  const versionHistory = readVersionHistoryFromMetadata(current.metadata);
-  const target = versionHistory.find((entry) => entry.id === versionEntryId);
-
-  if (!target || !Array.isArray(target.rows)) {
-    return null;
-  }
-
-  const currentVersionNumber = readCurrentVersionNumberFromMetadata(current.metadata);
-  const nextVersionNumber = currentVersionNumber + 1;
-  const nowIso = new Date().toISOString();
-
-  const restoredRows = cloneRows(target.rows);
-
-  return updateSpreadsheet(spreadsheetId, {
-    rows: restoredRows,
-    monthlyBaseValue: restoredRows.reduce(
-      (sum, row) => sum + Number(row.subtotal || 0),
-      0
-    ),
-    metadata: {
-      ...(current.metadata ?? {}),
-      versionNumber: nextVersionNumber,
-      previousSpreadsheetId: current.id,
-      previousVersionRows: cloneRows(current.rows),
-      lastSnapshotAt: nowIso,
-      lastSnapshotReason: `Restauração da ${target.label}`,
-      lastSnapshotOrigin: "restore",
-    },
-  });
-}
-
-export function markSpreadsheetVersionAsBaseline(
-  spreadsheetId: string,
-  versionEntryId: string
-): SpreadsheetRecord | null {
-  const current = getSpreadsheetById(spreadsheetId);
-
-  if (!current) {
-    return null;
-  }
-
-  const versionHistory = readVersionHistoryFromMetadata(current.metadata);
-
-  const updatedHistory = versionHistory.map((entry) => ({
-    ...entry,
-    isBaseline: entry.id === versionEntryId,
-  }));
-
-  return updateSpreadsheet(spreadsheetId, {
-    metadata: {
-      ...(current.metadata ?? {}),
-      versionHistory: updatedHistory,
-      baselineVersionEntryId: versionEntryId,
-    },
-  });
-}
-
 export function updateSpreadsheet(
   id: string,
-  patch: Partial<SpreadsheetRecord>
+  patch: Partial<SpreadsheetRecord>,
+  options?: UpdateSpreadsheetOptions
 ): SpreadsheetRecord | null {
   const current = getSpreadsheetById(id);
 
@@ -677,21 +667,34 @@ export function updateSpreadsheet(
     return null;
   }
 
-  const nextRows = Array.isArray(patch.rows) ? patch.rows : current.rows;
+  const shouldCreateSnapshot = options?.createSnapshot === true;
+
+  const baseSpreadsheet = shouldCreateSnapshot
+    ? appendSnapshotToSpreadsheet(
+        current,
+        options?.snapshot ?? {
+          reason: "Snapshot automático antes de atualização relevante",
+          origin: "auto_snapshot",
+          label: "Snapshot automático",
+        }
+      )
+    : current;
+
+  const nextRows = Array.isArray(patch.rows) ? patch.rows : baseSpreadsheet.rows;
   const recalculatedMonthlyBaseValue =
     patch.monthlyBaseValue !== undefined
       ? Number(patch.monthlyBaseValue)
       : nextRows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
 
   const next: SpreadsheetRecord = {
-    ...current,
+    ...baseSpreadsheet,
     ...patch,
     rows: nextRows,
     monthlyBaseValue: Number.isFinite(recalculatedMonthlyBaseValue)
       ? recalculatedMonthlyBaseValue
-      : current.monthlyBaseValue,
+      : baseSpreadsheet.monthlyBaseValue,
     metadata: {
-      ...(current.metadata ?? {}),
+      ...(baseSpreadsheet.metadata ?? {}),
       ...(patch.metadata ?? {}),
     },
   };
