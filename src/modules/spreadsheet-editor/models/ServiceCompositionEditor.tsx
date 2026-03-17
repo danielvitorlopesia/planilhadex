@@ -26,8 +26,6 @@ import SupportAgentOutlinedIcon from "@mui/icons-material/SupportAgentOutlined";
 import EditableCell from "../components/EditableCell";
 import {
   SpreadsheetRecord,
-  SpreadsheetRow,
-  createSpreadsheetSnapshot,
   updateSpreadsheet,
 } from "../../../services/spreadsheetService";
 import {
@@ -69,6 +67,18 @@ const DEMAND_TYPE_OPTIONS: Array<{
   { value: "nao_informado", label: "Não informado" },
 ];
 
+type VersionHistoryEntry = {
+  id: string;
+  versionNumber: number;
+  label: string;
+  createdAt: string;
+  reason: string;
+  origin: string;
+  spreadsheetId: string;
+  rows: SpreadsheetRecord["rows"];
+  notes?: string;
+};
+
 function safeString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
@@ -92,6 +102,14 @@ function formatCurrency(value: number) {
 }
 
 function buildRowId(prefix = "composition") {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+}
+
+function buildHistoryId(prefix = "version") {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `${prefix}_${crypto.randomUUID()}`;
   }
@@ -185,15 +203,73 @@ function mergeDemandTypeTags(
   return cleaned;
 }
 
-function cloneCompositionRows(rows: ServiceCompositionRow[]): ServiceCompositionRow[] {
+function cloneRows(rows: SpreadsheetRecord["rows"]): SpreadsheetRecord["rows"] {
   return rows.map((row) => ({
     ...row,
     trainingTags: Array.isArray(row.trainingTags) ? [...row.trainingTags] : [],
     metadata:
       row.metadata && typeof row.metadata === "object"
         ? { ...(row.metadata as Record<string, unknown>) }
-        : {},
+        : row.metadata,
   }));
+}
+
+function readVersionHistory(
+  spreadsheet: SpreadsheetRecord
+): VersionHistoryEntry[] {
+  const raw = spreadsheet.metadata?.versionHistory;
+  return Array.isArray(raw) ? (raw as VersionHistoryEntry[]) : [];
+}
+
+function readCurrentVersionNumber(spreadsheet: SpreadsheetRecord) {
+  const raw = spreadsheet.metadata?.versionNumber;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return raw;
+  }
+
+  const history = readVersionHistory(spreadsheet);
+  const maxHistoryVersion = history.reduce((max, item) => {
+    const value =
+      typeof item.versionNumber === "number" && Number.isFinite(item.versionNumber)
+        ? item.versionNumber
+        : 0;
+    return Math.max(max, value);
+  }, 0);
+
+  return Math.max(1, maxHistoryVersion + (history.length > 0 ? 1 : 0));
+}
+
+function buildPreUpdateSnapshot(
+  spreadsheet: SpreadsheetRecord,
+  reason: string
+): VersionHistoryEntry {
+  const currentVersionNumber = readCurrentVersionNumber(spreadsheet);
+  const createdAt = new Date().toISOString();
+
+  return {
+    id: buildHistoryId("snapshot"),
+    versionNumber: currentVersionNumber,
+    label: `Versão ${currentVersionNumber}`,
+    createdAt,
+    reason,
+    origin: "auto_snapshot",
+    spreadsheetId: spreadsheet.id,
+    rows: cloneRows(spreadsheet.rows),
+    notes: "Snapshot automático gerado antes da atualização do módulo de composição.",
+  };
+}
+
+function hasMeaningfulCompositionChanges(
+  previousRows: SpreadsheetRecord["rows"],
+  nextRows: SpreadsheetRecord["rows"]
+) {
+  if (previousRows.length !== nextRows.length) {
+    return true;
+  }
+
+  const previousSerialized = JSON.stringify(previousRows);
+  const nextSerialized = JSON.stringify(nextRows);
+  return previousSerialized !== nextSerialized;
 }
 
 export default function ServiceCompositionEditor({
@@ -304,11 +380,7 @@ export default function ServiceCompositionEditor({
 
   function handleSave() {
     try {
-      const previousEditableRows = cloneCompositionRows(
-        extractEditableCompositionRows(spreadsheet.rows)
-      );
-
-      const sanitizedRows: ServiceCompositionRow[] = normalizedRows.map((row) => {
+      const sanitizedRows = normalizedRows.map((row) => {
         const metadata = {
           ...(row.metadata && typeof row.metadata === "object"
             ? (row.metadata as Record<string, unknown>)
@@ -341,31 +413,34 @@ export default function ServiceCompositionEditor({
         (row) => !extractEditableCompositionRows([row]).length
       );
 
-      const rebuiltRows: SpreadsheetRow[] = [...sanitizedRows, ...preservedRows];
+      const rebuiltRows = [...sanitizedRows, ...preservedRows];
 
       const monthlyBaseValue = rebuiltRows.reduce(
         (sum, row) => sum + Number(row.subtotal || 0),
         0
       );
 
-      const snapshotResult = createSpreadsheetSnapshot({
-        spreadsheetId: spreadsheet.id,
-        rows: previousEditableRows,
-        reason: "Snapshot pré-atualização do módulo de composição",
-        origin: "auto_snapshot",
-        notes:
-          "Base anterior preservada automaticamente antes do salvamento do módulo de composição.",
-      });
+      const currentVersionNumber = readCurrentVersionNumber(spreadsheet);
+      const previousRowsSnapshot = cloneRows(spreadsheet.rows);
+      const existingHistory = readVersionHistory(spreadsheet);
 
-      if (!snapshotResult) {
-        throw new Error("Não foi possível criar o snapshot pré-save da planilha.");
-      }
+      const shouldCreateSnapshot = hasMeaningfulCompositionChanges(
+        previousRowsSnapshot,
+        rebuiltRows
+      );
+
+      const preUpdateSnapshot = shouldCreateSnapshot
+        ? buildPreUpdateSnapshot(
+            spreadsheet,
+            "Snapshot automático pré-atualização do módulo de composição"
+          )
+        : null;
 
       const updated = updateSpreadsheet(spreadsheet.id, {
         rows: rebuiltRows,
         monthlyBaseValue: Number(monthlyBaseValue.toFixed(2)),
         metadata: {
-          ...(snapshotResult.metadata ?? {}),
+          ...(spreadsheet.metadata ?? {}),
           editorModule: "service_composition",
           lastEditedSection: "materials_equipments_logistics",
           serviceCompositionSummary: summary,
@@ -374,20 +449,15 @@ export default function ServiceCompositionEditor({
             generatedAt: new Date().toISOString(),
             itemCount: summary.itemCount,
             total: summary.total,
-            totalByCategory: {
-              "Materiais e insumos": summary.materialsTotal,
-              Equipamentos: summary.equipmentTotal,
-              "Logística operacional": summary.logisticsTotal,
-              "Apoio operacional": summary.supportTotal,
-              "EPIs e uniformes": summary.episAndUniformsTotal,
-              "Materiais de consumo": summary.consumablesTotal,
-            },
-            totalByRecurrence: {
-              recorrente: summary.recurringTotal,
-              eventual: summary.eventualTotal,
-              sob_demanda: summary.onDemandTotal,
-            },
+            totalByCategory: summary.totalsByCategory ?? {},
+            totalByRecurrence: summary.totalsByRecurrence ?? {},
           },
+          previousVersionRows: previousRowsSnapshot,
+          previousSpreadsheetId: spreadsheet.id,
+          versionNumber: currentVersionNumber + (shouldCreateSnapshot ? 1 : 0),
+          versionHistory: preUpdateSnapshot
+            ? [preUpdateSnapshot, ...existingHistory]
+            : existingHistory,
         },
       });
 
@@ -397,8 +467,9 @@ export default function ServiceCompositionEditor({
 
       setFeedback({
         type: "success",
-        message:
-          "Composição de serviços salva com snapshot pré-save padronizado, cálculo, resumo técnico e memória persistida.",
+        message: shouldCreateSnapshot
+          ? "Composição salva com cálculo persistido e snapshot automático pré-atualização registrado."
+          : "Composição salva com cálculo, resumo técnico e memória persistida.",
       });
 
       onSpreadsheetUpdated?.(updated);
@@ -429,9 +500,9 @@ export default function ServiceCompositionEditor({
               </Typography>
 
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-                Este bloco opera com cálculo estruturado, classificação por natureza
-                do custo e persistência do resumo técnico, usando agora snapshot
-                padronizado pela camada comum de versionamento do sistema.
+                Este bloco opera com cálculo estruturado, classificando materiais,
+                insumos, equipamentos, logística e apoio operacional, além de persistir
+                resumo técnico, memória de composição e snapshot automático pré-atualização.
               </Typography>
             </Box>
 
@@ -533,45 +604,59 @@ export default function ServiceCompositionEditor({
                   <TableCell sx={{ minWidth: 200 }}>
                     <strong>Item</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 170 }}>
                     <strong>Categoria</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 120 }}>
                     <strong>Tipo de demanda</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 110 }}>
                     <strong>Qtd.</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 130 }}>
                     <strong>Valor unitário</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 120 }}>
                     <strong>Unidade</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 130 }}>
                     <strong>Periodicidade</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 120 }}>
                     <strong>Produtividade</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 120 }}>
                     <strong>Mensalização</strong>
                   </TableCell>
+
                   <TableCell align="right" sx={{ minWidth: 130 }}>
                     <strong>Subtotal</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 160 }}>
                     <strong>Status</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 180 }}>
                     <strong>Base de consumo</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 180 }}>
                     <strong>Depreciação</strong>
                   </TableCell>
+
                   <TableCell sx={{ minWidth: 240 }}>
                     <strong>Memória / justificativa</strong>
                   </TableCell>
+
                   <TableCell align="center" sx={{ minWidth: 90 }}>
                     <strong>Ação</strong>
                   </TableCell>
