@@ -48,15 +48,21 @@ import RestoreOutlinedIcon from "@mui/icons-material/RestoreOutlined";
 import FlagOutlinedIcon from "@mui/icons-material/FlagOutlined";
 import TimelineOutlinedIcon from "@mui/icons-material/TimelineOutlined";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
+import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
+import AttachFileIcon from "@mui/icons-material/AttachFile";
 import { Link as RouterLink, useParams } from "react-router-dom";
+
 import SpreadsheetEditor from "../modules/spreadsheet-editor/SpreadsheetEditor";
 import SpreadsheetVersionComparisonPanel from "../components/versioning/SpreadsheetVersionComparisonPanel";
 import ServiceCompositionComparisonPanel from "../components/service-composition/ServiceCompositionComparisonPanel";
+import DedicatedLaborComparisonPanel from "../components/labor/DedicatedLaborComparisonPanel";
+
 import {
   SpreadsheetRecord,
   getSpreadsheetById,
   updateSpreadsheetEditorDraft,
 } from "../services/spreadsheetService";
+
 import {
   buildServiceCompositionComparisonContext,
   compareServiceCompositionSpreadsheets,
@@ -289,7 +295,6 @@ const PCFP_MODULES: PcfpModuleDefinition[] = [
     backgroundColor: "#F8ECFB",
   },
 ];
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -723,21 +728,21 @@ function readLaborCostBreakdown(
   record: SpreadsheetDetailRecord | null | undefined
 ): LaborCostBreakdown | null {
   const raw = readMetadataRecord(record, "laborCostBreakdown");
-  return raw ? (raw as LaborCostBreakdown) : null;
+  return raw ? raw as LaborCostBreakdown : null;
 }
 
 function readLaborChargesConfig(
   record: SpreadsheetDetailRecord | null | undefined
 ): LaborChargesConfig | null {
   const raw = readMetadataRecord(record, "laborChargesConfig");
-  return raw ? (raw as LaborChargesConfig) : null;
+  return raw ? raw as LaborChargesConfig : null;
 }
 
 function readServiceCompositionSummary(
   record: SpreadsheetDetailRecord | null | undefined
 ): ServiceCompositionSummary | null {
   const raw = readMetadataRecord(record, "serviceCompositionSummary");
-  return raw ? (raw as ServiceCompositionSummary) : null;
+  return raw ? raw as ServiceCompositionSummary : null;
 }
 
 function readServiceCompositionMemoryBundle(
@@ -753,9 +758,8 @@ function readServiceCompositionEngineSnapshot(
   record: SpreadsheetDetailRecord | null | undefined
 ): ServiceCompositionEngineSnapshot | null {
   const raw = readMetadataRecord(record, "serviceCompositionEngineSnapshot");
-  return raw ? (raw as ServiceCompositionEngineSnapshot) : null;
+  return raw ? raw as ServiceCompositionEngineSnapshot : null;
 }
-
 function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
   const storedDraft = extractStoredEditorDraft(record);
 
@@ -1007,6 +1011,7 @@ function CompactInfoCard({
     </Card>
   );
 }
+
 function ModuleSummaryCard({ module }: { module: PcfpModuleGroup }) {
   return (
     <Card
@@ -1177,8 +1182,7 @@ function PersistedCompositionCard({
             priorizando o resumo consolidado, a memória técnica por item e o snapshot
             executivo da rodada de cálculo.
           </Typography>
-
-          <Box
+                    <Box
             sx={{
               display: "grid",
               gridTemplateColumns: {
@@ -1581,6 +1585,26 @@ export default function SpreadsheetDetail() {
     return resolveVersionHistoryRecord(baselineVersionItem, spreadsheet);
   }, [baselineVersionItem, spreadsheet]);
 
+  const selectedVersionLaborBreakdown = useMemo(
+    () => readLaborCostBreakdown(resolvedSelectedVersionRecord as SpreadsheetDetailRecord | null),
+    [resolvedSelectedVersionRecord]
+  );
+
+  const baselineVersionLaborBreakdown = useMemo(
+    () => readLaborCostBreakdown(resolvedBaselineVersionRecord as SpreadsheetDetailRecord | null),
+    [resolvedBaselineVersionRecord]
+  );
+
+  const selectedVersionLaborChargesConfig = useMemo(
+    () => readLaborChargesConfig(resolvedSelectedVersionRecord as SpreadsheetDetailRecord | null),
+    [resolvedSelectedVersionRecord]
+  );
+
+  const baselineVersionLaborChargesConfig = useMemo(
+    () => readLaborChargesConfig(resolvedBaselineVersionRecord as SpreadsheetDetailRecord | null),
+    [resolvedBaselineVersionRecord]
+  );
+
   const serviceCompositionComparisonContext = useMemo(() => {
     if (!spreadsheet) {
       return null;
@@ -1609,12 +1633,10 @@ export default function SpreadsheetDetail() {
     }
 
     try {
-      const comparison = compareServiceCompositionSpreadsheets({
+      return compareServiceCompositionSpreadsheets({
         previousSpreadsheet: resolvedSelectedVersionRecord,
         currentSpreadsheet: spreadsheet,
       });
-
-      return comparison;
     } catch {
       return null;
     }
@@ -1683,8 +1705,7 @@ export default function SpreadsheetDetail() {
       "uniforme",
     ]);
   }, [spreadsheet, serviceCompositionSummary, serviceCompositionEngineSnapshot]);
-
-  const analysisReferenceValue = useMemo(() => {
+    const analysisReferenceValue = useMemo(() => {
     if (!editor) return 0;
     return parseNumber(editor.monthlyBaseValue);
   }, [editor]);
@@ -1823,7 +1844,8 @@ export default function SpreadsheetDetail() {
     setSaveState("success");
     setSaveMessage(`${getVersionLabel(item)} restaurada localmente para análise.`);
   }
-    if (state === "loading") {
+
+  if (state === "loading") {
     return (
       <Box
         sx={{
@@ -1924,9 +1946,7 @@ export default function SpreadsheetDetail() {
                 >
                   <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                      <AutoAwesomeOutlinedIcon
-                        sx={{ fontSize: 16, color: "#9C6BC0" }}
-                      />
+                      <AutoAwesomeOutlinedIcon sx={{ fontSize: 16, color: "#9C6BC0" }} />
                       <Typography
                         variant="caption"
                         sx={{
@@ -2040,8 +2060,8 @@ export default function SpreadsheetDetail() {
             severity="info"
             sx={{ borderRadius: 3 }}
           >
-            Esta tela já consome o resumo, a memória técnica, o snapshot do motor e,
-            quando existir uma base anterior, o comparativo entre versões da composição.
+            Esta tela já consome histórico/versionamento, comparação executiva,
+            leitura persistida da composição e comparação técnica do bloco laboral.
           </Alert>
 
           <Box
@@ -2071,9 +2091,8 @@ export default function SpreadsheetDetail() {
                 </Stack>
 
                 <Typography variant="body2" color="text.secondary">
-                  Este painel consolida as versões já visíveis localmente, snapshots
-                  identificados em metadados, baseline de comparação e restauração
-                  operacional quando houver dados suficientes disponíveis no cliente.
+                  Este painel consolida as versões visíveis localmente, baseline de
+                  comparação, restauração operacional e leitura executiva entre versões.
                 </Typography>
 
                 <Box
@@ -2086,10 +2105,7 @@ export default function SpreadsheetDetail() {
                     gap: 2,
                   }}
                 >
-                  <ExecutiveMetricCard
-                    label="Versões identificadas"
-                    value={versionHistory.length}
-                  />
+                  <ExecutiveMetricCard label="Versões identificadas" value={versionHistory.length} />
                   <ExecutiveMetricCard
                     label="Baseline atual"
                     value={baselineVersionItem ? getVersionLabel(baselineVersionItem) : "—"}
@@ -2125,24 +2141,12 @@ export default function SpreadsheetDetail() {
                           <Table size="small" sx={{ minWidth: 940 }}>
                             <TableHead>
                               <TableRow>
-                                <TableCell>
-                                  <strong>Versão</strong>
-                                </TableCell>
-                                <TableCell>
-                                  <strong>Data / hora</strong>
-                                </TableCell>
-                                <TableCell>
-                                  <strong>Motivo</strong>
-                                </TableCell>
-                                <TableCell>
-                                  <strong>Origem</strong>
-                                </TableCell>
-                                <TableCell>
-                                  <strong>Status</strong>
-                                </TableCell>
-                                <TableCell align="right">
-                                  <strong>Ações</strong>
-                                </TableCell>
+                                <TableCell><strong>Versão</strong></TableCell>
+                                <TableCell><strong>Data / hora</strong></TableCell>
+                                <TableCell><strong>Motivo</strong></TableCell>
+                                <TableCell><strong>Origem</strong></TableCell>
+                                <TableCell><strong>Status</strong></TableCell>
+                                <TableCell align="right"><strong>Ações</strong></TableCell>
                               </TableRow>
                             </TableHead>
                             <TableBody>
@@ -2177,34 +2181,15 @@ export default function SpreadsheetDetail() {
                                       <TableCell>{getOriginLabel(item.origin)}</TableCell>
 
                                       <TableCell sx={{ minWidth: 170 }}>
-                                        <Stack
-                                          direction="row"
-                                          spacing={0.75}
-                                          flexWrap="wrap"
-                                          useFlexGap
-                                        >
+                                        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
                                           {item.isCurrent ? (
-                                            <Chip
-                                              size="small"
-                                              label="Atual"
-                                              color="primary"
-                                              variant="outlined"
-                                            />
+                                            <Chip size="small" label="Atual" color="primary" variant="outlined" />
                                           ) : null}
                                           {isBaseline ? (
-                                            <Chip
-                                              size="small"
-                                              label="Baseline ativa"
-                                              color="secondary"
-                                              variant="outlined"
-                                            />
+                                            <Chip size="small" label="Baseline ativa" color="secondary" variant="outlined" />
                                           ) : null}
                                           {isSelected ? (
-                                            <Chip
-                                              size="small"
-                                              label="Selecionada"
-                                              variant="outlined"
-                                            />
+                                            <Chip size="small" label="Selecionada" variant="outlined" />
                                           ) : null}
                                         </Stack>
                                       </TableCell>
@@ -2254,8 +2239,7 @@ export default function SpreadsheetDetail() {
                                 <TableRow>
                                   <TableCell colSpan={6}>
                                     <Typography variant="body2" color="text.secondary">
-                                      Nenhuma versão adicional foi identificada nos metadados
-                                      ou no repositório local desta planilha.
+                                      Nenhuma versão adicional foi identificada.
                                     </Typography>
                                   </TableCell>
                                 </TableRow>
@@ -2344,11 +2328,7 @@ export default function SpreadsheetDetail() {
                                 </Typography>
                               </Stack>
 
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                display="block"
-                              >
+                              <Typography variant="caption" color="text.secondary" display="block">
                                 {formatDateTime(item.createdAt)}
                               </Typography>
 
@@ -2356,33 +2336,13 @@ export default function SpreadsheetDetail() {
                                 {item.reason || "Sem motivo registrado"}
                               </Typography>
 
-                              <Stack
-                                direction="row"
-                                spacing={0.75}
-                                mt={1}
-                                flexWrap="wrap"
-                                useFlexGap
-                              >
-                                <Chip
-                                  size="small"
-                                  label={getOriginLabel(item.origin)}
-                                  variant="outlined"
-                                />
+                              <Stack direction="row" spacing={0.75} mt={1} flexWrap="wrap" useFlexGap>
+                                <Chip size="small" label={getOriginLabel(item.origin)} variant="outlined" />
                                 {item.isCurrent ? (
-                                  <Chip
-                                    size="small"
-                                    label="Versão atual"
-                                    color="primary"
-                                    variant="outlined"
-                                  />
+                                  <Chip size="small" label="Versão atual" color="primary" variant="outlined" />
                                 ) : null}
                                 {baselineVersionId === item.id ? (
-                                  <Chip
-                                    size="small"
-                                    label="Baseline"
-                                    color="secondary"
-                                    variant="outlined"
-                                  />
+                                  <Chip size="small" label="Baseline" color="secondary" variant="outlined" />
                                 ) : null}
                               </Stack>
                             </Box>
@@ -2460,42 +2420,336 @@ export default function SpreadsheetDetail() {
                 <ServiceCompositionComparisonPanel
                   comparison={selectedVersionComparison}
                   title={`Comparação técnica: versão atual x ${
-                    selectedVersionItem
-                      ? getVersionLabel(selectedVersionItem)
-                      : "versão selecionada"
+                    selectedVersionItem ? getVersionLabel(selectedVersionItem) : "versão selecionada"
                   }`}
                 />
               ) : null}
-                            {editor.type === "service_composition" ? (
-                <ServiceCompositionEditor
-                  spreadsheetId={spreadsheet.id}
-                  rows={editor.rows}
-                  onChange={(rows) => {
-                    setEditor((prev) =>
-                      prev.type === "service_composition"
-                        ? { ...prev, rows }
-                        : prev
-                    );
+
+              {(baselineVersionLaborBreakdown || selectedVersionLaborBreakdown) ? (
+                <DedicatedLaborComparisonPanel
+                  title="Comparação técnica do bloco laboral"
+                  data={{
+                    versionA: baselineVersionItem
+                      ? {
+                          label: getVersionLabel(baselineVersionItem),
+                          origin: baselineVersionItem.origin,
+                          createdAt: baselineVersionItem.createdAt,
+                        }
+                      : null,
+                    versionB: selectedVersionItem
+                      ? {
+                          label: getVersionLabel(selectedVersionItem),
+                          origin: selectedVersionItem.origin,
+                          createdAt: selectedVersionItem.createdAt,
+                        }
+                      : null,
+                    laborA: baselineVersionLaborBreakdown,
+                    laborB: selectedVersionLaborBreakdown,
+                    chargesConfigA: baselineVersionLaborChargesConfig,
+                    chargesConfigB: selectedVersionLaborChargesConfig,
                   }}
+                  emptyMessage="Não há dados laborais suficientes nas versões selecionadas."
                 />
               ) : null}
 
-              {editor.type === "dedicated_labor" ? (
-                <DedicatedLaborEditor
-                  spreadsheetId={spreadsheet.id}
-                  rows={editor.rows}
-                  onChange={(rows) => {
-                    setEditor((prev) =>
-                      prev.type === "dedicated_labor"
-                        ? { ...prev, rows }
-                        : prev
-                    );
-                  }}
-                />
-              ) : null}
+              <SpreadsheetEditor
+                spreadsheet={spreadsheet}
+                onSpreadsheetUpdated={(updated) => {
+                  const next = updated as SpreadsheetDetailRecord;
+                  setSpreadsheet(next);
+                  setEditor(buildInitialEditorState(next));
+                  setDataSource("local");
+                }}
+              />
+
+              <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+                <CardContent>
+                  <Stack spacing={2} sx={{ minWidth: 0 }}>
+                    <Stack direction="row" spacing={1.25} alignItems="center">
+                      <ViewAgendaOutlinedIcon sx={{ color: "#7B1FA2" }} />
+                      <Typography variant="h6" fontWeight={700}>
+                        Estrutura modular preliminar da PCFP
+                      </Typography>
+                    </Stack>
+
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: {
+                          xs: "1fr",
+                          sm: "repeat(2, minmax(0, 1fr))",
+                          xl: "repeat(3, minmax(0, 1fr))",
+                        },
+                        gap: 2,
+                        minWidth: 0,
+                      }}
+                    >
+                      {pcfpModules.map((module) => (
+                        <ModuleSummaryCard key={module.key} module={module} />
+                      ))}
+                    </Box>
+
+                    <Stack spacing={2} sx={{ minWidth: 0 }}>
+                      {pcfpModules
+                        .filter((module) => module.key !== "module_6")
+                        .map((module) => (
+                          <ModuleDetailCard key={module.key} module={module} />
+                        ))}
+
+                      <Card
+                        variant="outlined"
+                        sx={{
+                          borderRadius: 4,
+                          borderColor: "rgba(123, 31, 162, 0.16)",
+                          backgroundColor: "#F8ECFB",
+                          minWidth: 0,
+                        }}
+                      >
+                        <CardContent>
+                          <Stack spacing={1.5} sx={{ minWidth: 0 }}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <SummarizeOutlinedIcon sx={{ fontSize: 18 }} />
+                              <Typography variant="h6" fontWeight={800}>
+                                Módulo 6 — Síntese preliminar
+                              </Typography>
+                            </Stack>
+
+                            <Box
+                              sx={{
+                                display: "grid",
+                                gridTemplateColumns: {
+                                  xs: "1fr",
+                                  md: "repeat(3, minmax(0, 1fr))",
+                                },
+                                gap: 2,
+                                minWidth: 0,
+                              }}
+                            >
+                              <ExecutiveMetricCard
+                                label="Total dos módulos 1 a 5"
+                                value={formatCurrency(
+                                  pcfpModules
+                                    .filter((module) => module.key !== "module_6")
+                                    .reduce((sum, module) => sum + module.total, 0)
+                                )}
+                              />
+                              <ExecutiveMetricCard
+                                label="Base mensal declarada"
+                                value={formatCurrency(effectiveMonthlyReference)}
+                              />
+                              <ExecutiveMetricCard
+                                label="Saldo preliminar"
+                                value={formatCurrency(executabilityBalance)}
+                              />
+                            </Box>
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    </Stack>
+                  </Stack>
+                </CardContent>
+              </Card>
+
+              <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+                <CardContent sx={{ p: 0 }}>
+                  <Box sx={{ px: 2.25, py: 2 }}>
+                    <Typography variant="h6" fontWeight={700}>
+                      Estrutura inicial da planilha
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+                      Itens-base identificados nesta versão da planilha.
+                    </Typography>
+                  </Box>
+
+                  <Divider />
+
+                  <Box sx={{ overflowX: "auto", width: "100%" }}>
+                    <Table sx={{ minWidth: 820 }}>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell><strong>Item</strong></TableCell>
+                          <TableCell><strong>Categoria</strong></TableCell>
+                          <TableCell align="right"><strong>Quantidade</strong></TableCell>
+                          <TableCell align="right"><strong>Valor unitário</strong></TableCell>
+                          <TableCell align="right"><strong>Subtotal</strong></TableCell>
+                          <TableCell><strong>Status</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
+
+                      <TableBody>
+                        {spreadsheet.rows.map((row, index) => (
+                          <TableRow key={`${String(row.item)}-${index}`}>
+                            <TableCell sx={{ minWidth: 240 }}>
+                              <Stack spacing={0.4}>
+                                <Typography variant="body2">{String(row.item || "")}</Typography>
+                                {row.memoriaCalculo ? (
+                                  <Typography variant="caption" color="text.secondary">
+                                    {String(row.memoriaCalculo)}
+                                  </Typography>
+                                ) : null}
+                              </Stack>
+                            </TableCell>
+                            <TableCell>{String(row.categoria || "")}</TableCell>
+                            <TableCell align="right">{Number(row.quantidade || 0)}</TableCell>
+                            <TableCell align="right">
+                              {formatCurrency(Number(row.valorUnitario || 0))}
+                            </TableCell>
+                            <TableCell align="right">
+                              {formatCurrency(Number(row.subtotal || 0))}
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                size="small"
+                                label={String(row.status || "")}
+                                sx={{
+                                  backgroundColor:
+                                    String(row.status || "") === "Pendente"
+                                      ? "#FFF3E0"
+                                      : String(row.status || "") === "Exemplo do domínio"
+                                      ? "#E3F2FD"
+                                      : "#E7F6EC",
+                                  color:
+                                    String(row.status || "") === "Pendente"
+                                      ? "#EF6C00"
+                                      : String(row.status || "") === "Exemplo do domínio"
+                                      ? "#1565C0"
+                                      : "#2E7D32",
+                                  fontWeight: 700,
+                                }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+
+                        {spreadsheet.rows.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6}>
+                              <Typography variant="body2" color="text.secondary">
+                                Nenhum item encontrado nesta planilha.
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                </CardContent>
+              </Card>
             </Stack>
 
-            <Stack spacing={2}>
+            <Stack
+              spacing={2}
+              sx={{
+                minWidth: 0,
+                position: { xl: "sticky" },
+                top: { xl: 20 },
+              }}
+            >
+              <CompactInfoCard title="Resumo executivo">
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Tipo do modelo:</strong> {getModelLabel(spreadsheet.modelType)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Status:</strong> {spreadsheet.status}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Categoria:</strong> {spreadsheet.category}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Domínio:</strong>{" "}
+                  {DOMAIN_SCENARIO_LABELS[editor.domainScenario] || domainScenarioLabel}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Quantidade estimada:</strong> {effectiveHeadcount}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Referência mensal:</strong> {formatCurrency(effectiveMonthlyReference)}
+                </Typography>
+
+                <Stack direction="row" spacing={0.75} alignItems="center">
+                  <AccessTimeIcon sx={{ fontSize: 16, color: "#7A708D" }} />
+                  <Typography variant="body2" color="text.secondary">
+                    Atualizado em {spreadsheet.updatedAt}
+                  </Typography>
+                </Stack>
+              </CompactInfoCard>
+
+              <CompactInfoCard title="Resumo de versionamento">
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <HistoryOutlinedIcon sx={{ fontSize: 18 }} />
+                  <Typography variant="body2" fontWeight={700}>
+                    Fluxo visível de histórico
+                  </Typography>
+                </Stack>
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Versões identificadas:</strong> {versionHistory.length}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Baseline ativa:</strong>{" "}
+                  {baselineVersionItem ? getVersionLabel(baselineVersionItem) : "Não definida"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Versão em foco:</strong>{" "}
+                  {selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Não definida"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Restauração local:</strong>{" "}
+                  {selectedVersionItem && (selectedVersionItem.rows || selectedVersionItem.spreadsheetId)
+                    ? "Disponível"
+                    : "Dependente de dados adicionais"}
+                </Typography>
+              </CompactInfoCard>
+
+              <CompactInfoCard title="Quadro preliminar de exequibilidade">
+                <Box
+                  sx={{
+                    p: 2,
+                    borderRadius: 3,
+                    bgcolor: exequibilityRisk.backgroundColor,
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{ color: exequibilityRisk.color, fontWeight: 800 }}
+                  >
+                    {exequibilityRisk.label}
+                  </Typography>
+                </Box>
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Custos obrigatórios estimados:</strong> {formatCurrency(mandatoryCostTotal)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Custos comprobatórios / materiais:</strong> {formatCurrency(evidentiaryCostTotal)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Saldo preliminar de exequibilidade:</strong> {formatCurrency(executabilityBalance)}
+                </Typography>
+              </CompactInfoCard>
+
+              {laborCostBreakdown || laborChargesConfig ? (
+                <CompactInfoCard title="Bloco laboral persistido">
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Headcount:</strong> {Number(laborCostBreakdown?.headcount || 0)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Total salarial:</strong> {formatCurrency(Number(laborCostBreakdown?.salaryBaseTotal || 0))}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Benefícios obrigatórios:</strong>{" "}
+                    {formatCurrency(Number(laborCostBreakdown?.mandatoryBenefitsTotal || 0))}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Adicionais:</strong> {formatCurrency(Number(laborCostBreakdown?.additionalTotal || 0))}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Total laboral mensal:</strong>{" "}
+                    {formatCurrency(Number(laborCostBreakdown?.monthlyLaborTotal || 0))}
+                  </Typography>
+                </CompactInfoCard>
+              ) : null}
+
               {spreadsheet.trainingProfile ? (
                 <Card variant="outlined" sx={{ borderRadius: 4 }}>
                   <CardContent>
@@ -2508,8 +2762,8 @@ export default function SpreadsheetDetail() {
                       </Stack>
 
                       <Typography variant="body2" color="text.secondary">
-                        Este bloco descreve o contexto técnico utilizado pelo
-                        motor de análise para interpretar esta planilha.
+                        Este bloco descreve o contexto técnico utilizado pelo motor
+                        de análise para interpretar esta planilha.
                       </Typography>
 
                       <Divider />
@@ -2518,14 +2772,9 @@ export default function SpreadsheetDetail() {
                         <Typography variant="body2" fontWeight={700}>
                           Documentos esperados
                         </Typography>
-
                         {expectedDocuments.length > 0 ? (
                           expectedDocuments.map((doc) => (
-                            <Typography
-                              key={doc}
-                              variant="body2"
-                              color="text.secondary"
-                            >
+                            <Typography key={doc} variant="body2" color="text.secondary">
                               • {doc}
                             </Typography>
                           ))
@@ -2540,14 +2789,9 @@ export default function SpreadsheetDetail() {
                         <Typography variant="body2" fontWeight={700}>
                           Vetores de custo esperados
                         </Typography>
-
                         {expectedCostDrivers.length > 0 ? (
                           expectedCostDrivers.map((driver) => (
-                            <Typography
-                              key={driver}
-                              variant="body2"
-                              color="text.secondary"
-                            >
+                            <Typography key={driver} variant="body2" color="text.secondary">
                               • {driver}
                             </Typography>
                           ))
@@ -2562,14 +2806,9 @@ export default function SpreadsheetDetail() {
                         <Typography variant="body2" fontWeight={700}>
                           Pontos de validação
                         </Typography>
-
                         {validationFocus.length > 0 ? (
                           validationFocus.map((focus) => (
-                            <Typography
-                              key={focus}
-                              variant="body2"
-                              color="text.secondary"
-                            >
+                            <Typography key={focus} variant="body2" color="text.secondary">
                               • {focus}
                             </Typography>
                           ))
@@ -2584,14 +2823,9 @@ export default function SpreadsheetDetail() {
                         <Typography variant="body2" fontWeight={700}>
                           Sugestões de leitura
                         </Typography>
-
                         {readingHints.length > 0 ? (
                           readingHints.map((hint) => (
-                            <Typography
-                              key={hint}
-                              variant="body2"
-                              color="text.secondary"
-                            >
+                            <Typography key={hint} variant="body2" color="text.secondary">
                               • {hint}
                             </Typography>
                           ))
@@ -2619,31 +2853,52 @@ export default function SpreadsheetDetail() {
                     <Typography variant="body2" color="text.secondary">
                       Categoria: {spreadsheet.category}
                     </Typography>
-
                     <Typography variant="body2" color="text.secondary">
                       Modelo: {spreadsheet.modelType}
                     </Typography>
-
                     <Typography variant="body2" color="text.secondary">
                       Status: {spreadsheet.status}
                     </Typography>
-
                     <Typography variant="body2" color="text.secondary">
                       Atualizado em: {spreadsheet.updatedAt}
                     </Typography>
-
-                    {spreadsheet.contractId ? (
-                      <Typography variant="body2" color="text.secondary">
-                        Contratação vinculada: {spreadsheet.contractId}
-                      </Typography>
-                    ) : null}
                   </Stack>
                 </CardContent>
               </Card>
+
+              <CompactInfoCard title="Observações internas">
+                <TextField
+                  label="Anotações preparatórias"
+                  value={editor.notes}
+                  onChange={(event) => updateEditorField("notes", event.target.value)}
+                  multiline
+                  minRows={4}
+                  fullWidth
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Este campo já prepara a futura integração com histórico analítico,
+                  decisão interna, parecer consolidado e trilha de auditoria.
+                </Typography>
+              </CompactInfoCard>
             </Stack>
           </Box>
         </Stack>
       </Container>
+
+      <Snackbar
+        open={saveState === "success" || saveState === "error"}
+        autoHideDuration={3500}
+        onClose={() => setSaveState("idle")}
+      >
+        <Alert
+          onClose={() => setSaveState("idle")}
+          severity={saveState === "success" ? "success" : "error"}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {saveMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
