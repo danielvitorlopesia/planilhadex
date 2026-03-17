@@ -67,18 +67,6 @@ const DEMAND_TYPE_OPTIONS: Array<{
   { value: "nao_informado", label: "Não informado" },
 ];
 
-type VersionHistoryEntry = {
-  id: string;
-  versionNumber: number;
-  label: string;
-  createdAt: string;
-  reason: string;
-  origin: string;
-  spreadsheetId: string;
-  rows: SpreadsheetRecord["rows"];
-  notes?: string;
-};
-
 function safeString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
@@ -102,14 +90,6 @@ function formatCurrency(value: number) {
 }
 
 function buildRowId(prefix = "composition") {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return `${prefix}_${crypto.randomUUID()}`;
-  }
-
-  return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`;
-}
-
-function buildHistoryId(prefix = "version") {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `${prefix}_${crypto.randomUUID()}`;
   }
@@ -201,75 +181,6 @@ function mergeDemandTypeTags(
   }
 
   return cleaned;
-}
-
-function cloneRows(rows: SpreadsheetRecord["rows"]): SpreadsheetRecord["rows"] {
-  return rows.map((row) => ({
-    ...row,
-    trainingTags: Array.isArray(row.trainingTags) ? [...row.trainingTags] : [],
-    metadata:
-      row.metadata && typeof row.metadata === "object"
-        ? { ...(row.metadata as Record<string, unknown>) }
-        : row.metadata,
-  }));
-}
-
-function readVersionHistory(
-  spreadsheet: SpreadsheetRecord
-): VersionHistoryEntry[] {
-  const raw = spreadsheet.metadata?.versionHistory;
-  return Array.isArray(raw) ? (raw as VersionHistoryEntry[]) : [];
-}
-
-function readCurrentVersionNumber(spreadsheet: SpreadsheetRecord) {
-  const raw = spreadsheet.metadata?.versionNumber;
-  if (typeof raw === "number" && Number.isFinite(raw)) {
-    return raw;
-  }
-
-  const history = readVersionHistory(spreadsheet);
-  const maxHistoryVersion = history.reduce((max, item) => {
-    const value =
-      typeof item.versionNumber === "number" && Number.isFinite(item.versionNumber)
-        ? item.versionNumber
-        : 0;
-    return Math.max(max, value);
-  }, 0);
-
-  return Math.max(1, maxHistoryVersion + (history.length > 0 ? 1 : 0));
-}
-
-function buildPreUpdateSnapshot(
-  spreadsheet: SpreadsheetRecord,
-  reason: string
-): VersionHistoryEntry {
-  const currentVersionNumber = readCurrentVersionNumber(spreadsheet);
-  const createdAt = new Date().toISOString();
-
-  return {
-    id: buildHistoryId("snapshot"),
-    versionNumber: currentVersionNumber,
-    label: `Versão ${currentVersionNumber}`,
-    createdAt,
-    reason,
-    origin: "auto_snapshot",
-    spreadsheetId: spreadsheet.id,
-    rows: cloneRows(spreadsheet.rows),
-    notes: "Snapshot automático gerado antes da atualização do módulo de composição.",
-  };
-}
-
-function hasMeaningfulCompositionChanges(
-  previousRows: SpreadsheetRecord["rows"],
-  nextRows: SpreadsheetRecord["rows"]
-) {
-  if (previousRows.length !== nextRows.length) {
-    return true;
-  }
-
-  const previousSerialized = JSON.stringify(previousRows);
-  const nextSerialized = JSON.stringify(nextRows);
-  return previousSerialized !== nextSerialized;
 }
 
 export default function ServiceCompositionEditor({
@@ -420,46 +331,40 @@ export default function ServiceCompositionEditor({
         0
       );
 
-      const currentVersionNumber = readCurrentVersionNumber(spreadsheet);
-      const previousRowsSnapshot = cloneRows(spreadsheet.rows);
-      const existingHistory = readVersionHistory(spreadsheet);
-
-      const shouldCreateSnapshot = hasMeaningfulCompositionChanges(
-        previousRowsSnapshot,
-        rebuiltRows
-      );
-
-      const preUpdateSnapshot = shouldCreateSnapshot
-        ? buildPreUpdateSnapshot(
-            spreadsheet,
-            "Snapshot automático pré-atualização do módulo de composição"
-          )
-        : null;
-
-      const updated = updateSpreadsheet(spreadsheet.id, {
-        rows: rebuiltRows,
-        monthlyBaseValue: Number(monthlyBaseValue.toFixed(2)),
-        metadata: {
-          ...(spreadsheet.metadata ?? {}),
-          editorModule: "service_composition",
-          lastEditedSection: "materials_equipments_logistics",
-          serviceCompositionSummary: summary,
-          serviceCompositionMemoryBundle: memoryBundle,
-          serviceCompositionEngineSnapshot: {
-            generatedAt: new Date().toISOString(),
-            itemCount: summary.itemCount,
-            total: summary.total,
-            totalByCategory: summary.totalsByCategory ?? {},
-            totalByRecurrence: summary.totalsByRecurrence ?? {},
+      const updated = updateSpreadsheet(
+        spreadsheet.id,
+        {
+          rows: rebuiltRows,
+          monthlyBaseValue: Number(monthlyBaseValue.toFixed(2)),
+          metadata: {
+            ...(spreadsheet.metadata ?? {}),
+            editorModule: "service_composition",
+            lastEditedSection: "materials_equipments_logistics",
+            serviceCompositionSummary: summary,
+            serviceCompositionMemoryBundle: memoryBundle,
+            serviceCompositionEngineSnapshot: {
+              generatedAt: new Date().toISOString(),
+              itemCount: summary.itemCount,
+              total: summary.total,
+              totalByCategory: summary.totalsByCategory,
+              totalByRecurrence: summary.totalsByRecurrence,
+            },
           },
-          previousVersionRows: previousRowsSnapshot,
-          previousSpreadsheetId: spreadsheet.id,
-          versionNumber: currentVersionNumber + (shouldCreateSnapshot ? 1 : 0),
-          versionHistory: preUpdateSnapshot
-            ? [preUpdateSnapshot, ...existingHistory]
-            : existingHistory,
         },
-      });
+        {
+          createSnapshot: true,
+          snapshot: {
+            reason:
+              "Snapshot pré-atualização do módulo de composição de serviços",
+            origin: "auto_snapshot",
+            label: "Pré-atualização — composição de serviços",
+            notes:
+              "Snapshot automático gerado antes do salvamento do editor de composição.",
+            editorModule: "service_composition",
+            lastEditedSection: "materials_equipments_logistics",
+          },
+        }
+      );
 
       if (!updated) {
         throw new Error("Não foi possível atualizar a planilha.");
@@ -467,9 +372,8 @@ export default function ServiceCompositionEditor({
 
       setFeedback({
         type: "success",
-        message: shouldCreateSnapshot
-          ? "Composição salva com cálculo persistido e snapshot automático pré-atualização registrado."
-          : "Composição salva com cálculo, resumo técnico e memória persistida.",
+        message:
+          "Composição de serviços salva com snapshot automático, cálculo, resumo técnico e memória persistida.",
       });
 
       onSpreadsheetUpdated?.(updated);
@@ -500,9 +404,9 @@ export default function ServiceCompositionEditor({
               </Typography>
 
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-                Este bloco opera com cálculo estruturado, classificando materiais,
-                insumos, equipamentos, logística e apoio operacional, além de persistir
-                resumo técnico, memória de composição e snapshot automático pré-atualização.
+                Este bloco opera com cálculo estruturado, classificação por natureza
+                do custo, persistência da memória técnica e snapshot automático antes
+                do salvamento de alterações relevantes.
               </Typography>
             </Box>
 
@@ -723,9 +627,7 @@ export default function ServiceCompositionEditor({
                           <EditableCell
                             type="number"
                             value={row.valorUnitario}
-                            onChange={(value) =>
-                              updateRow(index, "valorUnitario", value)
-                            }
+                            onChange={(value) => updateRow(index, "valorUnitario", value)}
                             min={0}
                             step={0.01}
                           />
