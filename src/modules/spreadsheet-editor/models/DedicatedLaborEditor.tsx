@@ -43,6 +43,18 @@ type Props = {
 
 type EditorRow = SpreadsheetRecord["rows"][number];
 
+type VersionHistoryEntry = {
+  id: string;
+  versionNumber: number;
+  label: string;
+  createdAt: string;
+  reason: string;
+  origin: string;
+  spreadsheetId: string;
+  rows: SpreadsheetRecord["rows"];
+  notes?: string;
+};
+
 const STATUS_OPTIONS = [
   { value: "Pendente", label: "Pendente" },
   { value: "Conferido", label: "Conferido" },
@@ -254,6 +266,87 @@ function formatCurrency(value: number) {
   }).format(value || 0);
 }
 
+function buildHistoryId(prefix = "version") {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+}
+
+function cloneRows(rows: SpreadsheetRecord["rows"]): SpreadsheetRecord["rows"] {
+  return rows.map((row) => ({
+    ...row,
+    trainingTags: Array.isArray(row.trainingTags) ? [...row.trainingTags] : [],
+    metadata:
+      row.metadata && typeof row.metadata === "object"
+        ? { ...(row.metadata as Record<string, unknown>) }
+        : row.metadata,
+  }));
+}
+
+function readVersionHistory(
+  spreadsheet: SpreadsheetRecord
+): VersionHistoryEntry[] {
+  const raw = spreadsheet.metadata?.versionHistory;
+  return Array.isArray(raw) ? (raw as VersionHistoryEntry[]) : [];
+}
+
+function readCurrentVersionNumber(spreadsheet: SpreadsheetRecord) {
+  const raw = spreadsheet.metadata?.versionNumber;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return raw;
+  }
+
+  const history = readVersionHistory(spreadsheet);
+  const maxHistoryVersion = history.reduce((max, item) => {
+    const value =
+      typeof item.versionNumber === "number" && Number.isFinite(item.versionNumber)
+        ? item.versionNumber
+        : 0;
+    return Math.max(max, value);
+  }, 0);
+
+  return Math.max(1, maxHistoryVersion + (history.length > 0 ? 1 : 0));
+}
+
+function buildPreUpdateSnapshot(
+  spreadsheet: SpreadsheetRecord,
+  reason: string
+): VersionHistoryEntry {
+  const currentVersionNumber = readCurrentVersionNumber(spreadsheet);
+  const createdAt = new Date().toISOString();
+
+  return {
+    id: buildHistoryId("snapshot"),
+    versionNumber: currentVersionNumber,
+    label: `Versão ${currentVersionNumber}`,
+    createdAt,
+    reason,
+    origin: "auto_snapshot",
+    spreadsheetId: spreadsheet.id,
+    rows: cloneRows(spreadsheet.rows),
+    notes: "Snapshot automático gerado antes da atualização do módulo laboral.",
+  };
+}
+
+function hasMeaningfulLaborChanges(
+  previousRows: SpreadsheetRecord["rows"],
+  nextRows: SpreadsheetRecord["rows"],
+  previousChargesConfig: LaborChargesConfig,
+  nextChargesConfig: LaborChargesConfig
+) {
+  if (JSON.stringify(previousRows) !== JSON.stringify(nextRows)) {
+    return true;
+  }
+
+  if (JSON.stringify(previousChargesConfig) !== JSON.stringify(nextChargesConfig)) {
+    return true;
+  }
+
+  return false;
+}
+
 export default function DedicatedLaborEditor({
   spreadsheet,
   onSpreadsheetUpdated,
@@ -376,6 +469,25 @@ export default function DedicatedLaborEditor({
         0
       );
 
+      const currentVersionNumber = readCurrentVersionNumber(spreadsheet);
+      const previousRowsSnapshot = cloneRows(spreadsheet.rows);
+      const existingHistory = readVersionHistory(spreadsheet);
+      const previousChargesConfig = extractStoredChargesConfig(spreadsheet);
+
+      const shouldCreateSnapshot = hasMeaningfulLaborChanges(
+        previousRowsSnapshot,
+        rebuiltRows,
+        previousChargesConfig,
+        chargesConfig
+      );
+
+      const preUpdateSnapshot = shouldCreateSnapshot
+        ? buildPreUpdateSnapshot(
+            spreadsheet,
+            "Snapshot automático pré-atualização do módulo laboral"
+          )
+        : null;
+
       const updated = updateSpreadsheet(spreadsheet.id, {
         rows: rebuiltRows,
         monthlyBaseValue,
@@ -386,6 +498,12 @@ export default function DedicatedLaborEditor({
           lastEditedSection: "labor_rows_and_charges",
           laborChargesConfig: chargesConfig,
           laborCostBreakdown: recalculatedLaborCost,
+          previousVersionRows: previousRowsSnapshot,
+          previousSpreadsheetId: spreadsheet.id,
+          versionNumber: currentVersionNumber + (shouldCreateSnapshot ? 1 : 0),
+          versionHistory: preUpdateSnapshot
+            ? [preUpdateSnapshot, ...existingHistory]
+            : existingHistory,
         },
       });
 
@@ -395,7 +513,9 @@ export default function DedicatedLaborEditor({
 
       setFeedback({
         type: "success",
-        message: "Mão de obra, encargos e benefícios salvos com sucesso.",
+        message: shouldCreateSnapshot
+          ? "Mão de obra, encargos e benefícios salvos com snapshot automático pré-atualização."
+          : "Mão de obra, encargos e benefícios salvos com sucesso.",
       });
 
       onSpreadsheetUpdated?.(updated);
@@ -426,9 +546,9 @@ export default function DedicatedLaborEditor({
               </Typography>
 
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-                Este bloco permite editar a estrutura de mão de obra da planilha e
-                gerar automaticamente encargos e benefícios a partir de parâmetros
-                configuráveis.
+                Este bloco permite editar a estrutura de mão de obra da planilha,
+                gerar encargos e benefícios automaticamente e registrar snapshot
+                pré-atualização para rastreabilidade.
               </Typography>
             </Box>
 
