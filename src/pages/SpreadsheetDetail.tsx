@@ -24,7 +24,6 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import Groups2OutlinedIcon from "@mui/icons-material/Groups2Outlined";
@@ -33,15 +32,12 @@ import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import CompareArrowsOutlinedIcon from "@mui/icons-material/CompareArrowsOutlined";
 import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import PlaylistAddCheckCircleOutlinedIcon from "@mui/icons-material/PlaylistAddCheckCircleOutlined";
 import AttachMoneyOutlinedIcon from "@mui/icons-material/AttachMoneyOutlined";
 import ManageSearchOutlinedIcon from "@mui/icons-material/ManageSearchOutlined";
-import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import PrecisionManufacturingOutlinedIcon from "@mui/icons-material/PrecisionManufacturingOutlined";
 import SummarizeOutlinedIcon from "@mui/icons-material/SummarizeOutlined";
-import MemoryOutlinedIcon from "@mui/icons-material/MemoryOutlined";
 import FunctionsOutlinedIcon from "@mui/icons-material/FunctionsOutlined";
 import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import RestoreOutlinedIcon from "@mui/icons-material/RestoreOutlined";
@@ -49,9 +45,7 @@ import FlagOutlinedIcon from "@mui/icons-material/FlagOutlined";
 import TimelineOutlinedIcon from "@mui/icons-material/TimelineOutlined";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
-import AttachFileIcon from "@mui/icons-material/AttachFile";
 import { Link as RouterLink, useParams } from "react-router-dom";
-import SpreadsheetEditor from "../modules/spreadsheet-editor/SpreadsheetEditor";
 import SpreadsheetVersionComparisonPanel from "../components/versioning/SpreadsheetVersionComparisonPanel";
 import ServiceCompositionComparisonPanel from "../components/service-composition/ServiceCompositionComparisonPanel";
 import LaborVersionComparisonPanel from "../modules/spreadsheet-editor/components/LaborVersionComparisonPanel";
@@ -81,7 +75,6 @@ type SpreadsheetDetailRecord = SpreadsheetRecord & {
   monthlyBaseValue?: number;
   notes?: string;
   domainScenario?: string;
-  rows: SpreadsheetDetailRow[];
   trainingProfile?: {
     domainScenarioLabel?: string;
     interpretationTags?: string[];
@@ -91,6 +84,7 @@ type SpreadsheetDetailRecord = SpreadsheetRecord & {
     readingHints?: string[];
   };
   metadata?: Record<string, unknown>;
+  rows: SpreadsheetDetailRow[];
 };
 
 type EditorState = {
@@ -407,6 +401,170 @@ function getOriginLabel(origin?: string) {
   }
 }
 
+function getModelLabel(modelType?: string) {
+  switch (modelType) {
+    case "dedicated_labor":
+      return "Terceirização com dedicação exclusiva";
+    case "non_dedicated_labor":
+      return "Terceirização sem dedicação exclusiva";
+    case "service_composition":
+      return "Serviços por composição";
+    case "economic_rebalance":
+      return "Repactuação / revisão";
+    default:
+      return "Planilha";
+  }
+}
+
+function getModelIcon(modelType?: string) {
+  switch (modelType) {
+    case "dedicated_labor":
+      return <Groups2OutlinedIcon sx={{ fontSize: 18 }} />;
+    case "non_dedicated_labor":
+      return <TableChartOutlinedIcon sx={{ fontSize: 18 }} />;
+    case "service_composition":
+      return <AccountTreeOutlinedIcon sx={{ fontSize: 18 }} />;
+    case "economic_rebalance":
+      return <CompareArrowsOutlinedIcon sx={{ fontSize: 18 }} />;
+    default:
+      return <TableChartIcon sx={{ fontSize: 18 }} />;
+  }
+}
+
+function getModelChipStyles(modelType?: string) {
+  switch (modelType) {
+    case "dedicated_labor":
+      return { backgroundColor: "#EDE7F6", color: "#5E35B1" };
+    case "non_dedicated_labor":
+      return { backgroundColor: "#E3F2FD", color: "#1565C0" };
+    case "service_composition":
+      return { backgroundColor: "#E8F5E9", color: "#2E7D32" };
+    case "economic_rebalance":
+      return { backgroundColor: "#FFF3E0", color: "#EF6C00" };
+    default:
+      return { backgroundColor: "#EDE7F6", color: "#5E35B1" };
+  }
+}
+
+function getStatusChipStyles(status?: string) {
+  switch (status) {
+    case "Em elaboração":
+      return { backgroundColor: "#EFE7F6", color: "#8E5AB5" };
+    case "Concluída":
+      return { backgroundColor: "#E7F6EC", color: "#2E7D32" };
+    case "Em revisão":
+      return { backgroundColor: "#FFF3E0", color: "#ED6C02" };
+    case "Exemplo nativo":
+      return { backgroundColor: "#E3F2FD", color: "#1565C0" };
+    default:
+      return { backgroundColor: "#EFE7F6", color: "#8E5AB5" };
+  }
+}
+
+function categoryMatches(category: string, terms: string[]) {
+  const normalized = category.toLowerCase();
+  return terms.some((term) => normalized.includes(term.toLowerCase()));
+}
+
+function itemMatches(item: string, terms: string[]) {
+  const normalized = item.toLowerCase();
+  return terms.some((term) => normalized.includes(term.toLowerCase()));
+}
+
+function sumRowsByCategory(rows: SpreadsheetDetailRow[], terms: string[]) {
+  return rows.reduce((sum, row) => {
+    if (categoryMatches(String(row.categoria || ""), terms)) {
+      return sum + Number(row.subtotal || 0);
+    }
+    return sum;
+  }, 0);
+}
+
+function findFirstRowByItem(rows: SpreadsheetDetailRow[], terms: string[]) {
+  return rows.find((row) => itemMatches(String(row.item || ""), terms));
+}
+
+function getDomainScenarioLabel(record?: SpreadsheetDetailRecord | null) {
+  const key = record?.domainScenario;
+  if (key && DOMAIN_SCENARIO_LABELS[key]) {
+    return DOMAIN_SCENARIO_LABELS[key];
+  }
+  if (record?.trainingProfile?.domainScenarioLabel) {
+    return record.trainingProfile.domainScenarioLabel;
+  }
+  return "Não classificado";
+}
+function extractStoredEditorDraft(record: SpreadsheetDetailRecord) {
+  const metadata = record.metadata;
+  if (!isRecord(metadata)) {
+    return {};
+  }
+  const raw = metadata["editorDraft"];
+  if (!isRecord(raw)) {
+    return {};
+  }
+  return raw as Partial<EditorState>;
+}
+
+function readMetadataRecord(
+  record: SpreadsheetDetailRecord | null | undefined,
+  key: string
+): Record<string, unknown> | null {
+  if (!record || !isRecord(record.metadata)) {
+    return null;
+  }
+  const raw = record.metadata[key];
+  return isRecord(raw) ? raw : null;
+}
+
+function readMetadataArray<T>(
+  record: SpreadsheetDetailRecord | null | undefined,
+  key: string
+): T[] {
+  if (!record || !isRecord(record.metadata)) {
+    return [];
+  }
+  const raw = record.metadata[key];
+  return Array.isArray(raw) ? (raw as T[]) : [];
+}
+
+function readLaborCostBreakdown(
+  record: SpreadsheetDetailRecord | null | undefined
+): LaborCostBreakdown | null {
+  const raw = readMetadataRecord(record, "laborCostBreakdown");
+  return raw ? (raw as LaborCostBreakdown) : null;
+}
+
+function readLaborChargesConfig(
+  record: SpreadsheetDetailRecord | null | undefined
+): LaborChargesConfig | null {
+  const raw = readMetadataRecord(record, "laborChargesConfig");
+  return raw ? (raw as LaborChargesConfig) : null;
+}
+
+function readServiceCompositionSummary(
+  record: SpreadsheetDetailRecord | null | undefined
+): ServiceCompositionSummary | null {
+  const raw = readMetadataRecord(record, "serviceCompositionSummary");
+  return raw ? (raw as ServiceCompositionSummary) : null;
+}
+
+function readServiceCompositionMemoryBundle(
+  record: SpreadsheetDetailRecord | null | undefined
+): ServiceCompositionMemoryItem[] {
+  return readMetadataArray<ServiceCompositionMemoryItem>(
+    record,
+    "serviceCompositionMemoryBundle"
+  );
+}
+
+function readServiceCompositionEngineSnapshot(
+  record: SpreadsheetDetailRecord | null | undefined
+): ServiceCompositionEngineSnapshot | null {
+  const raw = readMetadataRecord(record, "serviceCompositionEngineSnapshot");
+  return raw ? (raw as ServiceCompositionEngineSnapshot) : null;
+}
+
 function buildVersionHistoryItemFromRecord(
   record: SpreadsheetDetailRecord,
   options?: Partial<VersionHistoryItem>
@@ -429,6 +587,19 @@ function buildVersionHistoryItemFromRecord(
     rows: options?.rows ?? record.rows,
     notes: options?.notes,
   };
+}
+
+function sortVersionHistoryDesc(a: VersionHistoryItem, b: VersionHistoryItem) {
+  const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+  const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+
+  if (aTime !== bTime) {
+    return bTime - aTime;
+  }
+
+  const aVersion = a.versionNumber ?? -1;
+  const bVersion = b.versionNumber ?? -1;
+  return bVersion - aVersion;
 }
 
 function readVersionHistoryFromMetadata(
@@ -568,18 +739,6 @@ function readVersionHistoryFromMetadata(
   return items.sort(sortVersionHistoryDesc);
 }
 
-function sortVersionHistoryDesc(a: VersionHistoryItem, b: VersionHistoryItem) {
-  const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-  const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-
-  if (aTime !== bTime) {
-    return bTime - aTime;
-  }
-
-  const aVersion = a.versionNumber ?? -1;
-  const bVersion = b.versionNumber ?? -1;
-  return bVersion - aVersion;
-}
 function resolveVersionHistoryRecord(
   item: VersionHistoryItem,
   currentSpreadsheet: SpreadsheetDetailRecord
@@ -607,603 +766,6 @@ function resolveVersionHistoryRecord(
   return null;
 }
 
-function getModelLabel(modelType?: string) {
-  switch (modelType) {
-    case "dedicated_labor":
-      return "Terceirização com dedicação exclusiva";
-    case "non_dedicated_labor":
-      return "Terceirização sem dedicação exclusiva";
-    case "service_composition":
-      return "Serviços por composição";
-    case "economic_rebalance":
-      return "Repactuação / revisão";
-    default:
-      return "Planilha";
-  }
-}
-
-function getModelIcon(modelType?: string) {
-  switch (modelType) {
-    case "dedicated_labor":
-      return <Groups2OutlinedIcon sx={{ fontSize: 18 }} />;
-    case "non_dedicated_labor":
-      return <TableChartOutlinedIcon sx={{ fontSize: 18 }} />;
-    case "service_composition":
-      return <AccountTreeOutlinedIcon sx={{ fontSize: 18 }} />;
-    case "economic_rebalance":
-      return <CompareArrowsOutlinedIcon sx={{ fontSize: 18 }} />;
-    default:
-      return <TableChartIcon sx={{ fontSize: 18 }} />;
-  }
-}
-
-function getModelChipStyles(modelType?: string) {
-  switch (modelType) {
-    case "dedicated_labor":
-      return { backgroundColor: "#EDE7F6", color: "#5E35B1" };
-    case "non_dedicated_labor":
-      return { backgroundColor: "#E3F2FD", color: "#1565C0" };
-    case "service_composition":
-      return { backgroundColor: "#E8F5E9", color: "#2E7D32" };
-    case "economic_rebalance":
-      return { backgroundColor: "#FFF3E0", color: "#EF6C00" };
-    default:
-      return { backgroundColor: "#EDE7F6", color: "#5E35B1" };
-  }
-}
-
-function getStatusChipStyles(status?: string) {
-  switch (status) {
-    case "Em elaboração":
-      return { backgroundColor: "#EFE7F6", color: "#8E5AB5" };
-    case "Concluída":
-      return { backgroundColor: "#E7F6EC", color: "#2E7D32" };
-    case "Em revisão":
-      return { backgroundColor: "#FFF3E0", color: "#ED6C02" };
-    case "Exemplo nativo":
-      return { backgroundColor: "#E3F2FD", color: "#1565C0" };
-    default:
-      return { backgroundColor: "#EFE7F6", color: "#8E5AB5" };
-  }
-}
-
-function categoryMatches(category: string, terms: string[]) {
-  const normalized = category.toLowerCase();
-  return terms.some((term) => normalized.includes(term.toLowerCase()));
-}
-
-function itemMatches(item: string, terms: string[]) {
-  const normalized = item.toLowerCase();
-  return terms.some((term) => normalized.includes(term.toLowerCase()));
-}
-
-function sumRowsByCategory(rows: SpreadsheetDetailRow[], terms: string[]) {
-  return rows.reduce((sum, row) => {
-    if (categoryMatches(String(row.categoria || ""), terms)) {
-      return sum + Number(row.subtotal || 0);
-    }
-    return sum;
-  }, 0);
-}
-
-function findFirstRowByItem(rows: SpreadsheetDetailRow[], terms: string[]) {
-  return rows.find((row) => itemMatches(String(row.item || ""), terms));
-}
-
-function getDomainScenarioLabel(record?: SpreadsheetDetailRecord | null) {
-  const key = record?.domainScenario;
-  if (key && DOMAIN_SCENARIO_LABELS[key]) {
-    return DOMAIN_SCENARIO_LABELS[key];
-  }
-  if (record?.trainingProfile?.domainScenarioLabel) {
-    return record.trainingProfile.domainScenarioLabel;
-  }
-  return "Não classificado";
-}
-
-function extractStoredEditorDraft(record: SpreadsheetDetailRecord) {
-  const metadata = record.metadata;
-  if (!isRecord(metadata)) {
-    return {};
-  }
-  const raw = metadata["editorDraft"];
-  if (!isRecord(raw)) {
-    return {};
-  }
-  return raw as Partial<EditorState>;
-}
-
-function readMetadataRecord(
-  record: SpreadsheetDetailRecord | null | undefined,
-  key: string
-): Record<string, unknown> | null {
-  if (!record || !isRecord(record.metadata)) {
-    return null;
-  }
-  const raw = record.metadata[key];
-  return isRecord(raw) ? raw : null;
-}
-
-function readMetadataArray<T>(
-  record: SpreadsheetDetailRecord | null | undefined,
-  key: string
-): T[] {
-  if (!record || !isRecord(record.metadata)) {
-    return [];
-  }
-  const raw = record.metadata[key];
-  return Array.isArray(raw) ? (raw as T[]) : [];
-}
-
-function readLaborCostBreakdown(
-  record: SpreadsheetDetailRecord | null | undefined
-): LaborCostBreakdown | null {
-  const raw = readMetadataRecord(record, "laborCostBreakdown");
-  return raw ? (raw as LaborCostBreakdown) : null;
-}
-
-function readLaborChargesConfig(
-  record: SpreadsheetDetailRecord | null | undefined
-): LaborChargesConfig | null {
-  const raw = readMetadataRecord(record, "laborChargesConfig");
-  return raw ? (raw as LaborChargesConfig) : null;
-}
-
-function readServiceCompositionSummary(
-  record: SpreadsheetDetailRecord | null | undefined
-): ServiceCompositionSummary | null {
-  const raw = readMetadataRecord(record, "serviceCompositionSummary");
-  return raw ? (raw as ServiceCompositionSummary) : null;
-}
-
-function readServiceCompositionMemoryBundle(
-  record: SpreadsheetDetailRecord | null | undefined
-): ServiceCompositionMemoryItem[] {
-  return readMetadataArray<ServiceCompositionMemoryItem>(
-    record,
-    "serviceCompositionMemoryBundle"
-  );
-}
-
-function readServiceCompositionEngineSnapshot(
-  record: SpreadsheetDetailRecord | null | undefined
-): ServiceCompositionEngineSnapshot | null {
-  const raw = readMetadataRecord(record, "serviceCompositionEngineSnapshot");
-  return raw ? (raw as ServiceCompositionEngineSnapshot) : null;
-}
-
-function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
-  const storedDraft = extractStoredEditorDraft(record);
-
-  const laborRows = record.rows.filter((row) =>
-    categoryMatches(String(row.categoria || ""), ["mão de obra", "equipe operacional"])
-  );
-
-  const firstLaborRow = laborRows[0];
-  const mealAllowanceRow = findFirstRowByItem(record.rows, [
-    "vale-alimentação",
-    "vale alimentação",
-    "alimentação",
-  ]);
-  const transportAllowanceRow = findFirstRowByItem(record.rows, [
-    "vale-transporte",
-    "vale transporte",
-    "transporte",
-  ]);
-
-  const laborBreakdown = readLaborCostBreakdown(record);
-
-  const inferredHeadcount =
-    laborBreakdown?.headcount ??
-    record.headcount ??
-    laborRows.reduce((sum, row) => sum + Number(row.quantidade || 0), 0);
-
-  const inferredMonthlyBaseValue =
-    record.monthlyBaseValue ??
-    laborBreakdown?.monthlyLaborTotal ??
-    record.rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
-
-  const inferredSalaryBase =
-    laborBreakdown?.salaryBaseTotal && inferredHeadcount > 0
-      ? laborBreakdown.salaryBaseTotal / inferredHeadcount
-      : Number(firstLaborRow?.valorUnitario || 0);
-
-  const inferredMealAllowance =
-    laborBreakdown?.mealAllowanceTotal && inferredHeadcount > 0
-      ? laborBreakdown.mealAllowanceTotal / inferredHeadcount
-      : Number(mealAllowanceRow?.valorUnitario || 0);
-
-  const inferredTransportAllowance =
-    laborBreakdown?.transportAllowanceTotal && inferredHeadcount > 0
-      ? laborBreakdown.transportAllowanceTotal / inferredHeadcount
-      : Number(transportAllowanceRow?.valorUnitario || 0);
-
-  return {
-    contractingAgency:
-      storedDraft.contractingAgency ?? safeString(record.contractingAgency),
-    contractReference:
-      storedDraft.contractReference ?? safeString(record.contractReference),
-    unitName: storedDraft.unitName ?? safeString(record.unitName),
-    lotName: storedDraft.lotName ?? safeString(record.lotName),
-    referenceDate: storedDraft.referenceDate ?? safeString(record.referenceDate),
-    municipality: storedDraft.municipality ?? "",
-    state: storedDraft.state ?? "",
-    cboCode: storedDraft.cboCode ?? "",
-    professionalCategory:
-      storedDraft.professionalCategory ?? safeString(firstLaborRow?.item),
-    cctReference: storedDraft.cctReference ?? "",
-    taxRegime: storedDraft.taxRegime ?? "lucro_presumido",
-    objectDescription: storedDraft.objectDescription ?? record.description ?? "",
-    domainScenario: storedDraft.domainScenario ?? safeString(record.domainScenario),
-    headcount: storedDraft.headcount ?? stringifyNumber(inferredHeadcount),
-    monthlyBaseValue:
-      storedDraft.monthlyBaseValue ?? stringifyNumber(inferredMonthlyBaseValue),
-    mainShift: storedDraft.mainShift ?? (laborRows.length > 0 ? "Postos contínuos" : ""),
-    workScale: storedDraft.workScale ?? "",
-    weeklyHours: storedDraft.weeklyHours ?? "",
-    monthlyHours: storedDraft.monthlyHours ?? "",
-    salaryBase: storedDraft.salaryBase ?? stringifyNumber(inferredSalaryBase),
-    nightAdditional: storedDraft.nightAdditional ?? "",
-    hazardAdditional: storedDraft.hazardAdditional ?? "",
-    mealAllowance:
-      storedDraft.mealAllowance ?? stringifyNumber(inferredMealAllowance),
-    transportAllowance:
-      storedDraft.transportAllowance ?? stringifyNumber(inferredTransportAllowance),
-    mandatoryBenefitsNotes: storedDraft.mandatoryBenefitsNotes ?? "",
-    notes: storedDraft.notes ?? safeString(record.notes),
-  };
-}
-
-function getExequibilityRisk(
-  mandatoryCostTotal: number,
-  referenceValue: number,
-  totalRowsValue: number
-) {
-  const base = referenceValue > 0 ? referenceValue : totalRowsValue;
-  if (base <= 0) {
-    return {
-      label: "Sem base suficiente",
-      color: "#6D6186",
-      backgroundColor: "#F3EAF7",
-    };
-  }
-
-  const ratio = mandatoryCostTotal / base;
-
-  if (ratio <= 0.75) {
-    return {
-      label: "Baixo risco preliminar",
-      color: "#2E7D32",
-      backgroundColor: "#E7F6EC",
-    };
-  }
-
-  if (ratio <= 0.9) {
-    return {
-      label: "Atenção moderada",
-      color: "#ED6C02",
-      backgroundColor: "#FFF3E0",
-    };
-  }
-
-  return {
-    label: "Alto risco preliminar",
-    color: "#C62828",
-    backgroundColor: "#FDECEC",
-  };
-}
-function resolveVersionHistoryRecord(
-  item: VersionHistoryItem,
-  currentSpreadsheet: SpreadsheetDetailRecord
-): SpreadsheetRecord | null {
-  if (item.isCurrent) {
-    return currentSpreadsheet;
-  }
-
-  if (item.spreadsheetId) {
-    const existing = getSpreadsheetById(item.spreadsheetId);
-    if (existing) {
-      return existing;
-    }
-  }
-
-  if (item.rows && item.rows.length > 0) {
-    return {
-      ...currentSpreadsheet,
-      id: item.spreadsheetId || item.id,
-      title: item.label || currentSpreadsheet.title,
-      rows: item.rows,
-    };
-  }
-
-  return null;
-}
-
-function getModelLabel(modelType?: string) {
-  switch (modelType) {
-    case "dedicated_labor":
-      return "Terceirização com dedicação exclusiva";
-    case "non_dedicated_labor":
-      return "Terceirização sem dedicação exclusiva";
-    case "service_composition":
-      return "Serviços por composição";
-    case "economic_rebalance":
-      return "Repactuação / revisão";
-    default:
-      return "Planilha";
-  }
-}
-
-function getModelIcon(modelType?: string) {
-  switch (modelType) {
-    case "dedicated_labor":
-      return <Groups2OutlinedIcon sx={{ fontSize: 18 }} />;
-    case "non_dedicated_labor":
-      return <TableChartOutlinedIcon sx={{ fontSize: 18 }} />;
-    case "service_composition":
-      return <AccountTreeOutlinedIcon sx={{ fontSize: 18 }} />;
-    case "economic_rebalance":
-      return <CompareArrowsOutlinedIcon sx={{ fontSize: 18 }} />;
-    default:
-      return <TableChartIcon sx={{ fontSize: 18 }} />;
-  }
-}
-
-function getModelChipStyles(modelType?: string) {
-  switch (modelType) {
-    case "dedicated_labor":
-      return { backgroundColor: "#EDE7F6", color: "#5E35B1" };
-    case "non_dedicated_labor":
-      return { backgroundColor: "#E3F2FD", color: "#1565C0" };
-    case "service_composition":
-      return { backgroundColor: "#E8F5E9", color: "#2E7D32" };
-    case "economic_rebalance":
-      return { backgroundColor: "#FFF3E0", color: "#EF6C00" };
-    default:
-      return { backgroundColor: "#EDE7F6", color: "#5E35B1" };
-  }
-}
-
-function getStatusChipStyles(status?: string) {
-  switch (status) {
-    case "Em elaboração":
-      return { backgroundColor: "#EFE7F6", color: "#8E5AB5" };
-    case "Concluída":
-      return { backgroundColor: "#E7F6EC", color: "#2E7D32" };
-    case "Em revisão":
-      return { backgroundColor: "#FFF3E0", color: "#ED6C02" };
-    case "Exemplo nativo":
-      return { backgroundColor: "#E3F2FD", color: "#1565C0" };
-    default:
-      return { backgroundColor: "#EFE7F6", color: "#8E5AB5" };
-  }
-}
-
-function categoryMatches(category: string, terms: string[]) {
-  const normalized = category.toLowerCase();
-  return terms.some((term) => normalized.includes(term.toLowerCase()));
-}
-
-function itemMatches(item: string, terms: string[]) {
-  const normalized = item.toLowerCase();
-  return terms.some((term) => normalized.includes(term.toLowerCase()));
-}
-
-function sumRowsByCategory(rows: SpreadsheetDetailRow[], terms: string[]) {
-  return rows.reduce((sum, row) => {
-    if (categoryMatches(String(row.categoria || ""), terms)) {
-      return sum + Number(row.subtotal || 0);
-    }
-    return sum;
-  }, 0);
-}
-
-function findFirstRowByItem(rows: SpreadsheetDetailRow[], terms: string[]) {
-  return rows.find((row) => itemMatches(String(row.item || ""), terms));
-}
-
-function getDomainScenarioLabel(record?: SpreadsheetDetailRecord | null) {
-  const key = record?.domainScenario;
-  if (key && DOMAIN_SCENARIO_LABELS[key]) {
-    return DOMAIN_SCENARIO_LABELS[key];
-  }
-  if (record?.trainingProfile?.domainScenarioLabel) {
-    return record.trainingProfile.domainScenarioLabel;
-  }
-  return "Não classificado";
-}
-
-function extractStoredEditorDraft(record: SpreadsheetDetailRecord) {
-  const metadata = record.metadata;
-  if (!isRecord(metadata)) {
-    return {};
-  }
-  const raw = metadata["editorDraft"];
-  if (!isRecord(raw)) {
-    return {};
-  }
-  return raw as Partial<EditorState>;
-}
-
-function readMetadataRecord(
-  record: SpreadsheetDetailRecord | null | undefined,
-  key: string
-): Record<string, unknown> | null {
-  if (!record || !isRecord(record.metadata)) {
-    return null;
-  }
-  const raw = record.metadata[key];
-  return isRecord(raw) ? raw : null;
-}
-
-function readMetadataArray<T>(
-  record: SpreadsheetDetailRecord | null | undefined,
-  key: string
-): T[] {
-  if (!record || !isRecord(record.metadata)) {
-    return [];
-  }
-  const raw = record.metadata[key];
-  return Array.isArray(raw) ? (raw as T[]) : [];
-}
-
-function readLaborCostBreakdown(
-  record: SpreadsheetDetailRecord | null | undefined
-): LaborCostBreakdown | null {
-  const raw = readMetadataRecord(record, "laborCostBreakdown");
-  return raw ? (raw as LaborCostBreakdown) : null;
-}
-
-function readLaborChargesConfig(
-  record: SpreadsheetDetailRecord | null | undefined
-): LaborChargesConfig | null {
-  const raw = readMetadataRecord(record, "laborChargesConfig");
-  return raw ? (raw as LaborChargesConfig) : null;
-}
-
-function readServiceCompositionSummary(
-  record: SpreadsheetDetailRecord | null | undefined
-): ServiceCompositionSummary | null {
-  const raw = readMetadataRecord(record, "serviceCompositionSummary");
-  return raw ? (raw as ServiceCompositionSummary) : null;
-}
-
-function readServiceCompositionMemoryBundle(
-  record: SpreadsheetDetailRecord | null | undefined
-): ServiceCompositionMemoryItem[] {
-  return readMetadataArray<ServiceCompositionMemoryItem>(
-    record,
-    "serviceCompositionMemoryBundle"
-  );
-}
-
-function readServiceCompositionEngineSnapshot(
-  record: SpreadsheetDetailRecord | null | undefined
-): ServiceCompositionEngineSnapshot | null {
-  const raw = readMetadataRecord(record, "serviceCompositionEngineSnapshot");
-  return raw ? (raw as ServiceCompositionEngineSnapshot) : null;
-}
-
-function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
-  const storedDraft = extractStoredEditorDraft(record);
-
-  const laborRows = record.rows.filter((row) =>
-    categoryMatches(String(row.categoria || ""), ["mão de obra", "equipe operacional"])
-  );
-
-  const firstLaborRow = laborRows[0];
-  const mealAllowanceRow = findFirstRowByItem(record.rows, [
-    "vale-alimentação",
-    "vale alimentação",
-    "alimentação",
-  ]);
-  const transportAllowanceRow = findFirstRowByItem(record.rows, [
-    "vale-transporte",
-    "vale transporte",
-    "transporte",
-  ]);
-
-  const laborBreakdown = readLaborCostBreakdown(record);
-
-  const inferredHeadcount =
-    laborBreakdown?.headcount ??
-    record.headcount ??
-    laborRows.reduce((sum, row) => sum + Number(row.quantidade || 0), 0);
-
-  const inferredMonthlyBaseValue =
-    record.monthlyBaseValue ??
-    laborBreakdown?.monthlyLaborTotal ??
-    record.rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
-
-  const inferredSalaryBase =
-    laborBreakdown?.salaryBaseTotal && inferredHeadcount > 0
-      ? laborBreakdown.salaryBaseTotal / inferredHeadcount
-      : Number(firstLaborRow?.valorUnitario || 0);
-
-  const inferredMealAllowance =
-    laborBreakdown?.mealAllowanceTotal && inferredHeadcount > 0
-      ? laborBreakdown.mealAllowanceTotal / inferredHeadcount
-      : Number(mealAllowanceRow?.valorUnitario || 0);
-
-  const inferredTransportAllowance =
-    laborBreakdown?.transportAllowanceTotal && inferredHeadcount > 0
-      ? laborBreakdown.transportAllowanceTotal / inferredHeadcount
-      : Number(transportAllowanceRow?.valorUnitario || 0);
-
-  return {
-    contractingAgency:
-      storedDraft.contractingAgency ?? safeString(record.contractingAgency),
-    contractReference:
-      storedDraft.contractReference ?? safeString(record.contractReference),
-    unitName: storedDraft.unitName ?? safeString(record.unitName),
-    lotName: storedDraft.lotName ?? safeString(record.lotName),
-    referenceDate: storedDraft.referenceDate ?? safeString(record.referenceDate),
-    municipality: storedDraft.municipality ?? "",
-    state: storedDraft.state ?? "",
-    cboCode: storedDraft.cboCode ?? "",
-    professionalCategory:
-      storedDraft.professionalCategory ?? safeString(firstLaborRow?.item),
-    cctReference: storedDraft.cctReference ?? "",
-    taxRegime: storedDraft.taxRegime ?? "lucro_presumido",
-    objectDescription: storedDraft.objectDescription ?? record.description ?? "",
-    domainScenario: storedDraft.domainScenario ?? safeString(record.domainScenario),
-    headcount: storedDraft.headcount ?? stringifyNumber(inferredHeadcount),
-    monthlyBaseValue:
-      storedDraft.monthlyBaseValue ?? stringifyNumber(inferredMonthlyBaseValue),
-    mainShift: storedDraft.mainShift ?? (laborRows.length > 0 ? "Postos contínuos" : ""),
-    workScale: storedDraft.workScale ?? "",
-    weeklyHours: storedDraft.weeklyHours ?? "",
-    monthlyHours: storedDraft.monthlyHours ?? "",
-    salaryBase: storedDraft.salaryBase ?? stringifyNumber(inferredSalaryBase),
-    nightAdditional: storedDraft.nightAdditional ?? "",
-    hazardAdditional: storedDraft.hazardAdditional ?? "",
-    mealAllowance:
-      storedDraft.mealAllowance ?? stringifyNumber(inferredMealAllowance),
-    transportAllowance:
-      storedDraft.transportAllowance ?? stringifyNumber(inferredTransportAllowance),
-    mandatoryBenefitsNotes: storedDraft.mandatoryBenefitsNotes ?? "",
-    notes: storedDraft.notes ?? safeString(record.notes),
-  };
-}
-
-function getExequibilityRisk(
-  mandatoryCostTotal: number,
-  referenceValue: number,
-  totalRowsValue: number
-) {
-  const base = referenceValue > 0 ? referenceValue : totalRowsValue;
-  if (base <= 0) {
-    return {
-      label: "Sem base suficiente",
-      color: "#6D6186",
-      backgroundColor: "#F3EAF7",
-    };
-  }
-
-  const ratio = mandatoryCostTotal / base;
-
-  if (ratio <= 0.75) {
-    return {
-      label: "Baixo risco preliminar",
-      color: "#2E7D32",
-      backgroundColor: "#E7F6EC",
-    };
-  }
-
-  if (ratio <= 0.9) {
-    return {
-      label: "Atenção moderada",
-      color: "#ED6C02",
-      backgroundColor: "#FFF3E0",
-    };
-  }
-
-  return {
-    label: "Alto risco preliminar",
-    color: "#C62828",
-    backgroundColor: "#FDECEC",
-  };
-}
 function readPreviousSpreadsheetCandidate(
   spreadsheet: SpreadsheetDetailRecord | null
 ): SpreadsheetRecord | null {
@@ -1232,6 +794,390 @@ function readPreviousSpreadsheetCandidate(
   return null;
 }
 
+function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
+  const storedDraft = extractStoredEditorDraft(record);
+
+  const laborRows = record.rows.filter((row) =>
+    categoryMatches(String(row.categoria || ""), ["mão de obra", "equipe operacional"])
+  );
+
+  const firstLaborRow = laborRows[0];
+  const mealAllowanceRow = findFirstRowByItem(record.rows, [
+    "vale-alimentação",
+    "vale alimentação",
+    "alimentação",
+  ]);
+  const transportAllowanceRow = findFirstRowByItem(record.rows, [
+    "vale-transporte",
+    "vale transporte",
+    "transporte",
+  ]);
+
+  const laborBreakdown = readLaborCostBreakdown(record);
+
+  const inferredHeadcount =
+    laborBreakdown?.headcount ??
+    record.headcount ??
+    laborRows.reduce((sum, row) => sum + Number(row.quantidade || 0), 0);
+
+  const inferredMonthlyBaseValue =
+    record.monthlyBaseValue ??
+    laborBreakdown?.monthlyLaborTotal ??
+    record.rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
+
+  const inferredSalaryBase =
+    laborBreakdown?.salaryBaseTotal && inferredHeadcount > 0
+      ? laborBreakdown.salaryBaseTotal / inferredHeadcount
+      : Number(firstLaborRow?.valorUnitario || 0);
+
+  const inferredMealAllowance =
+    laborBreakdown?.mealAllowanceTotal && inferredHeadcount > 0
+      ? laborBreakdown.mealAllowanceTotal / inferredHeadcount
+      : Number(mealAllowanceRow?.valorUnitario || 0);
+
+  const inferredTransportAllowance =
+    laborBreakdown?.transportAllowanceTotal && inferredHeadcount > 0
+      ? laborBreakdown.transportAllowanceTotal / inferredHeadcount
+      : Number(transportAllowanceRow?.valorUnitario || 0);
+
+  return {
+    contractingAgency:
+      storedDraft.contractingAgency ?? safeString(record.contractingAgency),
+    contractReference:
+      storedDraft.contractReference ?? safeString(record.contractReference),
+    unitName: storedDraft.unitName ?? safeString(record.unitName),
+    lotName: storedDraft.lotName ?? safeString(record.lotName),
+    referenceDate: storedDraft.referenceDate ?? safeString(record.referenceDate),
+    municipality: storedDraft.municipality ?? "",
+    state: storedDraft.state ?? "",
+    cboCode: storedDraft.cboCode ?? "",
+    professionalCategory:
+      storedDraft.professionalCategory ?? safeString(firstLaborRow?.item),
+    cctReference: storedDraft.cctReference ?? "",
+    taxRegime: storedDraft.taxRegime ?? "lucro_presumido",
+    objectDescription: storedDraft.objectDescription ?? record.description ?? "",
+    domainScenario: storedDraft.domainScenario ?? safeString(record.domainScenario),
+    headcount: storedDraft.headcount ?? stringifyNumber(inferredHeadcount),
+    monthlyBaseValue:
+      storedDraft.monthlyBaseValue ?? stringifyNumber(inferredMonthlyBaseValue),
+    mainShift: storedDraft.mainShift ?? (laborRows.length > 0 ? "Postos contínuos" : ""),
+    workScale: storedDraft.workScale ?? "",
+    weeklyHours: storedDraft.weeklyHours ?? "",
+    monthlyHours: storedDraft.monthlyHours ?? "",
+    salaryBase: storedDraft.salaryBase ?? stringifyNumber(inferredSalaryBase),
+    nightAdditional: storedDraft.nightAdditional ?? "",
+    hazardAdditional: storedDraft.hazardAdditional ?? "",
+    mealAllowance:
+      storedDraft.mealAllowance ?? stringifyNumber(inferredMealAllowance),
+    transportAllowance:
+      storedDraft.transportAllowance ?? stringifyNumber(inferredTransportAllowance),
+    mandatoryBenefitsNotes: storedDraft.mandatoryBenefitsNotes ?? "",
+    notes: storedDraft.notes ?? safeString(record.notes),
+  };
+}
+
+function getExequibilityRisk(
+  mandatoryCostTotal: number,
+  referenceValue: number,
+  totalRowsValue: number
+) {
+  const base = referenceValue > 0 ? referenceValue : totalRowsValue;
+  if (base <= 0) {
+    return {
+      label: "Sem base suficiente",
+      color: "#6D6186",
+      backgroundColor: "#F3EAF7",
+    };
+  }
+
+  const ratio = mandatoryCostTotal / base;
+
+  if (ratio <= 0.75) {
+    return {
+      label: "Baixo risco preliminar",
+      color: "#2E7D32",
+      backgroundColor: "#E7F6EC",
+    };
+  }
+
+  if (ratio <= 0.9) {
+    return {
+      label: "Atenção moderada",
+      color: "#ED6C02",
+      backgroundColor: "#FFF3E0",
+    };
+  }
+
+  return {
+    label: "Alto risco preliminar",
+    color: "#C62828",
+    backgroundColor: "#FDECEC",
+  };
+}
+
+function classifyRowToModule(row: SpreadsheetDetailRow): PcfpModuleKey {
+  const category = String(row.categoria || "").toLowerCase();
+  const item = String(row.item || "").toLowerCase();
+
+  if (
+    categoryMatches(category, ["mão de obra", "equipe operacional", "remuneração"]) ||
+    itemMatches(item, ["salário", "posto", "vigia", "porteiro", "recepcionista", "auxiliar"])
+  ) {
+    return "module_1";
+  }
+
+  if (
+    categoryMatches(category, ["encargos", "provisões", "provisoes", "reflexos"]) ||
+    itemMatches(item, ["inss", "fgts", "férias", "ferias", "13º", "provisão", "provisao"])
+  ) {
+    return "module_2";
+  }
+
+  if (
+    categoryMatches(category, ["benefícios", "beneficios"]) ||
+    itemMatches(item, ["vale", "alimentação", "alimentacao", "transporte", "auxílio", "auxilio"])
+  ) {
+    return "module_3";
+  }
+
+  if (
+    categoryMatches(category, ["insumos", "materiais", "uniforme", "epi"]) ||
+    itemMatches(item, ["uniforme", "epi", "insumo", "material", "saneante"])
+  ) {
+    return "module_4";
+  }
+
+  if (
+    categoryMatches(category, ["equipamentos", "logística", "logistica", "apoio operacional"]) ||
+    itemMatches(item, ["equipamento", "máquina", "maquina", "utensílio", "utensilio", "apoio"])
+  ) {
+    return "module_5";
+  }
+
+  return "module_6";
+}
+
+function buildPcfpModuleGroups(rows: SpreadsheetDetailRow[]): PcfpModuleGroup[] {
+  return PCFP_MODULES.map((module) => {
+    const moduleRows =
+      module.key === "module_6"
+        ? rows.filter((row) => classifyRowToModule(row) === "module_6")
+        : rows.filter((row) => classifyRowToModule(row) === module.key);
+
+    return {
+      ...module,
+      rows: moduleRows,
+      total: moduleRows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0),
+    };
+  });
+}
+
+function ExecutiveMetricCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+      <CardContent>
+        <Stack spacing={0.8}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+            {label}
+          </Typography>
+          <Typography
+            variant="h6"
+            sx={{ fontWeight: 800, color: "#2B2340", wordBreak: "break-word" }}
+          >
+            {value}
+          </Typography>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CompactInfoCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+      <CardContent>
+        <Stack spacing={2}>
+          <Typography variant="subtitle1" fontWeight={700}>
+            {title}
+          </Typography>
+          {children}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ModuleSummaryCard({ module }: { module: PcfpModuleGroup }) {
+  return (
+    <Card
+      variant="outlined"
+      sx={{
+        borderRadius: 4,
+        borderColor: module.borderColor,
+        backgroundColor: module.backgroundColor,
+        minWidth: 0,
+      }}
+    >
+      <CardContent>
+        <Stack spacing={1.1}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            {module.icon}
+            <Typography variant="subtitle2" fontWeight={700}>
+              {module.shortTitle}
+            </Typography>
+          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            {module.rows.length} item(ns)
+          </Typography>
+          <Typography variant="h6" fontWeight={800}>
+            {formatCurrency(module.total)}
+          </Typography>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ModuleDetailCard({ module }: { module: PcfpModuleGroup }) {
+  return (
+    <Card
+      variant="outlined"
+      sx={{
+        borderRadius: 4,
+        borderColor: module.borderColor,
+        minWidth: 0,
+      }}
+    >
+      <CardContent>
+        <Stack spacing={2}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            {module.icon}
+            <Box>
+              <Typography variant="subtitle1" fontWeight={700}>
+                {module.title}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {module.description}
+              </Typography>
+            </Box>
+          </Stack>
+
+          <Typography variant="body2">
+            <strong>Total:</strong> {formatCurrency(module.total)}
+          </Typography>
+
+          {module.rows.length > 0 ? (
+            <Box sx={{ overflowX: "auto" }}>
+              <Table size="small" sx={{ minWidth: 720 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>
+                      <strong>Item</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>Categoria</strong>
+                    </TableCell>
+                    <TableCell align="right">
+                      <strong>Qtd.</strong>
+                    </TableCell>
+                    <TableCell align="right">
+                      <strong>Valor unitário</strong>
+                    </TableCell>
+                    <TableCell align="right">
+                      <strong>Subtotal</strong>
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {module.rows.map((row, index) => (
+                    <TableRow key={`${module.key}-${index}-${row.item}`}>
+                      <TableCell>{String(row.item || "—")}</TableCell>
+                      <TableCell>{String(row.categoria || "—")}</TableCell>
+                      <TableCell align="right">{Number(row.quantidade || 0)}</TableCell>
+                      <TableCell align="right">
+                        {formatCurrency(Number(row.valorUnitario || 0))}
+                      </TableCell>
+                      <TableCell align="right">
+                        {formatCurrency(Number(row.subtotal || 0))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Nenhum item classificado neste módulo.
+            </Typography>
+          )}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PersistedCompositionCard({
+  summary,
+  memoryItems,
+  engineSnapshot,
+}: {
+  summary: ServiceCompositionSummary | null;
+  memoryItems: ServiceCompositionMemoryItem[];
+  engineSnapshot: ServiceCompositionEngineSnapshot | null;
+}) {
+  const total =
+    Number(summary?.total ?? 0) || Number(engineSnapshot?.total ?? 0) || 0;
+
+  const itemCount =
+    Number(summary?.itemCount ?? 0) || Number(engineSnapshot?.itemCount ?? 0) || 0;
+
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+      <CardContent>
+        <Stack spacing={2}>
+          <Stack direction="row" spacing={1.25} alignItems="center">
+            <SummarizeOutlinedIcon sx={{ color: "#2E7D32" }} />
+            <Typography variant="h6" fontWeight={700}>
+              Persistência da composição de serviços
+            </Typography>
+          </Stack>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                sm: "repeat(3, minmax(0, 1fr))",
+              },
+              gap: 2,
+            }}
+          >
+            <ExecutiveMetricCard label="Itens persistidos" value={itemCount} />
+            <ExecutiveMetricCard label="Memória técnica" value={memoryItems.length} />
+            <ExecutiveMetricCard label="Total persistido" value={formatCurrency(total)} />
+          </Box>
+
+          <Typography variant="body2" color="text.secondary">
+            Este bloco mostra o resumo persistido da composição, a quantidade de itens na
+            memória de cálculo e o snapshot do motor para leitura técnica posterior.
+          </Typography>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
 export default function SpreadsheetDetail() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<LoadState>("loading");
@@ -1264,7 +1210,9 @@ export default function SpreadsheetDetail() {
       setSpreadsheet(null);
       setEditor(null);
 
-      const localSpreadsheet = getSpreadsheetById(id) as SpreadsheetDetailRecord | undefined;
+      const localSpreadsheet = getSpreadsheetById(id) as
+        | SpreadsheetDetailRecord
+        | undefined;
 
       try {
         const response = await fetch(`/api/spreadsheets/${id}`);
@@ -1732,8 +1680,9 @@ export default function SpreadsheetDetail() {
   const expectedDocuments = safeStringArray(spreadsheet.trainingProfile?.expectedDocuments);
   const expectedCostDrivers = safeStringArray(spreadsheet.trainingProfile?.expectedCostDrivers);
   const validationFocus = safeStringArray(spreadsheet.trainingProfile?.validationFocus);
-  const readingHints = safeStringArray(spreadsheet.trainingProfile?.readingHints);v
-    return (
+  const readingHints = safeStringArray(spreadsheet.trainingProfile?.readingHints);
+
+  return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#F7F3F8", py: 1 }}>
       <Container
         maxWidth={false}
@@ -1773,9 +1722,7 @@ export default function SpreadsheetDetail() {
                 >
                   <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                      <AutoAwesomeOutlinedIcon
-                        sx={{ fontSize: 16, color: "#9C6BC0" }}
-                      />
+                      <AutoAwesomeOutlinedIcon sx={{ fontSize: 16, color: "#9C6BC0" }} />
                       <Typography
                         variant="caption"
                         sx={{
@@ -2272,7 +2219,8 @@ export default function SpreadsheetDetail() {
               </Stack>
             </CardContent>
           </Card>
-                    {spreadsheet.modelType === "service_composition" ? (
+
+          {spreadsheet.modelType === "service_composition" ? (
             <Stack spacing={2.5}>
               <PersistedCompositionCard
                 summary={serviceCompositionSummary}
@@ -2307,12 +2255,8 @@ export default function SpreadsheetDetail() {
           <LaborVersionComparisonPanel
             versionA={baselineVersionLaborBreakdown}
             versionB={selectedVersionLaborBreakdown}
-            labelA={
-              baselineVersionItem ? getVersionLabel(baselineVersionItem) : "Baseline"
-            }
-            labelB={
-              selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Versão selecionada"
-            }
+            labelA={baselineVersionItem ? getVersionLabel(baselineVersionItem) : "Baseline"}
+            labelB={selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Versão selecionada"}
           />
 
           <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
@@ -2421,6 +2365,20 @@ export default function SpreadsheetDetail() {
                   custos obrigatórios e valor de referência indica o nível
                   preliminar de risco de exequibilidade.
                 </Alert>
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Postos estimados:</strong> {effectiveHeadcount || 0}
+                </Typography>
+
+                {laborChargesConfig ? (
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Encargos efetivos persistidos:</strong>{" "}
+                    {laborChargesConfig.effectiveChargesRate ??
+                    laborChargesConfig.totalChargesPercentage ??
+                    0}
+                    %
+                  </Typography>
+                ) : null}
               </Stack>
             </CardContent>
           </Card>
@@ -2473,6 +2431,120 @@ export default function SpreadsheetDetail() {
             </CardContent>
           </Card>
 
+          <Card variant="outlined" sx={{ borderRadius: 4 }}>
+            <CardContent>
+              <Stack spacing={2}>
+                <Typography variant="h6" fontWeight={700}>
+                  Dados editoriais complementares
+                </Typography>
+
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "1fr",
+                      md: "repeat(2, minmax(0, 1fr))",
+                    },
+                    gap: 2,
+                  }}
+                >
+                  <TextField
+                    label="Órgão contratante"
+                    value={editor.contractingAgency}
+                    onChange={(e) => updateEditorField("contractingAgency", e.target.value)}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Referência do contrato"
+                    value={editor.contractReference}
+                    onChange={(e) => updateEditorField("contractReference", e.target.value)}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Unidade"
+                    value={editor.unitName}
+                    onChange={(e) => updateEditorField("unitName", e.target.value)}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Lote"
+                    value={editor.lotName}
+                    onChange={(e) => updateEditorField("lotName", e.target.value)}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Data de referência"
+                    value={editor.referenceDate}
+                    onChange={(e) => updateEditorField("referenceDate", e.target.value)}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Cenário"
+                    value={editor.domainScenario}
+                    onChange={(e) => updateEditorField("domainScenario", e.target.value)}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Quantidade de postos"
+                    value={editor.headcount}
+                    onChange={(e) => updateEditorField("headcount", e.target.value)}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Valor mensal de referência"
+                    value={editor.monthlyBaseValue}
+                    onChange={(e) => updateEditorField("monthlyBaseValue", e.target.value)}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Salário-base"
+                    value={editor.salaryBase}
+                    onChange={(e) => updateEditorField("salaryBase", e.target.value)}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Vale-alimentação"
+                    value={editor.mealAllowance}
+                    onChange={(e) => updateEditorField("mealAllowance", e.target.value)}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Vale-transporte"
+                    value={editor.transportAllowance}
+                    onChange={(e) => updateEditorField("transportAllowance", e.target.value)}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Categoria profissional"
+                    value={editor.professionalCategory}
+                    onChange={(e) =>
+                      updateEditorField("professionalCategory", e.target.value)
+                    }
+                    fullWidth
+                  />
+                </Box>
+
+                <TextField
+                  label="Objeto / descrição"
+                  value={editor.objectDescription}
+                  onChange={(e) => updateEditorField("objectDescription", e.target.value)}
+                  multiline
+                  minRows={3}
+                  fullWidth
+                />
+
+                <TextField
+                  label="Observações"
+                  value={editor.notes}
+                  onChange={(e) => updateEditorField("notes", e.target.value)}
+                  multiline
+                  minRows={4}
+                  fullWidth
+                />
+              </Stack>
+            </CardContent>
+          </Card>
+
           <Snackbar
             open={saveState === "success" || saveState === "error"}
             autoHideDuration={4000}
@@ -2484,3 +2556,30 @@ export default function SpreadsheetDetail() {
     </Box>
   );
 }
+type SpreadsheetDetailRecord = SpreadsheetRecord & {
+  contractReference?: string;
+  contractingAgency?: string;
+  unitName?: string;
+  lotName?: string;
+  referenceDate?: string;
+  headcount?: number;
+  monthlyBaseValue?: number;
+  notes?: string;
+  domainScenario?: string;
+  trainingProfile?: {
+    domainScenarioLabel?: string;
+    interpretationTags?: string[];
+    expectedDocuments?: string[];
+    expectedCostDrivers?: string[];
+    validationFocus?: string[];
+    readingHints?: string[];
+  };
+  metadata?: Record<string, unknown>;
+  rows: SpreadsheetDetailRow[];
+  title?: string;
+  description?: string;
+  category?: string;
+  status?: string;
+  modelType?: string;
+  updatedAt?: string;
+};
