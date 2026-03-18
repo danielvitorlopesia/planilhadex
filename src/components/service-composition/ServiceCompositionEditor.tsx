@@ -9,6 +9,10 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import PrecisionManufacturingOutlinedIcon from "@mui/icons-material/PrecisionManufacturingOutlined";
+import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
+import SupportAgentOutlinedIcon from "@mui/icons-material/SupportAgentOutlined";
 
 export type ServiceCompositionRow = {
   id: string;
@@ -62,6 +66,45 @@ function formatCurrency(value: number) {
   }).format(value || 0);
 }
 
+function ChipLike({ label }: { label: string }) {
+  return (
+    <Box
+      sx={{
+        px: 1.4,
+        py: 0.7,
+        borderRadius: 999,
+        border: "1px solid #D8CCE6",
+        backgroundColor: "#FFFFFF",
+      }}
+    >
+      <Typography variant="caption" sx={{ fontWeight: 600, color: "#4A3A60" }}>
+        {label}
+      </Typography>
+    </Box>
+  );
+}
+
+function SummaryMiniCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: string;
+}) {
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 3 }}>
+      <CardContent>
+        <Typography variant="body2" color="text.secondary">
+          {title}
+        </Typography>
+        <Typography variant="h6" fontWeight={800}>
+          {value}
+        </Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ServiceCompositionEditor({ rows, onChange }: Props) {
   function updateRow(
     id: string,
@@ -107,6 +150,16 @@ export default function ServiceCompositionEditor({ rows, onChange }: Props) {
     }
   );
 
+  const actionButtonSx = {
+    width: "100%",
+    minHeight: 56,
+    justifyContent: "flex-start",
+    px: 2.25,
+    borderRadius: 3,
+    textTransform: "none" as const,
+    fontWeight: 700,
+  };
+
   return (
     <Card
       variant="outlined"
@@ -122,45 +175,68 @@ export default function ServiceCompositionEditor({ rows, onChange }: Props) {
           <Stack
             direction={{ xs: "column", xl: "row" }}
             justifyContent="space-between"
-            alignItems={{ xs: "flex-start", xl: "center" }}
+            alignItems={{ xs: "flex-start", xl: "flex-start" }}
             spacing={2}
           >
-            <Box>
+            <Box sx={{ maxWidth: 560 }}>
               <Typography variant="h6" fontWeight={700}>
                 Editor — Serviços por composição
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                 Este bloco opera com cálculo estruturado, classificação por natureza
-                do custo e organização operacional da composição.
+                do custo, persistência da memória técnica e snapshot automático antes
+                do salvamento de alterações relevantes.
               </Typography>
             </Box>
 
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  sm: "repeat(2, minmax(0, 1fr))",
+                },
+                gap: 1.5,
+                width: { xs: "100%", xl: 520 },
+                flexShrink: 0,
+              }}
+            >
               <Button
                 variant="outlined"
+                startIcon={<Inventory2OutlinedIcon />}
+                sx={actionButtonSx}
                 onClick={() => addRow("Materiais e insumos")}
               >
                 Adicionar material
               </Button>
+
               <Button
                 variant="outlined"
+                startIcon={<PrecisionManufacturingOutlinedIcon />}
+                sx={actionButtonSx}
                 onClick={() => addRow("Equipamentos")}
               >
                 Adicionar equipamento
               </Button>
+
               <Button
                 variant="outlined"
+                startIcon={<LocalShippingOutlinedIcon />}
+                sx={actionButtonSx}
                 onClick={() => addRow("Logística")}
               >
                 Adicionar logística
               </Button>
+
               <Button
                 variant="outlined"
+                startIcon={<SupportAgentOutlinedIcon />}
+                sx={actionButtonSx}
                 onClick={() => addRow("Apoio operacional")}
               >
                 Adicionar apoio
               </Button>
-            </Stack>
+            </Box>
           </Stack>
 
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -366,45 +442,6 @@ export default function ServiceCompositionEditor({ rows, onChange }: Props) {
             />
           </Box>
         </Stack>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ChipLike({ label }: { label: string }) {
-  return (
-    <Box
-      sx={{
-        px: 1.4,
-        py: 0.7,
-        borderRadius: 999,
-        border: "1px solid #D8CCE6",
-        backgroundColor: "#FFFFFF",
-      }}
-    >
-      <Typography variant="caption" sx={{ fontWeight: 600, color: "#4A3A60" }}>
-        {label}
-      </Typography>
-    </Box>
-  );
-}
-
-function SummaryMiniCard({
-  title,
-  value,
-}: {
-  title: string;
-  value: string;
-}) {
-  return (
-    <Card variant="outlined" sx={{ borderRadius: 3 }}>
-      <CardContent>
-        <Typography variant="body2" color="text.secondary">
-          {title}
-        </Typography>
-        <Typography variant="h6" fontWeight={800}>
-          {value}
-        </Typography>
       </CardContent>
     </Card>
   );
