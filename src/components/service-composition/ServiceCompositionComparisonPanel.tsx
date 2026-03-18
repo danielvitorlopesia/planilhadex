@@ -28,6 +28,8 @@ import {
 type Props = {
   comparison: ServiceCompositionComparisonResult;
   title?: string;
+  previousLabel?: string;
+  currentLabel?: string;
 };
 
 function formatCurrency(value: number) {
@@ -326,6 +328,8 @@ function ComparisonRowCard({ row }: { row: ServiceCompositionRowComparison }) {
 export default function ServiceCompositionComparisonPanel({
   comparison,
   title = "Comparação entre versões da composição",
+  previousLabel,
+  currentLabel,
 }: Props) {
   const changedRows = useMemo(
     () => comparison.rows.filter((row) => row.changeType !== "unchanged"),
@@ -344,6 +348,25 @@ export default function ServiceCompositionComparisonPanel({
               {title}
             </Typography>
           </Stack>
+
+          {previousLabel || currentLabel ? (
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              {previousLabel ? (
+                <Chip
+                  size="small"
+                  label={`Base: ${previousLabel}`}
+                  variant="outlined"
+                />
+              ) : null}
+              {currentLabel ? (
+                <Chip
+                  size="small"
+                  label={`Atual: ${currentLabel}`}
+                  variant="outlined"
+                />
+              ) : null}
+            </Stack>
+          ) : null}
 
           <Typography variant="body2" color="text.secondary">
             Painel comparativo da composição de serviços entre duas versões, com
