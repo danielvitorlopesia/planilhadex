@@ -479,6 +479,7 @@ function itemMatches(item: string, terms: string[]) {
   const normalized = item.toLowerCase();
   return terms.some((term) => normalized.includes(term.toLowerCase()));
 }
+
 function sumRowsByCategory(rows: SpreadsheetDetailRow[], terms: string[]) {
   return rows.reduce((sum, row) => {
     if (categoryMatches(String(row.categoria || ""), terms)) {
@@ -1187,6 +1188,7 @@ function PersistedCompositionCard({
     </Card>
   );
 }
+
 export default function SpreadsheetDetail() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<LoadState>("loading");
@@ -1377,13 +1379,6 @@ export default function SpreadsheetDetail() {
   const totalItems = spreadsheet?.rows.length ?? 0;
   const pendingItems =
     spreadsheet?.rows.filter((row) => String(row.status || "") === "Pendente").length ?? 0;
-
-  const laborRows = useMemo(() => {
-    if (!spreadsheet) return [];
-    return spreadsheet.rows.filter((row) =>
-      categoryMatches(String(row.categoria || ""), ["mão de obra", "equipe operacional"])
-    );
-  }, [spreadsheet]);
 
   const laborCostBreakdown = useMemo(() => readLaborCostBreakdown(spreadsheet), [spreadsheet]);
   const laborChargesConfig = useMemo(() => readLaborChargesConfig(spreadsheet), [spreadsheet]);
@@ -1616,13 +1611,6 @@ export default function SpreadsheetDetail() {
     totalValue,
   ]);
 
-  const compositionEditorTotal = useMemo(() => {
-    return compositionRows.reduce(
-      (sum, row) => sum + Number(row.quantidade || 0) * Number(row.valorUnitario || 0),
-      0
-    );
-  }, [compositionRows]);
-
   function updateEditorField(field: keyof EditorState, value: string) {
     setEditor((current) => {
       if (!current) return current;
@@ -1692,25 +1680,6 @@ export default function SpreadsheetDetail() {
 
       setSpreadsheet(updated);
       setEditor(buildInitialEditorState(updated));
-
-      if (updated.modelType === "service_composition") {
-        const refreshedCompositionRows = updated.rows.map((row, index) => ({
-          id: `${updated.id}-${index}`,
-          item: safeString(row.item),
-          categoria: safeString(row.categoria),
-          tipoDemanda:
-            safeString((row as Record<string, unknown>)?.["tipoDemanda"]) ||
-            safeString((row as Record<string, unknown>)?.["tipo_demanda"]) ||
-            "Não informado",
-          quantidade: Number(row.quantidade || 0),
-          valorUnitario: Number(row.valorUnitario || 0),
-          unidade: safeString((row as Record<string, unknown>)?.["unidade"]) || "",
-          periodicidade:
-            safeString((row as Record<string, unknown>)?.["periodicidade"]) || "",
-        }));
-        setCompositionRows(refreshedCompositionRows);
-      }
-
       setDataSource("local");
       setSaveState("success");
       setSaveMessage("Edição local salva com sucesso.");
@@ -1742,25 +1711,6 @@ export default function SpreadsheetDetail() {
     const next = restored as SpreadsheetDetailRecord;
     setSpreadsheet(next);
     setEditor(buildInitialEditorState(next));
-
-    if (next.modelType === "service_composition") {
-      const restoredCompositionRows = next.rows.map((row, index) => ({
-        id: `${next.id}-${index}`,
-        item: safeString(row.item),
-        categoria: safeString(row.categoria),
-        tipoDemanda:
-          safeString((row as Record<string, unknown>)?.["tipoDemanda"]) ||
-          safeString((row as Record<string, unknown>)?.["tipo_demanda"]) ||
-          "Não informado",
-        quantidade: Number(row.quantidade || 0),
-        valorUnitario: Number(row.valorUnitario || 0),
-        unidade: safeString((row as Record<string, unknown>)?.["unidade"]) || "",
-        periodicidade:
-          safeString((row as Record<string, unknown>)?.["periodicidade"]) || "",
-      }));
-      setCompositionRows(restoredCompositionRows);
-    }
-
     setDataSource("local");
     setSaveState("success");
     setSaveMessage(`${getVersionLabel(item)} restaurada localmente para análise.`);
@@ -2367,27 +2317,10 @@ export default function SpreadsheetDetail() {
 
           {spreadsheet.modelType === "service_composition" ? (
             <Stack spacing={2.5}>
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
-                <CardContent>
-                  <Stack spacing={2}>
-                    <ServiceCompositionEditor
-                      rows={compositionRows}
-                      onChange={setCompositionRows}
-                    />
-
-                    <Typography variant="body2" color="text.secondary">
-                      O editor acima recompõe a camada operacional da planilha de
-                      serviços por composição, permitindo estruturar materiais,
-                      equipamentos, logística e apoio antes da persistência local.
-                    </Typography>
-
-                    <ExecutiveMetricCard
-                      label="Total da composição em edição"
-                      value={formatCurrency(compositionEditorTotal)}
-                    />
-                  </Stack>
-                </CardContent>
-              </Card>
+              <ServiceCompositionEditor
+                rows={compositionRows}
+                onChange={setCompositionRows}
+              />
 
               <PersistedCompositionCard
                 summary={serviceCompositionSummary}
@@ -2423,9 +2356,7 @@ export default function SpreadsheetDetail() {
             versionA={baselineVersionLaborBreakdown}
             versionB={selectedVersionLaborBreakdown}
             labelA={baselineVersionItem ? getVersionLabel(baselineVersionItem) : "Baseline"}
-            labelB={
-              selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Versão selecionada"
-            }
+            labelB={selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Versão selecionada"}
           />
 
           <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
@@ -2543,8 +2474,8 @@ export default function SpreadsheetDetail() {
                   <Typography variant="body2" color="text.secondary">
                     <strong>Encargos efetivos persistidos:</strong>{" "}
                     {laborChargesConfig.effectiveChargesRate ??
-                      laborChargesConfig.totalChargesPercentage ??
-                      0}
+                    laborChargesConfig.totalChargesPercentage ??
+                    0}
                     %
                   </Typography>
                 ) : null}
