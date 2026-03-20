@@ -45,6 +45,8 @@ import FlagOutlinedIcon from "@mui/icons-material/FlagOutlined";
 import TimelineOutlinedIcon from "@mui/icons-material/TimelineOutlined";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
+import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
+import RuleOutlinedIcon from "@mui/icons-material/RuleOutlined";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import SpreadsheetVersionComparisonPanel from "../components/versioning/SpreadsheetVersionComparisonPanel";
 import ServiceCompositionComparisonPanel from "../components/service-composition/ServiceCompositionComparisonPanel";
@@ -62,6 +64,9 @@ import {
   buildServiceCompositionComparisonContext,
   compareServiceCompositionSpreadsheets,
 } from "../modules/spreadsheet-editor/adapters/serviceCompositionVersionAdapter";
+import generateTechnicalOpinion, {
+  TechnicalOpinionOutput,
+} from "../services/technicalOpinionGenerator";
 
 type LoadState = "loading" | "success" | "error";
 type SaveState = "idle" | "saving" | "success" | "error";
@@ -309,7 +314,6 @@ const PCFP_MODULES: PcfpModuleDefinition[] = [
     backgroundColor: "#F8ECFB",
   },
 ];
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -331,6 +335,18 @@ function parseNumber(value: string | number | undefined | null) {
   const normalized = String(value).trim().replace(/\./g, "").replace(",", ".");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function safeNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const normalized = value.replace(/\./g, "").replace(",", ".");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 function stringifyNumber(value: number | undefined | null) {
@@ -483,7 +499,7 @@ function itemMatches(item: string, terms: string[]) {
 function sumRowsByCategory(rows: SpreadsheetDetailRow[], terms: string[]) {
   return rows.reduce((sum, row) => {
     if (categoryMatches(String(row.categoria || ""), terms)) {
-      return sum + Number(row.subtotal || 0);
+      return sum + safeNumber(row.subtotal);
     }
     return sum;
   }, 0);
@@ -803,7 +819,6 @@ function readPreviousSpreadsheetCandidate(
 
   return null;
 }
-
 function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
   const storedDraft = extractStoredEditorDraft(record);
 
@@ -828,27 +843,27 @@ function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
   const inferredHeadcount =
     laborBreakdown?.headcount ??
     record.headcount ??
-    laborRows.reduce((sum, row) => sum + Number(row.quantidade || 0), 0);
+    laborRows.reduce((sum, row) => sum + safeNumber(row.quantidade), 0);
 
   const inferredMonthlyBaseValue =
     record.monthlyBaseValue ??
     laborBreakdown?.monthlyLaborTotal ??
-    record.rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
+    record.rows.reduce((sum, row) => sum + safeNumber(row.subtotal), 0);
 
   const inferredSalaryBase =
     laborBreakdown?.salaryBaseTotal && inferredHeadcount > 0
       ? laborBreakdown.salaryBaseTotal / inferredHeadcount
-      : Number(firstLaborRow?.valorUnitario || 0);
+      : safeNumber(firstLaborRow?.valorUnitario);
 
   const inferredMealAllowance =
     laborBreakdown?.mealAllowanceTotal && inferredHeadcount > 0
       ? laborBreakdown.mealAllowanceTotal / inferredHeadcount
-      : Number(mealAllowanceRow?.valorUnitario || 0);
+      : safeNumber(mealAllowanceRow?.valorUnitario);
 
   const inferredTransportAllowance =
     laborBreakdown?.transportAllowanceTotal && inferredHeadcount > 0
       ? laborBreakdown.transportAllowanceTotal / inferredHeadcount
-      : Number(transportAllowanceRow?.valorUnitario || 0);
+      : safeNumber(transportAllowanceRow?.valorUnitario);
 
   return {
     contractingAgency:
@@ -865,7 +880,7 @@ function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
       storedDraft.professionalCategory ?? safeString(firstLaborRow?.item),
     cctReference: storedDraft.cctReference ?? "",
     taxRegime: storedDraft.taxRegime ?? "lucro_presumido",
-    objectDescription: storedDraft.objectDescription ?? record.description ?? "",
+    objectDescription: storedDraft.objectDescription ?? safeString(record.description),
     domainScenario: storedDraft.domainScenario ?? safeString(record.domainScenario),
     headcount: storedDraft.headcount ?? stringifyNumber(inferredHeadcount),
     monthlyBaseValue:
@@ -969,15 +984,12 @@ function classifyRowToModule(row: SpreadsheetDetailRow): PcfpModuleKey {
 
 function buildPcfpModuleGroups(rows: SpreadsheetDetailRow[]): PcfpModuleGroup[] {
   return PCFP_MODULES.map((module) => {
-    const moduleRows =
-      module.key === "module_6"
-        ? rows.filter((row) => classifyRowToModule(row) === "module_6")
-        : rows.filter((row) => classifyRowToModule(row) === module.key);
+    const moduleRows = rows.filter((row) => classifyRowToModule(row) === module.key);
 
     return {
       ...module,
       rows: moduleRows,
-      total: moduleRows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0),
+      total: moduleRows.reduce((sum, row) => sum + safeNumber(row.subtotal), 0),
     };
   });
 }
@@ -1115,12 +1127,12 @@ function ModuleDetailCard({ module }: { module: PcfpModuleGroup }) {
                     <TableRow key={`${module.key}-${index}-${row.item}`}>
                       <TableCell>{String(row.item || "—")}</TableCell>
                       <TableCell>{String(row.categoria || "—")}</TableCell>
-                      <TableCell align="right">{Number(row.quantidade || 0)}</TableCell>
+                      <TableCell align="right">{safeNumber(row.quantidade)}</TableCell>
                       <TableCell align="right">
-                        {formatCurrency(Number(row.valorUnitario || 0))}
+                        {formatCurrency(safeNumber(row.valorUnitario))}
                       </TableCell>
                       <TableCell align="right">
-                        {formatCurrency(Number(row.subtotal || 0))}
+                        {formatCurrency(safeNumber(row.subtotal))}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1148,10 +1160,10 @@ function PersistedCompositionCard({
   engineSnapshot: ServiceCompositionEngineSnapshot | null;
 }) {
   const total =
-    Number(summary?.total ?? 0) || Number(engineSnapshot?.total ?? 0) || 0;
+    safeNumber(summary?.total) || safeNumber(engineSnapshot?.total) || 0;
 
   const itemCount =
-    Number(summary?.itemCount ?? 0) || Number(engineSnapshot?.itemCount ?? 0) || 0;
+    safeNumber(summary?.itemCount) || safeNumber(engineSnapshot?.itemCount) || 0;
 
   return (
     <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
@@ -1189,6 +1201,157 @@ function PersistedCompositionCard({
   );
 }
 
+function TechnicalOpinionCard({
+  opinion,
+}: {
+  opinion: TechnicalOpinionOutput | null;
+}) {
+  if (!opinion) {
+    return null;
+  }
+
+  const toneColor =
+    opinion.riskLevel === "high"
+      ? "#C62828"
+      : opinion.riskLevel === "medium"
+      ? "#ED6C02"
+      : "#2E7D32";
+
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+      <CardContent>
+        <Stack spacing={2.25}>
+          <Stack direction="row" spacing={1.25} alignItems="center">
+            <GavelOutlinedIcon sx={{ color: "#5E35B1" }} />
+            <Typography variant="h6" fontWeight={700}>
+              Parecer técnico automático
+            </Typography>
+          </Stack>
+
+          <Typography variant="body2" color="text.secondary">
+            Camada automatizada de síntese analítica, recomendação e conclusão,
+            construída a partir do quadro atual da planilha, do comparativo de versões
+            e da leitura preliminar de exequibilidade.
+          </Typography>
+
+          <Box
+            sx={{
+              p: 2,
+              borderRadius: 3,
+              border: `1px solid ${toneColor}22`,
+              backgroundColor: `${toneColor}10`,
+            }}
+          >
+            <Typography variant="subtitle2" fontWeight={800} sx={{ color: toneColor, mb: 0.75 }}>
+              Ementa
+            </Typography>
+            <Typography variant="body2">{opinion.ementa}</Typography>
+          </Box>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(2, minmax(0, 1fr))",
+                xl: "repeat(4, minmax(0, 1fr))",
+              },
+              gap: 2,
+            }}
+          >
+            {opinion.indicadores.map((indicator) => (
+              <ExecutiveMetricCard
+                key={`${indicator.label}-${indicator.value}`}
+                label={indicator.label}
+                value={indicator.value}
+              />
+            ))}
+          </Box>
+
+          <CompactInfoCard title="Resumo executivo">
+            <Typography variant="body2">{opinion.resumoExecutivo}</Typography>
+          </CompactInfoCard>
+
+          <CompactInfoCard title="Fundamentação técnica">
+            <Typography variant="body2">{opinion.fundamentacaoTecnica}</Typography>
+          </CompactInfoCard>
+
+          <CompactInfoCard title="Fundamentação técnico-jurídica">
+            <Typography variant="body2">{opinion.fundamentacaoTecnicoJuridica}</Typography>
+          </CompactInfoCard>
+
+          <CompactInfoCard title="Conclusão">
+            <Typography variant="body2">{opinion.conclusao}</Typography>
+          </CompactInfoCard>
+
+          <CompactInfoCard title="Recomendação final">
+            <Typography variant="body2">{opinion.recomendacaoFinal}</Typography>
+          </CompactInfoCard>
+
+          <CompactInfoCard title="Versão para gestor">
+            <Typography variant="body2">{opinion.versaoGestor}</Typography>
+          </CompactInfoCard>
+
+          <CompactInfoCard title="Diligências sugeridas">
+            <Stack spacing={1}>
+              {opinion.diligenciasSugeridas.length > 0 ? (
+                opinion.diligenciasSugeridas.map((item, index) => (
+                  <Stack key={`${index}-${item}`} direction="row" spacing={1.25} alignItems="flex-start">
+                    <RuleOutlinedIcon sx={{ fontSize: 18, color: "#7A708D", mt: "2px" }} />
+                    <Typography variant="body2">{item}</Typography>
+                  </Stack>
+                ))
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Nenhuma diligência adicional foi sugerida.
+                </Typography>
+              )}
+            </Stack>
+          </CompactInfoCard>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function mapSpreadsheetRowsToCompositionRows(
+  record: SpreadsheetDetailRecord | null
+): ServiceCompositionRow[] {
+  if (!record || record.modelType !== "service_composition") {
+    return [];
+  }
+
+  return record.rows.map((row, index) => ({
+    id: String(
+      isRecord(row) && row["id"] ? row["id"] : `${record.id}-${index}`
+    ),
+    item: safeString(row.item),
+    categoria: safeString(row.categoria),
+    tipoDemanda:
+      safeString((row as Record<string, unknown>)?.["tipoDemanda"]) ||
+      safeString((row as Record<string, unknown>)?.["tipo_demanda"]) ||
+      "Não informado",
+    quantidade: safeNumber(row.quantidade),
+    valorUnitario: safeNumber(row.valorUnitario),
+    unidade: safeString((row as Record<string, unknown>)?.["unidade"]) || "",
+    periodicidade: safeString((row as Record<string, unknown>)?.["periodicidade"]) || "",
+  }));
+}
+
+function mapCompositionRowsToSpreadsheetRows(
+  rows: ServiceCompositionRow[]
+): SpreadsheetDetailRow[] {
+  return rows.map((row) => ({
+    item: row.item,
+    categoria: row.categoria,
+    quantidade: row.quantidade,
+    valorUnitario: row.valorUnitario,
+    subtotal: safeNumber(row.quantidade) * safeNumber(row.valorUnitario),
+    status: "Editado",
+    memoriaCalculo: `${row.tipoDemanda || "Não informado"} | ${row.unidade || "sem unidade"} | ${row.periodicidade || "sem periodicidade"}` as SpreadsheetDetailRow["memoriaCalculo"],
+  }));
+}
+
 export default function SpreadsheetDetail() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<LoadState>("loading");
@@ -1223,9 +1386,7 @@ export default function SpreadsheetDetail() {
       setEditor(null);
       setCompositionRows([]);
 
-      const localSpreadsheet = getSpreadsheetById(id) as
-        | SpreadsheetDetailRecord
-        | undefined;
+      const localSpreadsheet = getSpreadsheetById(id) as SpreadsheetDetailRecord | undefined;
 
       try {
         const response = await fetch(`/api/spreadsheets/${id}`);
@@ -1244,29 +1405,7 @@ export default function SpreadsheetDetail() {
           if (isMounted) {
             setSpreadsheet(payload);
             setEditor(buildInitialEditorState(payload));
-
-            const initialCompositionRows =
-              payload.modelType === "service_composition"
-                ? payload.rows.map((row, index) => ({
-                    id: String(
-                      isRecord(row) && row["id"] ? row["id"] : `${payload.id}-${index}`
-                    ),
-                    item: safeString(row.item),
-                    categoria: safeString(row.categoria),
-                    tipoDemanda:
-                      safeString((row as Record<string, unknown>)?.["tipoDemanda"]) ||
-                      safeString((row as Record<string, unknown>)?.["tipo_demanda"]) ||
-                      "Não informado",
-                    quantidade: Number(row.quantidade || 0),
-                    valorUnitario: Number(row.valorUnitario || 0),
-                    unidade:
-                      safeString((row as Record<string, unknown>)?.["unidade"]) || "",
-                    periodicidade:
-                      safeString((row as Record<string, unknown>)?.["periodicidade"]) || "",
-                  }))
-                : [];
-
-            setCompositionRows(initialCompositionRows);
+            setCompositionRows(mapSpreadsheetRowsToCompositionRows(payload));
             setDataSource(localDraftOverride ? "local" : "api");
             setState("success");
           }
@@ -1277,31 +1416,7 @@ export default function SpreadsheetDetail() {
           if (isMounted) {
             setSpreadsheet(localSpreadsheet);
             setEditor(buildInitialEditorState(localSpreadsheet));
-
-            const initialCompositionRows =
-              localSpreadsheet.modelType === "service_composition"
-                ? localSpreadsheet.rows.map((row, index) => ({
-                    id: String(
-                      isRecord(row) && row["id"]
-                        ? row["id"]
-                        : `${localSpreadsheet.id}-${index}`
-                    ),
-                    item: safeString(row.item),
-                    categoria: safeString(row.categoria),
-                    tipoDemanda:
-                      safeString((row as Record<string, unknown>)?.["tipoDemanda"]) ||
-                      safeString((row as Record<string, unknown>)?.["tipo_demanda"]) ||
-                      "Não informado",
-                    quantidade: Number(row.quantidade || 0),
-                    valorUnitario: Number(row.valorUnitario || 0),
-                    unidade:
-                      safeString((row as Record<string, unknown>)?.["unidade"]) || "",
-                    periodicidade:
-                      safeString((row as Record<string, unknown>)?.["periodicidade"]) || "",
-                  }))
-                : [];
-
-            setCompositionRows(initialCompositionRows);
+            setCompositionRows(mapSpreadsheetRowsToCompositionRows(localSpreadsheet));
             setDataSource("local");
             setState("success");
           }
@@ -1322,31 +1437,7 @@ export default function SpreadsheetDetail() {
           if (isMounted) {
             setSpreadsheet(localSpreadsheet);
             setEditor(buildInitialEditorState(localSpreadsheet));
-
-            const initialCompositionRows =
-              localSpreadsheet.modelType === "service_composition"
-                ? localSpreadsheet.rows.map((row, index) => ({
-                    id: String(
-                      isRecord(row) && row["id"]
-                        ? row["id"]
-                        : `${localSpreadsheet.id}-${index}`
-                    ),
-                    item: safeString(row.item),
-                    categoria: safeString(row.categoria),
-                    tipoDemanda:
-                      safeString((row as Record<string, unknown>)?.["tipoDemanda"]) ||
-                      safeString((row as Record<string, unknown>)?.["tipo_demanda"]) ||
-                      "Não informado",
-                    quantidade: Number(row.quantidade || 0),
-                    valorUnitario: Number(row.valorUnitario || 0),
-                    unidade:
-                      safeString((row as Record<string, unknown>)?.["unidade"]) || "",
-                    periodicidade:
-                      safeString((row as Record<string, unknown>)?.["periodicidade"]) || "",
-                  }))
-                : [];
-
-            setCompositionRows(initialCompositionRows);
+            setCompositionRows(mapSpreadsheetRowsToCompositionRows(localSpreadsheet));
             setDataSource("local");
             setState("success");
           }
@@ -1370,10 +1461,9 @@ export default function SpreadsheetDetail() {
       isMounted = false;
     };
   }, [id]);
-
-  const totalValue = useMemo(() => {
+    const totalValue = useMemo(() => {
     if (!spreadsheet) return 0;
-    return spreadsheet.rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
+    return spreadsheet.rows.reduce((sum, row) => sum + safeNumber(row.subtotal), 0);
   }, [spreadsheet]);
 
   const totalItems = spreadsheet?.rows.length ?? 0;
@@ -1520,9 +1610,9 @@ export default function SpreadsheetDetail() {
     if (!spreadsheet) return 0;
 
     const persistedLaborMandatory =
-      Number(laborCostBreakdown?.salaryBaseTotal || 0) +
-      Number(laborCostBreakdown?.mandatoryBenefitsTotal || 0) +
-      Number(laborCostBreakdown?.additionalTotal || 0);
+      safeNumber(laborCostBreakdown?.salaryBaseTotal) +
+      safeNumber(laborCostBreakdown?.mandatoryBenefitsTotal) +
+      safeNumber(laborCostBreakdown?.additionalTotal);
 
     if (persistedLaborMandatory > 0) {
       return persistedLaborMandatory;
@@ -1540,7 +1630,7 @@ export default function SpreadsheetDetail() {
   const evidentiaryCostTotal = useMemo(() => {
     if (!spreadsheet) return 0;
 
-    const persistedCompositionTotal = Number(
+    const persistedCompositionTotal = safeNumber(
       serviceCompositionSummary?.total ?? serviceCompositionEngineSnapshot?.total ?? 0
     );
 
@@ -1580,7 +1670,7 @@ export default function SpreadsheetDetail() {
   }, [spreadsheet]);
 
   const effectiveHeadcount = useMemo(() => {
-    const persisted = Number(laborCostBreakdown?.headcount || 0);
+    const persisted = safeNumber(laborCostBreakdown?.headcount);
     if (persisted > 0) {
       return persisted;
     }
@@ -1588,8 +1678,8 @@ export default function SpreadsheetDetail() {
   }, [laborCostBreakdown, editor]);
 
   const effectiveMonthlyReference = useMemo(() => {
-    const persistedLabor = Number(laborCostBreakdown?.monthlyLaborTotal || 0);
-    const persistedComposition = Number(
+    const persistedLabor = safeNumber(laborCostBreakdown?.monthlyLaborTotal);
+    const persistedComposition = safeNumber(
       serviceCompositionSummary?.total ?? serviceCompositionEngineSnapshot?.total ?? 0
     );
     const explicitEditor = parseNumber(editor?.monthlyBaseValue);
@@ -1609,6 +1699,53 @@ export default function SpreadsheetDetail() {
     serviceCompositionEngineSnapshot,
     editor,
     totalValue,
+  ]);
+
+  const technicalOpinion = useMemo<TechnicalOpinionOutput | null>(() => {
+    if (!spreadsheet) {
+      return null;
+    }
+
+    try {
+      return generateTechnicalOpinion({
+        spreadsheet,
+        metadata: spreadsheet.metadata,
+        comparison: baselineToSelectedComparison ?? selectedVersionComparison ?? null,
+        executability: {
+          mandatoryCostTotal,
+          evidentiaryCostTotal,
+          effectiveMonthlyReference,
+          executabilityBalance,
+          riskLabel: exequibilityRisk.label,
+          riskColor: exequibilityRisk.color,
+        },
+        validation: {
+          score:
+            exequibilityRisk.color === "#C62828"
+              ? 82
+              : exequibilityRisk.color === "#ED6C02"
+              ? 58
+              : 24,
+          riskLevel:
+            exequibilityRisk.color === "#C62828"
+              ? "high"
+              : exequibilityRisk.color === "#ED6C02"
+              ? "medium"
+              : "low",
+        },
+      });
+    } catch {
+      return null;
+    }
+  }, [
+    spreadsheet,
+    baselineToSelectedComparison,
+    selectedVersionComparison,
+    mandatoryCostTotal,
+    evidentiaryCostTotal,
+    effectiveMonthlyReference,
+    executabilityBalance,
+    exequibilityRisk,
   ]);
 
   function updateEditorField(field: keyof EditorState, value: string) {
@@ -1632,16 +1769,7 @@ export default function SpreadsheetDetail() {
     try {
       const normalizedRows: SpreadsheetDetailRow[] =
         spreadsheet.modelType === "service_composition"
-          ? compositionRows.map((row) => ({
-              item: row.item,
-              categoria: row.categoria,
-              quantidade: row.quantidade,
-              valorUnitario: row.valorUnitario,
-              subtotal: Number(row.quantidade || 0) * Number(row.valorUnitario || 0),
-              status: "Editado",
-              memoriaCalculo:
-                `${row.tipoDemanda || "Não informado"} | ${row.unidade || "sem unidade"} | ${row.periodicidade || "sem periodicidade"}` as SpreadsheetDetailRow["memoriaCalculo"],
-            }))
+          ? mapCompositionRowsToSpreadsheetRows(compositionRows)
           : spreadsheet.rows;
 
       const updated = updateSpreadsheetEditorDraft(spreadsheet.id, {
@@ -1680,6 +1808,7 @@ export default function SpreadsheetDetail() {
 
       setSpreadsheet(updated);
       setEditor(buildInitialEditorState(updated));
+      setCompositionRows(mapSpreadsheetRowsToCompositionRows(updated));
       setDataSource("local");
       setSaveState("success");
       setSaveMessage("Edição local salva com sucesso.");
@@ -1711,6 +1840,7 @@ export default function SpreadsheetDetail() {
     const next = restored as SpreadsheetDetailRecord;
     setSpreadsheet(next);
     setEditor(buildInitialEditorState(next));
+    setCompositionRows(mapSpreadsheetRowsToCompositionRows(next));
     setDataSource("local");
     setSaveState("success");
     setSaveMessage(`${getVersionLabel(item)} restaurada localmente para análise.`);
@@ -1951,6 +2081,8 @@ export default function SpreadsheetDetail() {
             />
           </Box>
 
+          <TechnicalOpinionCard opinion={technicalOpinion} />
+
           <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
             <CardContent>
               <Stack spacing={2}>
@@ -1990,8 +2122,7 @@ export default function SpreadsheetDetail() {
                     value={selectedVersionItem ? getVersionLabel(selectedVersionItem) : "—"}
                   />
                 </Box>
-
-                <Box
+                                <Box
                   sx={{
                     display: "grid",
                     gridTemplateColumns: {
@@ -2331,8 +2462,14 @@ export default function SpreadsheetDetail() {
               {serviceCompositionComparisonContext ? (
                 <ServiceCompositionComparisonPanel
                   title="Comparação — versão anterior x atual"
-                  previousLabel={serviceCompositionComparisonContext.previousLabel}
-                  currentLabel={serviceCompositionComparisonContext.currentLabel}
+                  previousLabel={
+                    serviceCompositionComparisonContext.previousLabel ??
+                    "Versão anterior"
+                  }
+                  currentLabel={
+                    serviceCompositionComparisonContext.currentLabel ??
+                    "Versão atual"
+                  }
                   comparison={serviceCompositionComparisonContext.comparison}
                 />
               ) : null}
@@ -2356,7 +2493,9 @@ export default function SpreadsheetDetail() {
             versionA={baselineVersionLaborBreakdown}
             versionB={selectedVersionLaborBreakdown}
             labelA={baselineVersionItem ? getVersionLabel(baselineVersionItem) : "Baseline"}
-            labelB={selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Versão selecionada"}
+            labelB={
+              selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Versão selecionada"
+            }
           />
 
           <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
@@ -2474,8 +2613,8 @@ export default function SpreadsheetDetail() {
                   <Typography variant="body2" color="text.secondary">
                     <strong>Encargos efetivos persistidos:</strong>{" "}
                     {laborChargesConfig.effectiveChargesRate ??
-                    laborChargesConfig.totalChargesPercentage ??
-                    0}
+                      laborChargesConfig.totalChargesPercentage ??
+                      0}
                     %
                   </Typography>
                 ) : null}
