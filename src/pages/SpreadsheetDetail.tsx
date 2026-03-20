@@ -376,6 +376,11 @@ function safeRowsArray(value: unknown): SpreadsheetDetailRow[] | undefined {
   return value as SpreadsheetDetailRow[];
 }
 
+function getRowExtraValue(row: SpreadsheetDetailRow, key: string): unknown {
+  const candidate = row as unknown as Record<string, unknown>;
+  return candidate[key];
+}
+
 function normalizeVersionNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -1322,19 +1327,17 @@ function mapSpreadsheetRowsToCompositionRows(
   }
 
   return record.rows.map((row, index) => ({
-    id: String(
-      isRecord(row) && row["id"] ? row["id"] : `${record.id}-${index}`
-    ),
+    id: String(getRowExtraValue(row, "id") ?? `${record.id}-${index}`),
     item: safeString(row.item),
     categoria: safeString(row.categoria),
     tipoDemanda:
-      safeString((row as Record<string, unknown>)?.["tipoDemanda"]) ||
-      safeString((row as Record<string, unknown>)?.["tipo_demanda"]) ||
+      safeString(getRowExtraValue(row, "tipoDemanda")) ||
+      safeString(getRowExtraValue(row, "tipo_demanda")) ||
       "Não informado",
     quantidade: safeNumber(row.quantidade),
     valorUnitario: safeNumber(row.valorUnitario),
-    unidade: safeString((row as Record<string, unknown>)?.["unidade"]) || "",
-    periodicidade: safeString((row as Record<string, unknown>)?.["periodicidade"]) || "",
+    unidade: safeString(getRowExtraValue(row, "unidade")) || "",
+    periodicidade: safeString(getRowExtraValue(row, "periodicidade")) || "",
   }));
 }
 
@@ -1348,7 +1351,8 @@ function mapCompositionRowsToSpreadsheetRows(
     valorUnitario: row.valorUnitario,
     subtotal: safeNumber(row.quantidade) * safeNumber(row.valorUnitario),
     status: "Editado",
-    memoriaCalculo: `${row.tipoDemanda || "Não informado"} | ${row.unidade || "sem unidade"} | ${row.periodicidade || "sem periodicidade"}` as SpreadsheetDetailRow["memoriaCalculo"],
+    memoriaCalculo:
+      `${row.tipoDemanda || "Não informado"} | ${row.unidade || "sem unidade"} | ${row.periodicidade || "sem periodicidade"}` as SpreadsheetDetailRow["memoriaCalculo"],
   }));
 }
 
@@ -1449,7 +1453,7 @@ export default function SpreadsheetDetail() {
           setErrorMessage(
             error instanceof Error
               ? error.message
-              : "Erro inesperado ao carregar a planilha."
+                          : "Erro inesperado ao carregar a planilha."
           );
         }
       }
@@ -1772,7 +1776,7 @@ export default function SpreadsheetDetail() {
           ? mapCompositionRowsToSpreadsheetRows(compositionRows)
           : spreadsheet.rows;
 
-      const updated = updateSpreadsheetEditorDraft(spreadsheet.id, {
+      const updatedBase = updateSpreadsheetEditorDraft(spreadsheet.id, {
         contractingAgency: editor.contractingAgency,
         contractReference: editor.contractReference,
         unitName: editor.unitName,
@@ -1799,12 +1803,20 @@ export default function SpreadsheetDetail() {
         transportAllowance: editor.transportAllowance,
         mandatoryBenefitsNotes: editor.mandatoryBenefitsNotes,
         notes: editor.notes,
-        rows: normalizedRows,
       }) as SpreadsheetDetailRecord | null;
 
-      if (!updated) {
+      if (!updatedBase) {
         throw new Error("Não foi possível salvar a edição local.");
       }
+
+      const updated: SpreadsheetDetailRecord = {
+        ...updatedBase,
+        rows: normalizedRows,
+        metadata: {
+          ...(updatedBase.metadata ?? {}),
+          localDraftOverride: true,
+        },
+      };
 
       setSpreadsheet(updated);
       setEditor(buildInitialEditorState(updated));
@@ -2462,14 +2474,8 @@ export default function SpreadsheetDetail() {
               {serviceCompositionComparisonContext ? (
                 <ServiceCompositionComparisonPanel
                   title="Comparação — versão anterior x atual"
-                  previousLabel={
-                    serviceCompositionComparisonContext.previousLabel ??
-                    "Versão anterior"
-                  }
-                  currentLabel={
-                    serviceCompositionComparisonContext.currentLabel ??
-                    "Versão atual"
-                  }
+                  previousLabel="Versão anterior"
+                  currentLabel="Versão atual"
                   comparison={serviceCompositionComparisonContext.comparison}
                 />
               ) : null}
