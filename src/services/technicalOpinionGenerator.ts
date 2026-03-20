@@ -1,4 +1,5 @@
 export type TechnicalOpinionRiskLevel = "low" | "medium" | "high";
+
 export type TechnicalOpinionExecutability =
   | "exequivel"
   | "exequivel_com_ressalvas"
@@ -120,11 +121,15 @@ function safeNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
-  if (typeof value === "string" && value.trim()) {
-    const normalized = value.replace(/\./g, "").replace(",", ".");
+
+  if (typeof value === "string") {
+    const normalized = value.replace(/\./g, "").replace(",", ".").trim();
     const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : 0;
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
   }
+
   return 0;
 }
 
@@ -136,12 +141,10 @@ function formatCurrency(value: number): string {
 }
 
 function formatPercent(value: number): string {
-  return `${value.toFixed(1).replace(".", ",")}%`;
-}
-
-function toSentenceCase(text: string): string {
-  if (!text) return "";
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  if (value > 1) {
+    return `${value.toFixed(1).replace(".", ",")}%`;
+  }
+  return `${(value * 100).toFixed(1).replace(".", ",")}%`;
 }
 
 function uniqueStrings(values: Array<string | undefined | null>): string[] {
@@ -159,8 +162,17 @@ function uniqueStrings(values: Array<string | undefined | null>): string[] {
   return out;
 }
 
-function inferRiskLevel(input: TechnicalOpinionInput): TechnicalOpinionRiskLevel {
+function formatExecutabilityStatus(
+  status: TechnicalOpinionExecutability
+): string {
+  return status.replace(/_/g, " ");
+}
+
+function inferRiskLevel(
+  input: TechnicalOpinionInput
+): TechnicalOpinionRiskLevel {
   const explicit = safeString(input.validation?.riskLevel);
+
   if (explicit === "high" || explicit === "medium" || explicit === "low") {
     return explicit;
   }
@@ -174,6 +186,7 @@ function inferRiskLevel(input: TechnicalOpinionInput): TechnicalOpinionRiskLevel
 
   const balance = safeNumber(input.executability?.executabilityBalance);
   const reference = safeNumber(input.executability?.effectiveMonthlyReference);
+
   if (reference > 0) {
     const ratio = balance / reference;
     if (ratio < 0) return "high";
@@ -194,6 +207,7 @@ function inferExecutabilityStatus(
   riskLevel: TechnicalOpinionRiskLevel
 ): TechnicalOpinionExecutability {
   const explicit = safeString(input.validation?.executabilityStatus);
+
   if (
     explicit === "exequivel" ||
     explicit === "exequivel_com_ressalvas" ||
@@ -232,6 +246,7 @@ function summarizeTopCategoryDeltas(
   limit = 3
 ): string[] {
   if (!deltas) return [];
+
   return Object.entries(deltas)
     .filter(([, value]) => value !== 0)
     .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
@@ -249,21 +264,38 @@ function summarizeComparisonHighlights(input: TechnicalOpinionInput): string[] {
 
   if (summary) {
     const totalDelta = safeNumber(summary.totalDelta);
+
     if (totalDelta !== 0) {
       const direction = totalDelta >= 0 ? "aumento" : "redução";
       highlights.push(
-        `Houve ${direction} global de ${formatCurrency(Math.abs(totalDelta))} entre as versões comparadas.`
+        `Houve ${direction} global de ${formatCurrency(
+          Math.abs(totalDelta)
+        )} entre as versões comparadas.`
       );
     }
 
     if (safeNumber(summary.addedCount) > 0) {
-      highlights.push(`Foram incluídos ${safeNumber(summary.addedCount)} item(ns) na versão mais recente.`);
+      highlights.push(
+        `Foram incluídos ${safeNumber(
+          summary.addedCount
+        )} item(ns) na versão mais recente.`
+      );
     }
+
     if (safeNumber(summary.removedCount) > 0) {
-      highlights.push(`Foram removidos ${safeNumber(summary.removedCount)} item(ns) em relação à base anterior.`);
+      highlights.push(
+        `Foram removidos ${safeNumber(
+          summary.removedCount
+        )} item(ns) em relação à base anterior.`
+      );
     }
+
     if (safeNumber(summary.changedCount) > 0) {
-      highlights.push(`Foram identificados ${safeNumber(summary.changedCount)} item(ns) alterados com impacto material.`);
+      highlights.push(
+        `Foram identificados ${safeNumber(
+          summary.changedCount
+        )} item(ns) alterados com impacto material.`
+      );
     }
 
     highlights.push(...summarizeTopCategoryDeltas(summary.deltaByCategory));
@@ -271,14 +303,21 @@ function summarizeComparisonHighlights(input: TechnicalOpinionInput): string[] {
 
   const mostRelevantRows = rows
     .filter((row) => row.changeType && row.changeType !== "unchanged")
-    .sort((a, b) => Math.abs(safeNumber(b.subtotalDelta)) - Math.abs(safeNumber(a.subtotalDelta)))
+    .sort(
+      (a, b) =>
+        Math.abs(safeNumber(b.subtotalDelta)) -
+        Math.abs(safeNumber(a.subtotalDelta))
+    )
     .slice(0, 3);
 
   for (const row of mostRelevantRows) {
     const item = safeString(row.item) || "Item sem identificação";
     const delta = safeNumber(row.subtotalDelta);
     const direction = delta >= 0 ? "acréscimo" : "redução";
-    highlights.push(`${item}: ${direction} de ${formatCurrency(Math.abs(delta))}.`);
+
+    highlights.push(
+      `${item}: ${direction} de ${formatCurrency(Math.abs(delta))}.`
+    );
   }
 
   return uniqueStrings(highlights);
@@ -326,12 +365,14 @@ function buildIndicators(
     },
     {
       label: "Exequibilidade",
-      value: executabilityStatus.replace(/_/g, " "),
+      value: formatExecutabilityStatus(executabilityStatus),
       tone:
         executabilityStatus === "inexequivel"
           ? "critical"
           : executabilityStatus === "exequivel_com_diligencia" ||
             executabilityStatus === "exequivel_com_ressalvas"
+          ? "warning"
+          : executabilityStatus === "inconclusivo"
           ? "warning"
           : "positive",
     },
@@ -364,7 +405,12 @@ function buildIndicators(
   indicators.push({
     label: "Saldo preliminar",
     value: formatCurrency(balance),
-    tone: balance < 0 ? "critical" : balance < reference * 0.1 ? "warning" : "positive",
+    tone:
+      balance < 0
+        ? "critical"
+        : reference > 0 && balance < reference * 0.1
+        ? "warning"
+        : "positive",
   });
 
   if (delta !== 0) {
@@ -386,7 +432,10 @@ function buildIndicators(
   return indicators;
 }
 
-function buildDiligences(input: TechnicalOpinionInput, riskLevel: TechnicalOpinionRiskLevel): string[] {
+function buildDiligences(
+  input: TechnicalOpinionInput,
+  riskLevel: TechnicalOpinionRiskLevel
+): string[] {
   const explicit = uniqueStrings([
     ...(input.validation?.diligences ?? []),
     ...(input.validation?.recommendations ?? []),
@@ -398,8 +447,8 @@ function buildDiligences(input: TechnicalOpinionInput, riskLevel: TechnicalOpini
   }
 
   const diligences: string[] = [];
-
   const balance = safeNumber(input.executability?.executabilityBalance);
+
   if (balance < 0) {
     diligences.push(
       "Revisar imediatamente a composição mínima obrigatória e reprocessar a planilha para verificar a suficiência econômica da contratação."
@@ -515,11 +564,24 @@ function buildTechnicalFoundation(
   );
 
   if (comparisonHighlights.length > 0) {
-    parts.push(`Na comparação entre versões, destacaram-se os seguintes vetores materiais: ${comparisonHighlights.join(" ")}`);
+    parts.push(
+      `Na comparação entre versões, destacaram-se os seguintes vetores materiais: ${comparisonHighlights.join(
+        " "
+      )}`
+    );
   }
 
   if (highlights.length > 0) {
-    parts.push(`O contexto interpretativo considerado na leitura incluiu: ${highlights.join("; ")}.`);
+    parts.push(
+      `O contexto interpretativo considerado na leitura incluiu: ${highlights.join(
+        "; "
+      )}.`
+    );
+  }
+
+  const explicitSummary = safeString(input.validation?.summary);
+  if (explicitSummary) {
+    parts.push(`Síntese adicional de validação: ${explicitSummary}`);
   }
 
   return parts.join(" ");
@@ -543,6 +605,10 @@ function buildTechnicalLegalFoundation(
     return `${base} Ainda que não haja inviabilidade imediata, o prosseguimento demanda ressalvas expressas e reforço da documentação de suporte para preservar a robustez da motivação.`;
   }
 
+  if (executabilityStatus === "inconclusivo") {
+    return `${base} Na ausência de elementos suficientes para fechamento conclusivo, recomenda-se complementação técnica antes de decisão definitiva.`;
+  }
+
   return `${base} No estado atual dos elementos analisados, a continuidade é compatível com manifestação técnica favorável, desde que mantidas integridade documental e trilha de explicabilidade.`;
 }
 
@@ -559,7 +625,9 @@ function buildExecutiveSummary(
     riskLevel === "high" ? "alto" : riskLevel === "medium" ? "médio" : "baixo";
 
   const parts = [
-    `A análise preliminar da ${title} indica status ${executabilityStatus.replace(/_/g, " ")} e nível de risco ${riskText}.`,
+    `A análise preliminar da ${title} indica status ${formatExecutabilityStatus(
+      executabilityStatus
+    )} e nível de risco ${riskText}.`,
   ];
 
   if (delta !== 0) {
@@ -571,22 +639,22 @@ function buildExecutiveSummary(
   }
 
   if (changedCount > 0) {
-    parts.push(`Foram observados ${changedCount} item(ns) materialmente alterados entre as versões comparadas.`);
+    parts.push(
+      `Foram observados ${changedCount} item(ns) materialmente alterados entre as versões comparadas.`
+    );
   }
 
   return parts.join(" ");
 }
 
-function buildManagerVersion(
-  outputCore: {
-    title: string;
-    executabilityStatus: TechnicalOpinionExecutability;
-    riskLevel: TechnicalOpinionRiskLevel;
-    recommendation: string;
-    conclusion: string;
-    delta: number;
-  }
-): string {
+function buildManagerVersion(outputCore: {
+  title: string;
+  executabilityStatus: TechnicalOpinionExecutability;
+  riskLevel: TechnicalOpinionRiskLevel;
+  recommendation: string;
+  conclusion: string;
+  delta: number;
+}): string {
   const riskText =
     outputCore.riskLevel === "high"
       ? "alto"
@@ -596,14 +664,13 @@ function buildManagerVersion(
 
   const deltaText =
     outputCore.delta !== 0
-      ? `Houve ${outputCore.delta >= 0 ? "aumento" : "redução"} de ${formatCurrency(
-          Math.abs(outputCore.delta)
-        )} entre as versões comparadas. `
+      ? `Houve ${
+          outputCore.delta >= 0 ? "aumento" : "redução"
+        } de ${formatCurrency(Math.abs(outputCore.delta))} entre as versões comparadas. `
       : "";
 
-  return `Resumo gerencial da ${outputCore.title}: o sistema classificou a versão como ${outputCore.executabilityStatus.replace(
-    /_/g,
-    " "
+  return `Resumo gerencial da ${outputCore.title}: o sistema classificou a versão como ${formatExecutabilityStatus(
+    outputCore.executabilityStatus
   )}, com risco ${riskText}. ${deltaText}${outputCore.conclusion} ${outputCore.recommendation}`;
 }
 
@@ -615,9 +682,8 @@ function buildEmenta(
   const riskText =
     riskLevel === "high" ? "alto" : riskLevel === "medium" ? "médio" : "baixo";
 
-  return `${title}. Análise técnica automatizada da planilha de custos. Leitura consolidada de composição, comparação entre versões, exequibilidade preliminar e recomendação final. Resultado: ${executabilityStatus.replace(
-    /_/g,
-    " "
+  return `${title}. Análise técnica automatizada da planilha de custos. Leitura consolidada de composição, comparação entre versões, exequibilidade preliminar e recomendação final. Resultado: ${formatExecutabilityStatus(
+    executabilityStatus
   )}. Risco técnico ${riskText}.`;
 }
 
