@@ -47,6 +47,9 @@ import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import RuleOutlinedIcon from "@mui/icons-material/RuleOutlined";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
+import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import SpreadsheetVersionComparisonPanel from "../components/versioning/SpreadsheetVersionComparisonPanel";
 import ServiceCompositionComparisonPanel from "../components/service-composition/ServiceCompositionComparisonPanel";
@@ -67,6 +70,10 @@ import {
 import generateTechnicalOpinion, {
   TechnicalOpinionOutput,
 } from "../services/technicalOpinionGenerator";
+import {
+  renderTechnicalOpinion,
+  TechnicalOpinionRenderedOutput,
+} from "../services/technicalOpinionRenderer";
 
 type LoadState = "loading" | "success" | "error";
 type SaveState = "idle" | "saving" | "success" | "error";
@@ -314,6 +321,7 @@ const PCFP_MODULES: PcfpModuleDefinition[] = [
     backgroundColor: "#F8ECFB",
   },
 ];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -490,7 +498,6 @@ function getStatusChipStyles(status?: string) {
       return { backgroundColor: "#EFE7F6", color: "#8E5AB5" };
   }
 }
-
 function categoryMatches(category: string, terms: string[]) {
   const normalized = category.toLowerCase();
   return terms.some((term) => normalized.includes(term.toLowerCase()));
@@ -824,6 +831,7 @@ function readPreviousSpreadsheetCandidate(
 
   return null;
 }
+
 function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
   const storedDraft = extractStoredEditorDraft(record);
 
@@ -905,7 +913,6 @@ function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
     notes: storedDraft.notes ?? safeString(record.notes),
   };
 }
-
 function getExequibilityRisk(
   mandatoryCostTotal: number,
   referenceValue: number,
@@ -1206,6 +1213,145 @@ function PersistedCompositionCard({
   );
 }
 
+function TechnicalOpinionInstitutionalCard({
+  renderedOpinion,
+}: {
+  renderedOpinion: TechnicalOpinionRenderedOutput | null;
+}) {
+  if (!renderedOpinion) {
+    return null;
+  }
+
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+      <CardContent>
+        <Stack spacing={2.5}>
+          <Stack direction="row" spacing={1.25} alignItems="center">
+            <DescriptionOutlinedIcon sx={{ color: "#5E35B1" }} />
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                Nota técnica institucional estruturada
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Camada incremental de renderização formal do parecer técnico para leitura
+                institucional, futura exportação documental e uso gerencial.
+              </Typography>
+            </Box>
+          </Stack>
+
+          <Box
+            sx={{
+              p: 2,
+              borderRadius: 3,
+              border: "1px solid rgba(94, 53, 177, 0.16)",
+              backgroundColor: "#F7F2FB",
+            }}
+          >
+            <Stack spacing={0.75}>
+              <Typography variant="subtitle1" fontWeight={800} color="#4A2F75">
+                {renderedOpinion.title}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {renderedOpinion.subtitle}
+              </Typography>
+              <Typography variant="body2">{renderedOpinion.summaryLine}</Typography>
+            </Stack>
+          </Box>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(2, minmax(0, 1fr))",
+                xl: "repeat(4, minmax(0, 1fr))",
+              },
+              gap: 2,
+            }}
+          >
+            <ExecutiveMetricCard
+              label="Exequibilidade"
+              value={renderedOpinion.meta.executabilityLabel}
+            />
+            <ExecutiveMetricCard
+              label="Nível de risco"
+              value={renderedOpinion.meta.riskLabel}
+            />
+            <ExecutiveMetricCard
+              label="Recomendação"
+              value={renderedOpinion.meta.recommendationLabel}
+            />
+            <ExecutiveMetricCard
+              label="Diligências"
+              value={
+                renderedOpinion.meta.hasDiligences
+                  ? renderedOpinion.meta.diligenceCount
+                  : "Nenhuma"
+              }
+            />
+          </Box>
+
+          <Stack spacing={2}>
+            {renderedOpinion.orderedSections.map((section) => (
+              <Card
+                key={section.key}
+                variant="outlined"
+                sx={{
+                  borderRadius: 3,
+                  borderColor: "rgba(91, 58, 122, 0.14)",
+                  backgroundColor:
+                    section.key === "conclusao" || section.key === "recomendacaoFinal"
+                      ? "#FCFAFE"
+                      : "#FFFFFF",
+                }}
+              >
+                <CardContent>
+                  <Stack spacing={1.5}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      {section.key === "ementa" ? (
+                        <FactCheckOutlinedIcon sx={{ fontSize: 18, color: "#6D6186" }} />
+                      ) : (
+                        <AssignmentOutlinedIcon sx={{ fontSize: 18, color: "#6D6186" }} />
+                      )}
+                      <Typography variant="subtitle1" fontWeight={700}>
+                        {section.title}
+                      </Typography>
+                    </Stack>
+
+                    {section.paragraphs.map((paragraph, index) => (
+                      <Typography key={`${section.key}-p-${index}`} variant="body2">
+                        {paragraph}
+                      </Typography>
+                    ))}
+
+                    {section.bullets && section.bullets.length > 0 ? (
+                      <Stack spacing={1}>
+                        {section.bullets.map((item, index) => (
+                          <Stack
+                            key={`${section.key}-b-${index}`}
+                            direction="row"
+                            spacing={1.25}
+                            alignItems="flex-start"
+                          >
+                            <RuleOutlinedIcon
+                              sx={{ fontSize: 18, color: "#7A708D", mt: "2px" }}
+                            />
+                            <Typography variant="body2">{item}</Typography>
+                          </Stack>
+                        ))}
+                      </Stack>
+                    ) : null}
+                  </Stack>
+                </CardContent>
+              </Card>
+            ))}
+          </Stack>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
 function TechnicalOpinionCard({
   opinion,
 }: {
@@ -1252,8 +1398,7 @@ function TechnicalOpinionCard({
             </Typography>
             <Typography variant="body2">{opinion.ementa}</Typography>
           </Box>
-
-          <Box
+                    <Box
             sx={{
               display: "grid",
               gridTemplateColumns: {
@@ -1301,7 +1446,12 @@ function TechnicalOpinionCard({
             <Stack spacing={1}>
               {opinion.diligenciasSugeridas.length > 0 ? (
                 opinion.diligenciasSugeridas.map((item, index) => (
-                  <Stack key={`${index}-${item}`} direction="row" spacing={1.25} alignItems="flex-start">
+                  <Stack
+                    key={`${index}-${item}`}
+                    direction="row"
+                    spacing={1.25}
+                    alignItems="flex-start"
+                  >
                     <RuleOutlinedIcon sx={{ fontSize: 18, color: "#7A708D", mt: "2px" }} />
                     <Typography variant="body2">{item}</Typography>
                   </Stack>
@@ -1453,7 +1603,7 @@ export default function SpreadsheetDetail() {
           setErrorMessage(
             error instanceof Error
               ? error.message
-                          : "Erro inesperado ao carregar a planilha."
+              : "Erro inesperado ao carregar a planilha."
           );
         }
       }
@@ -1465,7 +1615,8 @@ export default function SpreadsheetDetail() {
       isMounted = false;
     };
   }, [id]);
-    const totalValue = useMemo(() => {
+
+  const totalValue = useMemo(() => {
     if (!spreadsheet) return 0;
     return spreadsheet.rows.reduce((sum, row) => sum + safeNumber(row.subtotal), 0);
   }, [spreadsheet]);
@@ -1609,8 +1760,7 @@ export default function SpreadsheetDetail() {
       return null;
     }
   }, [resolvedBaselineVersionRecord, resolvedSelectedVersionRecord, spreadsheet]);
-
-  const mandatoryCostTotal = useMemo(() => {
+    const mandatoryCostTotal = useMemo(() => {
     if (!spreadsheet) return 0;
 
     const persistedLaborMandatory =
@@ -1750,6 +1900,50 @@ export default function SpreadsheetDetail() {
     effectiveMonthlyReference,
     executabilityBalance,
     exequibilityRisk,
+  ]);
+
+  const renderedTechnicalOpinion = useMemo<TechnicalOpinionRenderedOutput | null>(() => {
+    if (!technicalOpinion || !spreadsheet) {
+      return null;
+    }
+
+    try {
+      return renderTechnicalOpinion({
+        ...technicalOpinion,
+        spreadsheet: {
+          id: spreadsheet.id,
+          title: spreadsheet.title,
+          modelType: spreadsheet.modelType,
+          status: spreadsheet.status,
+          organization: spreadsheet.contractingAgency,
+          agency: spreadsheet.contractingAgency,
+        },
+        organization: spreadsheet.contractingAgency,
+        financial: {
+          proposedTotalValue: totalValue,
+          mandatoryCostTotal,
+          evidentiaryCostTotal,
+          retentionTotal: 0,
+          executabilityBalance,
+        },
+        scoreGlobal:
+          exequibilityRisk.color === "#C62828"
+            ? 82
+            : exequibilityRisk.color === "#ED6C02"
+            ? 58
+            : 24,
+      });
+    } catch {
+      return null;
+    }
+  }, [
+    technicalOpinion,
+    spreadsheet,
+    totalValue,
+    mandatoryCostTotal,
+    evidentiaryCostTotal,
+    executabilityBalance,
+    exequibilityRisk.color,
   ]);
 
   function updateEditorField(field: keyof EditorState, value: string) {
@@ -2093,9 +2287,10 @@ export default function SpreadsheetDetail() {
             />
           </Box>
 
-          <TechnicalOpinionCard opinion={technicalOpinion} />
+          <TechnicalOpinionInstitutionalCard renderedOpinion={renderedTechnicalOpinion} />
 
-          <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+          <TechnicalOpinionCard opinion={technicalOpinion} />
+                    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
             <CardContent>
               <Stack spacing={2}>
                 <Stack direction="row" spacing={1.25} alignItems="center">
@@ -2134,7 +2329,8 @@ export default function SpreadsheetDetail() {
                     value={selectedVersionItem ? getVersionLabel(selectedVersionItem) : "—"}
                   />
                 </Box>
-                                <Box
+
+                <Box
                   sx={{
                     display: "grid",
                     gridTemplateColumns: {
@@ -2503,8 +2699,7 @@ export default function SpreadsheetDetail() {
               selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Versão selecionada"
             }
           />
-
-          <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+                    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
             <CardContent>
               <Stack spacing={2}>
                 <Stack direction="row" spacing={1.25} alignItems="center">
@@ -2675,8 +2870,7 @@ export default function SpreadsheetDetail() {
               </Stack>
             </CardContent>
           </Card>
-
-          <Card variant="outlined" sx={{ borderRadius: 4 }}>
+                    <Card variant="outlined" sx={{ borderRadius: 4 }}>
             <CardContent>
               <Stack spacing={2}>
                 <Typography variant="h6" fontWeight={700}>
