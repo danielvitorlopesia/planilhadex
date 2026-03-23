@@ -1249,12 +1249,29 @@ function TechnicalOpinionInstitutionalCard({
           >
             <Stack spacing={0.75}>
               <Typography variant="subtitle1" fontWeight={800} color="#4A2F75">
-                {renderedOpinion.title}
+                {renderedOpinion.header.tituloDocumento}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {renderedOpinion.subtitle}
+                {renderedOpinion.header.subtituloDocumento}
               </Typography>
-              <Typography variant="body2">{renderedOpinion.summaryLine}</Typography>
+              <Typography variant="body2">
+                <strong>Órgão:</strong> {renderedOpinion.header.orgao}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Unidade:</strong> {renderedOpinion.header.unidade}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Contrato:</strong> {renderedOpinion.header.contrato}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Data de referência:</strong> {renderedOpinion.header.dataReferencia}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Planilha analisada:</strong> {renderedOpinion.header.planilhaAnalisada}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Cenário:</strong> {renderedOpinion.header.cenario}
+              </Typography>
             </Stack>
           </Box>
 
@@ -1271,80 +1288,99 @@ function TechnicalOpinionInstitutionalCard({
           >
             <ExecutiveMetricCard
               label="Exequibilidade"
-              value={renderedOpinion.meta.executabilityLabel}
+              value={renderedOpinion.result.executabilityLabel}
             />
             <ExecutiveMetricCard
               label="Nível de risco"
-              value={renderedOpinion.meta.riskLabel}
+              value={renderedOpinion.result.riskLabel}
             />
             <ExecutiveMetricCard
               label="Recomendação"
-              value={renderedOpinion.meta.recommendationLabel}
+              value={renderedOpinion.result.recommendationLabel}
             />
             <ExecutiveMetricCard
-              label="Diligências"
-              value={
-                renderedOpinion.meta.hasDiligences
-                  ? renderedOpinion.meta.diligenceCount
-                  : "Nenhuma"
-              }
+              label="Score global"
+              value={renderedOpinion.result.scoreLabel}
             />
           </Box>
+                    {renderedOpinion.indicators.length > 0 ? (
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  md: "repeat(2, minmax(0, 1fr))",
+                  xl: "repeat(5, minmax(0, 1fr))",
+                },
+                gap: 2,
+              }}
+            >
+              {renderedOpinion.indicators.map((indicator) => (
+                <ExecutiveMetricCard
+                  key={`${indicator.label}-${indicator.value}`}
+                  label={indicator.label}
+                  value={indicator.value}
+                />
+              ))}
+            </Box>
+          ) : null}
 
           <Stack spacing={2}>
-            {renderedOpinion.orderedSections.map((section) => (
-              <Card
-                key={section.key}
-                variant="outlined"
-                sx={{
-                  borderRadius: 3,
-                  borderColor: "rgba(91, 58, 122, 0.14)",
-                  backgroundColor:
-                    section.key === "conclusao" || section.key === "recomendacaoFinal"
-                      ? "#FCFAFE"
-                      : "#FFFFFF",
-                }}
-              >
-                <CardContent>
-                  <Stack spacing={1.5}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      {section.key === "ementa" ? (
-                        <FactCheckOutlinedIcon sx={{ fontSize: 18, color: "#6D6186" }} />
-                      ) : (
-                        <AssignmentOutlinedIcon sx={{ fontSize: 18, color: "#6D6186" }} />
-                      )}
-                      <Typography variant="subtitle1" fontWeight={700}>
-                        {section.title}
-                      </Typography>
-                    </Stack>
-
-                    {section.paragraphs.map((paragraph, index) => (
-                      <Typography key={`${section.key}-p-${index}`} variant="body2">
-                        {paragraph}
-                      </Typography>
-                    ))}
-
-                    {section.bullets && section.bullets.length > 0 ? (
-                      <Stack spacing={1}>
-                        {section.bullets.map((item, index) => (
-                          <Stack
-                            key={`${section.key}-b-${index}`}
-                            direction="row"
-                            spacing={1.25}
-                            alignItems="flex-start"
-                          >
-                            <RuleOutlinedIcon
-                              sx={{ fontSize: 18, color: "#7A708D", mt: "2px" }}
-                            />
-                            <Typography variant="body2">{item}</Typography>
-                          </Stack>
-                        ))}
+            {renderedOpinion.orderedSections
+              .filter((section) => section.key !== "cabecalho")
+              .map((section) => (
+                <Card
+                  key={section.key}
+                  variant="outlined"
+                  sx={{
+                    borderRadius: 3,
+                    borderColor: "rgba(91, 58, 122, 0.14)",
+                    backgroundColor:
+                      section.key === "conclusao" || section.key === "recomendacaoFinal"
+                        ? "#FCFAFE"
+                        : "#FFFFFF",
+                  }}
+                >
+                  <CardContent>
+                    <Stack spacing={1.5}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        {section.key === "ementa" ? (
+                          <FactCheckOutlinedIcon sx={{ fontSize: 18, color: "#6D6186" }} />
+                        ) : (
+                          <AssignmentOutlinedIcon sx={{ fontSize: 18, color: "#6D6186" }} />
+                        )}
+                        <Typography variant="subtitle1" fontWeight={700}>
+                          {section.title}
+                        </Typography>
                       </Stack>
-                    ) : null}
-                  </Stack>
-                </CardContent>
-              </Card>
-            ))}
+
+                      {section.paragraphs.map((paragraph, index) => (
+                        <Typography key={`${section.key}-p-${index}`} variant="body2">
+                          {paragraph}
+                        </Typography>
+                      ))}
+
+                      {section.bullets && section.bullets.length > 0 ? (
+                        <Stack spacing={1}>
+                          {section.bullets.map((item, index) => (
+                            <Stack
+                              key={`${section.key}-b-${index}`}
+                              direction="row"
+                              spacing={1.25}
+                              alignItems="flex-start"
+                            >
+                              <RuleOutlinedIcon
+                                sx={{ fontSize: 18, color: "#7A708D", mt: "2px" }}
+                              />
+                              <Typography variant="body2">{item}</Typography>
+                            </Stack>
+                          ))}
+                        </Stack>
+                      ) : null}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ))}
           </Stack>
         </Stack>
       </CardContent>
@@ -1398,7 +1434,8 @@ function TechnicalOpinionCard({
             </Typography>
             <Typography variant="body2">{opinion.ementa}</Typography>
           </Box>
-                    <Box
+
+          <Box
             sx={{
               display: "grid",
               gridTemplateColumns: {
@@ -1505,7 +1542,6 @@ function mapCompositionRowsToSpreadsheetRows(
       `${row.tipoDemanda || "Não informado"} | ${row.unidade || "sem unidade"} | ${row.periodicidade || "sem periodicidade"}` as SpreadsheetDetailRow["memoriaCalculo"],
   }));
 }
-
 export default function SpreadsheetDetail() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<LoadState>("loading");
@@ -1760,7 +1796,8 @@ export default function SpreadsheetDetail() {
       return null;
     }
   }, [resolvedBaselineVersionRecord, resolvedSelectedVersionRecord, spreadsheet]);
-    const mandatoryCostTotal = useMemo(() => {
+
+  const mandatoryCostTotal = useMemo(() => {
     if (!spreadsheet) return 0;
 
     const persistedLaborMandatory =
@@ -1817,8 +1854,7 @@ export default function SpreadsheetDetail() {
   const exequibilityRisk = useMemo(() => {
     return getExequibilityRisk(mandatoryCostTotal, analysisReferenceValue, totalValue);
   }, [mandatoryCostTotal, analysisReferenceValue, totalValue]);
-
-  const pcfpModules = useMemo(() => {
+    const pcfpModules = useMemo(() => {
     if (!spreadsheet) return [];
     return buildPcfpModuleGroups(spreadsheet.rows);
   }, [spreadsheet]);
@@ -1917,8 +1953,16 @@ export default function SpreadsheetDetail() {
           status: spreadsheet.status,
           organization: spreadsheet.contractingAgency,
           agency: spreadsheet.contractingAgency,
+          unitName: spreadsheet.unitName,
+          contractReference: spreadsheet.contractReference,
+          referenceDate: spreadsheet.referenceDate,
+          domainScenario: spreadsheet.domainScenario,
         },
         organization: spreadsheet.contractingAgency,
+        unitName: spreadsheet.unitName,
+        contractReference: spreadsheet.contractReference,
+        referenceDate: spreadsheet.referenceDate,
+        domainScenario: spreadsheet.domainScenario,
         financial: {
           proposedTotalValue: totalValue,
           mandatoryCostTotal,
@@ -2131,8 +2175,7 @@ export default function SpreadsheetDetail() {
             </Link>
             <Typography color="text.primary">Planilha</Typography>
           </Breadcrumbs>
-
-          <Card
+                    <Card
             elevation={0}
             sx={{
               borderRadius: 4,
@@ -2290,7 +2333,8 @@ export default function SpreadsheetDetail() {
           <TechnicalOpinionInstitutionalCard renderedOpinion={renderedTechnicalOpinion} />
 
           <TechnicalOpinionCard opinion={technicalOpinion} />
-                    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+
+          <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
             <CardContent>
               <Stack spacing={2}>
                 <Stack direction="row" spacing={1.25} alignItems="center">
@@ -2496,8 +2540,7 @@ export default function SpreadsheetDetail() {
                       </Stack>
                     </CardContent>
                   </Card>
-
-                  <Stack spacing={2}>
+                                    <Stack spacing={2}>
                     <CompactInfoCard title="Controles de comparação">
                       <TextField
                         label="Selecionar versão para comparação"
@@ -2699,7 +2742,8 @@ export default function SpreadsheetDetail() {
               selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Versão selecionada"
             }
           />
-                    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+
+          <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
             <CardContent>
               <Stack spacing={2}>
                 <Stack direction="row" spacing={1.25} alignItems="center">
@@ -2742,8 +2786,7 @@ export default function SpreadsheetDetail() {
               </Stack>
             </CardContent>
           </Card>
-
-          <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+                    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
             <CardContent>
               <Stack spacing={2}>
                 <Stack direction="row" spacing={1.25} alignItems="center">
@@ -2870,7 +2913,8 @@ export default function SpreadsheetDetail() {
               </Stack>
             </CardContent>
           </Card>
-                    <Card variant="outlined" sx={{ borderRadius: 4 }}>
+
+          <Card variant="outlined" sx={{ borderRadius: 4 }}>
             <CardContent>
               <Stack spacing={2}>
                 <Typography variant="h6" fontWeight={700}>
@@ -2962,8 +3006,7 @@ export default function SpreadsheetDetail() {
                     fullWidth
                   />
                 </Box>
-
-                <TextField
+                                <TextField
                   label="Objeto / descrição"
                   value={editor.objectDescription}
                   onChange={(e) => updateEditorField("objectDescription", e.target.value)}
