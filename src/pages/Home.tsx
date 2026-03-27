@@ -563,7 +563,7 @@ export default function Home() {
 
                     <Button
                       component={RouterLink}
-                      to="/create"
+                      to="/models/new/create"
                       variant="contained"
                       startIcon={<AddCircleOutlineIcon />}
                     >
