@@ -38,6 +38,7 @@ import {
   DomainScenarioKey,
   SpreadsheetModelType,
 } from "../types/spreadsheetModels";
+import createSpreadsheetTemplate from "../services/spreadsheetTemplateFactory";
 
 type FormState = {
   title: string;
@@ -162,7 +163,6 @@ function buildInitialFormState(
     notes: "",
   };
 }
-
 export default function SpreadsheetCreatePage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -315,7 +315,7 @@ export default function SpreadsheetCreatePage() {
     setSubmitting(true);
 
     try {
-      const created: SpreadsheetRecord = createSpreadsheetFromModel({
+      const generatedTemplate = createSpreadsheetTemplate({
         modelType,
         title: form.title,
         domainScenario: form.domainScenario,
@@ -334,8 +334,8 @@ export default function SpreadsheetCreatePage() {
         monthlyBaseValue: parseNumericInput(form.monthlyBaseValue),
         mainShift: form.mainShift,
         workScale: form.workScale,
-        weeklyHours: form.weeklyHours,
-        monthlyHours: form.monthlyHours,
+        weeklyHours: parseNumericInput(form.weeklyHours),
+        monthlyHours: parseNumericInput(form.monthlyHours),
         salaryBase: parseNumericInput(form.salaryBase),
         nightAdditional: parseNumericInput(form.nightAdditional),
         hazardAdditional: parseNumericInput(form.hazardAdditional),
@@ -346,6 +346,39 @@ export default function SpreadsheetCreatePage() {
         mandatoryBenefitsNotes: form.mandatoryBenefitsNotes,
         notes: form.notes,
         category: selectedScenario?.defaultCategory,
+      });
+
+      const created: SpreadsheetRecord = createSpreadsheetFromModel({
+        modelType,
+        title: generatedTemplate.title,
+        domainScenario: generatedTemplate.domainScenario as DomainScenarioKey,
+        contractingAgency: generatedTemplate.contractingAgency,
+        contractReference: generatedTemplate.contractReference,
+        unitName: generatedTemplate.unitName,
+        lotName: generatedTemplate.lotName,
+        referenceDate: generatedTemplate.referenceDate,
+        municipality: form.municipality,
+        state: form.state,
+        cboCode: form.cboCode,
+        professionalCategory: form.professionalCategory,
+        cctReference: form.cctReference,
+        taxRegime: form.taxRegime,
+        headcount: generatedTemplate.headcount,
+        monthlyBaseValue: generatedTemplate.monthlyBaseValue,
+        mainShift: form.mainShift,
+        workScale: form.workScale,
+        weeklyHours: form.weeklyHours,
+        monthlyHours: form.monthlyHours,
+        salaryBase: parseNumericInput(form.salaryBase),
+        nightAdditional: parseNumericInput(form.nightAdditional),
+        hazardAdditional: parseNumericInput(form.hazardAdditional),
+        mealAllowance: parseNumericInput(form.mealAllowance),
+        transportAllowance: parseNumericInput(form.transportAllowance),
+        objectDescription: generatedTemplate.description,
+        description: generatedTemplate.description,
+        mandatoryBenefitsNotes: form.mandatoryBenefitsNotes,
+        notes: generatedTemplate.notes,
+        category: generatedTemplate.category,
       } as any);
 
       setFeedback({
@@ -387,8 +420,7 @@ export default function SpreadsheetCreatePage() {
             </Link>
             <Typography color="text.primary">Criar planilha</Typography>
           </Breadcrumbs>
-
-          <Card
+                    <Card
             elevation={0}
             sx={{
               borderRadius: 5,
@@ -751,8 +783,7 @@ export default function SpreadsheetCreatePage() {
                   </Stack>
                 </CardContent>
               </Card>
-
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+                            <Card variant="outlined" sx={{ borderRadius: 4 }}>
                 <CardContent>
                   <Stack spacing={2.5}>
                     <Stack direction="row" spacing={1.25} alignItems="center">
@@ -933,8 +964,7 @@ export default function SpreadsheetCreatePage() {
                   </CardContent>
                 </Card>
               ) : null}
-
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+                            <Card variant="outlined" sx={{ borderRadius: 4 }}>
                 <CardContent>
                   <Stack spacing={1.5}>
                     <Typography variant="h6" fontWeight={700}>
