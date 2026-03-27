@@ -49,6 +49,15 @@ function AppRoutes() {
         />
 
         <Route
+          path="/spreadsheet/new"
+          element={
+            <ProtectedRoute>
+              <SpreadsheetCreatePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/models/new"
           element={
             <ProtectedRoute>
