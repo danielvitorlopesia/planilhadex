@@ -10,6 +10,7 @@ import {
   getDomainScenario,
 } from "../mocks/domainScenarioCatalog";
 import { getModelTemplateByType } from "../mocks/modelTemplatesMocks";
+import createSpreadsheetTemplate from "./spreadsheetTemplateFactory";
 
 export type SpreadsheetRow = BaseSpreadsheetRow & {
   metadata?: Record<string, unknown>;
@@ -167,7 +168,9 @@ function cloneRows(rows: SpreadsheetRow[]): SpreadsheetRow[] {
   return rows.map((row) => ({
     ...row,
     id: row.id ?? buildId("row"),
-    subtotal: Number((Number(row.quantidade || 0) * Number(row.valorUnitario || 0)).toFixed(2)),
+    subtotal: Number(
+      (Number(row.quantidade || 0) * Number(row.valorUnitario || 0)).toFixed(2)
+    ),
     trainingTags: [...(row.trainingTags ?? [])],
     metadata: isRecord(row.metadata) ? { ...row.metadata } : undefined,
   }));
@@ -419,9 +422,7 @@ function buildSnapshotEntry(
   return {
     id: buildId("version"),
     versionNumber: currentVersionNumber,
-    label:
-      options.label ||
-      `Versão ${currentVersionNumber}`,
+    label: options.label || `Versão ${currentVersionNumber}`,
     createdAt: isoNow(),
     reason: options.reason,
     origin: options.origin,
@@ -610,35 +611,104 @@ export function createSpreadsheetFromModel(
     ...draft,
   } as SpreadsheetCreationDraft;
 
-  const rows = buildRowsForDraft(mergedDraft);
-  const monthlyBaseValue =
-    parseNumericInput(mergedDraft.monthlyBaseValue) ||
-    rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
-
-  const spreadsheet: SpreadsheetRecord = {
-    id: buildId("sheet"),
+  const generatedTemplate = createSpreadsheetTemplate({
+    modelType: mergedDraft.modelType,
     title: buildTitleFromDraft(mergedDraft),
     description: buildDescriptionFromDraft(mergedDraft),
-    status: "Em elaboração",
-    category: String(mergedDraft.category || scenario?.defaultCategory || template.title),
-    updatedAt: humanDateTime(),
-    modelType: mergedDraft.modelType,
-    domainScenario: mergedDraft.domainScenario as DomainScenarioKey | undefined,
-    rows,
-    source: "local",
+    category: String(
+      mergedDraft.category || scenario?.defaultCategory || template.title
+    ),
     contractReference: String(mergedDraft.contractReference || ""),
     contractingAgency: String(mergedDraft.contractingAgency || ""),
     unitName: String(mergedDraft.unitName || ""),
     lotName: String(mergedDraft.lotName || ""),
     referenceDate: String(mergedDraft.referenceDate || isoToday()),
-    headcount: parseNumericInput(mergedDraft.headcount),
-    monthlyBaseValue,
+    headcount:
+      mergedDraft.headcount !== undefined
+        ? parseNumericInput(mergedDraft.headcount)
+        : undefined,
+    monthlyBaseValue:
+      mergedDraft.monthlyBaseValue !== undefined
+        ? parseNumericInput(mergedDraft.monthlyBaseValue)
+        : undefined,
     notes: String(mergedDraft.notes || ""),
+    domainScenario: mergedDraft.domainScenario,
+    municipality: String(mergedDraft.municipality || ""),
+    state: String(mergedDraft.state || ""),
+    cboCode: String(mergedDraft.cboCode || ""),
+    professionalCategory: String(mergedDraft.professionalCategory || ""),
+    cctReference: String(mergedDraft.cctReference || ""),
+    taxRegime: String(mergedDraft.taxRegime || "lucro_presumido"),
+    objectDescription:
+      String(mergedDraft.objectDescription || "") ||
+      String(mergedDraft.description || ""),
+    mainShift: String(mergedDraft.mainShift || ""),
+    workScale: String(mergedDraft.workScale || ""),
+    weeklyHours:
+      mergedDraft.weeklyHours !== undefined
+        ? parseNumericInput(mergedDraft.weeklyHours)
+        : undefined,
+    monthlyHours:
+      mergedDraft.monthlyHours !== undefined
+        ? parseNumericInput(mergedDraft.monthlyHours)
+        : undefined,
+    salaryBase:
+      mergedDraft.salaryBase !== undefined
+        ? parseNumericInput(mergedDraft.salaryBase)
+        : undefined,
+    nightAdditional:
+      mergedDraft.nightAdditional !== undefined
+        ? parseNumericInput(mergedDraft.nightAdditional)
+        : undefined,
+    hazardAdditional:
+      mergedDraft.hazardAdditional !== undefined
+        ? parseNumericInput(mergedDraft.hazardAdditional)
+        : undefined,
+    mealAllowance:
+      mergedDraft.mealAllowance !== undefined
+        ? parseNumericInput(mergedDraft.mealAllowance)
+        : undefined,
+    transportAllowance:
+      mergedDraft.transportAllowance !== undefined
+        ? parseNumericInput(mergedDraft.transportAllowance)
+        : undefined,
+    mandatoryBenefitsNotes: String(mergedDraft.mandatoryBenefitsNotes || ""),
+  });
+
+  const rows = cloneRows(generatedTemplate.rows as SpreadsheetRow[]);
+  const monthlyBaseValue =
+    typeof generatedTemplate.monthlyBaseValue === "number"
+      ? generatedTemplate.monthlyBaseValue
+      : rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
+
+  const spreadsheet: SpreadsheetRecord = {
+    id: buildId("sheet"),
+    title: generatedTemplate.title,
+    description: generatedTemplate.description,
+    status: "Em elaboração",
+    category: generatedTemplate.category,
+    updatedAt: humanDateTime(),
+    modelType: generatedTemplate.modelType,
+    domainScenario: generatedTemplate.domainScenario as DomainScenarioKey | undefined,
+    rows,
+    source: "local",
+    contractReference: generatedTemplate.contractReference || "",
+    contractingAgency: generatedTemplate.contractingAgency || "",
+    unitName: generatedTemplate.unitName || "",
+    lotName: generatedTemplate.lotName || "",
+    referenceDate: generatedTemplate.referenceDate || isoToday(),
+    headcount:
+      typeof generatedTemplate.headcount === "number"
+        ? generatedTemplate.headcount
+        : parseNumericInput(mergedDraft.headcount),
+    monthlyBaseValue,
+    notes: generatedTemplate.notes || "",
     trainingProfile:
-      mergedDraft.domainScenario &&
+      generatedTemplate.trainingProfile ||
+      (mergedDraft.domainScenario &&
       mergedDraft.domainScenario in DOMAIN_SCENARIOS
         ? buildTrainingProfile(mergedDraft.domainScenario as DomainScenarioKey)
-        : undefined,
+        : undefined),
     metadata: {
       origin: "local_model_creation",
       templateTitle: template.title,
@@ -650,6 +720,7 @@ export function createSpreadsheetFromModel(
       editorDraft: buildInitialEditorDraftFromCreation(mergedDraft, rows),
       versionNumber: 1,
       versionHistory: [],
+      ...(generatedTemplate.metadata ?? {}),
     },
   };
 
