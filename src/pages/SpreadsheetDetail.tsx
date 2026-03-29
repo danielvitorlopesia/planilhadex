@@ -1212,7 +1212,6 @@ function PersistedCompositionCard({
     </Card>
   );
 }
-
 function TechnicalOpinionInstitutionalCard({
   renderedOpinion,
 }: {
@@ -1303,7 +1302,8 @@ function TechnicalOpinionInstitutionalCard({
               value={renderedOpinion.result.scoreLabel}
             />
           </Box>
-                    {renderedOpinion.indicators.length > 0 ? (
+
+          {renderedOpinion.indicators.length > 0 ? (
             <Box
               sx={{
                 display: "grid",
@@ -1454,8 +1454,7 @@ function TechnicalOpinionCard({
               />
             ))}
           </Box>
-
-          <CompactInfoCard title="Resumo executivo">
+                    <CompactInfoCard title="Resumo executivo">
             <Typography variant="body2">{opinion.resumoExecutivo}</Typography>
           </CompactInfoCard>
 
@@ -1542,6 +1541,7 @@ function mapCompositionRowsToSpreadsheetRows(
       `${row.tipoDemanda || "Não informado"} | ${row.unidade || "sem unidade"} | ${row.periodicidade || "sem periodicidade"}` as SpreadsheetDetailRow["memoriaCalculo"],
   }));
 }
+
 export default function SpreadsheetDetail() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<LoadState>("loading");
@@ -1660,8 +1660,7 @@ export default function SpreadsheetDetail() {
   const totalItems = spreadsheet?.rows.length ?? 0;
   const pendingItems =
     spreadsheet?.rows.filter((row) => String(row.status || "") === "Pendente").length ?? 0;
-
-  const laborCostBreakdown = useMemo(() => readLaborCostBreakdown(spreadsheet), [spreadsheet]);
+    const laborCostBreakdown = useMemo(() => readLaborCostBreakdown(spreadsheet), [spreadsheet]);
   const laborChargesConfig = useMemo(() => readLaborChargesConfig(spreadsheet), [spreadsheet]);
   const serviceCompositionSummary = useMemo(
     () => readServiceCompositionSummary(spreadsheet),
@@ -1854,12 +1853,12 @@ export default function SpreadsheetDetail() {
   const exequibilityRisk = useMemo(() => {
     return getExequibilityRisk(mandatoryCostTotal, analysisReferenceValue, totalValue);
   }, [mandatoryCostTotal, analysisReferenceValue, totalValue]);
-    const pcfpModules = useMemo(() => {
+
+  const pcfpModules = useMemo(() => {
     if (!spreadsheet) return [];
     return buildPcfpModuleGroups(spreadsheet.rows);
   }, [spreadsheet]);
-
-  const effectiveHeadcount = useMemo(() => {
+    const effectiveHeadcount = useMemo(() => {
     const persisted = safeNumber(laborCostBreakdown?.headcount);
     if (persisted > 0) {
       return persisted;
@@ -1990,6 +1989,13 @@ export default function SpreadsheetDetail() {
     exequibilityRisk.color,
   ]);
 
+  const editorDomainScenarioLabel = useMemo(() => {
+    if (!editor?.domainScenario) {
+      return "";
+    }
+    return DOMAIN_SCENARIO_LABELS[editor.domainScenario] ?? editor.domainScenario;
+  }, [editor?.domainScenario]);
+
   function updateEditorField(field: keyof EditorState, value: string) {
     setEditor((current) => {
       if (!current) return current;
@@ -2095,8 +2101,7 @@ export default function SpreadsheetDetail() {
     setSaveState("success");
     setSaveMessage(`${getVersionLabel(item)} restaurada localmente para análise.`);
   }
-
-  if (state === "loading") {
+    if (state === "loading") {
     return (
       <Box
         sx={{
@@ -2175,7 +2180,8 @@ export default function SpreadsheetDetail() {
             </Link>
             <Typography color="text.primary">Planilha</Typography>
           </Breadcrumbs>
-                    <Card
+
+          <Card
             elevation={0}
             sx={{
               borderRadius: 4,
@@ -2333,8 +2339,7 @@ export default function SpreadsheetDetail() {
           <TechnicalOpinionInstitutionalCard renderedOpinion={renderedTechnicalOpinion} />
 
           <TechnicalOpinionCard opinion={technicalOpinion} />
-
-          <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+                    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
             <CardContent>
               <Stack spacing={2}>
                 <Stack direction="row" spacing={1.25} alignItems="center">
@@ -2742,8 +2747,7 @@ export default function SpreadsheetDetail() {
               selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Versão selecionada"
             }
           />
-
-          <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+                    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
             <CardContent>
               <Stack spacing={2}>
                 <Stack direction="row" spacing={1.25} alignItems="center">
@@ -2786,7 +2790,8 @@ export default function SpreadsheetDetail() {
               </Stack>
             </CardContent>
           </Card>
-                    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+
+          <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
             <CardContent>
               <Stack spacing={2}>
                 <Stack direction="row" spacing={1.25} alignItems="center">
@@ -2913,8 +2918,7 @@ export default function SpreadsheetDetail() {
               </Stack>
             </CardContent>
           </Card>
-
-          <Card variant="outlined" sx={{ borderRadius: 4 }}>
+                    <Card variant="outlined" sx={{ borderRadius: 4 }}>
             <CardContent>
               <Stack spacing={2}>
                 <Typography variant="h6" fontWeight={700}>
@@ -2963,8 +2967,8 @@ export default function SpreadsheetDetail() {
                   />
                   <TextField
                     label="Cenário"
-                    value={editor.domainScenario}
-                    onChange={(e) => updateEditorField("domainScenario", e.target.value)}
+                    value={editorDomainScenarioLabel}
+                    InputProps={{ readOnly: true }}
                     fullWidth
                   />
                   <TextField
@@ -3006,7 +3010,8 @@ export default function SpreadsheetDetail() {
                     fullWidth
                   />
                 </Box>
-                                <TextField
+
+                <TextField
                   label="Objeto / descrição"
                   value={editor.objectDescription}
                   onChange={(e) => updateEditorField("objectDescription", e.target.value)}
