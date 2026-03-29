@@ -91,6 +91,23 @@ function parseNumericInput(value: string) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function isBlank(value: string | undefined | null) {
+  return !value || !String(value).trim();
+}
+
+function preferCurrentValue(
+  currentValue: string,
+  nextValue: string | number | undefined
+) {
+  if (!isBlank(currentValue)) {
+    return currentValue;
+  }
+  if (nextValue === undefined || nextValue === null || nextValue === "") {
+    return "";
+  }
+  return String(nextValue);
+}
+
 function getModelLabel(modelType: SpreadsheetModelType) {
   switch (modelType) {
     case "dedicated_labor":
@@ -110,6 +127,17 @@ function isDomainScenarioKey(value: string): value is DomainScenarioKey {
   return value in DOMAIN_SCENARIOS;
 }
 
+function buildSuggestedTitle(
+  scenarioLabel?: string,
+  unitName?: string,
+  lotName?: string
+) {
+  return [scenarioLabel, unitName, lotName]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join(" - ");
+}
+
 function buildInitialFormState(
   modelType: SpreadsheetModelType,
   preferredScenario?: DomainScenarioKey
@@ -127,7 +155,7 @@ function buildInitialFormState(
     : undefined;
 
   return {
-    title: "",
+    title: scenario ? buildSuggestedTitle(scenario.label) : "",
     domainScenario: compatibleScenario,
     contractingAgency: "",
     contractReference: "",
@@ -140,21 +168,38 @@ function buildInitialFormState(
     professionalCategory: "",
     cctReference: "",
     taxRegime: "lucro_presumido",
-    headcount: scenario?.defaultDraftValues.headcount
-      ? String(scenario.defaultDraftValues.headcount)
-      : "",
-    monthlyBaseValue: scenario?.defaultDraftValues.monthlyBaseValue
-      ? String(scenario.defaultDraftValues.monthlyBaseValue)
-      : "",
+    headcount:
+      scenario?.defaultDraftValues.headcount !== undefined
+        ? String(scenario.defaultDraftValues.headcount)
+        : "",
+    monthlyBaseValue:
+      scenario?.defaultDraftValues.monthlyBaseValue !== undefined
+        ? String(scenario.defaultDraftValues.monthlyBaseValue)
+        : "",
     mainShift: "",
     workScale: "",
     weeklyHours: "",
     monthlyHours: "",
-    salaryBase: "",
-    nightAdditional: "",
-    hazardAdditional: "",
-    mealAllowance: "",
-    transportAllowance: "",
+    salaryBase:
+      scenario?.defaultDraftValues.salaryBase !== undefined
+        ? String(scenario.defaultDraftValues.salaryBase)
+        : "",
+    nightAdditional:
+      scenario?.defaultDraftValues.nightAdditional !== undefined
+        ? String(scenario.defaultDraftValues.nightAdditional)
+        : "",
+    hazardAdditional:
+      scenario?.defaultDraftValues.hazardAdditional !== undefined
+        ? String(scenario.defaultDraftValues.hazardAdditional)
+        : "",
+    mealAllowance:
+      scenario?.defaultDraftValues.mealAllowance !== undefined
+        ? String(scenario.defaultDraftValues.mealAllowance)
+        : "",
+    transportAllowance:
+      scenario?.defaultDraftValues.transportAllowance !== undefined
+        ? String(scenario.defaultDraftValues.transportAllowance)
+        : "",
     objectDescription:
       typeof scenario?.defaultDraftValues.description === "string"
         ? scenario.defaultDraftValues.description
@@ -163,6 +208,7 @@ function buildInitialFormState(
     notes: "",
   };
 }
+
 export default function SpreadsheetCreatePage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -181,7 +227,6 @@ export default function SpreadsheetCreatePage() {
     if (requestedModel && requestedModel in spreadsheetModelTemplates) {
       return requestedModel as SpreadsheetModelType;
     }
-
     return "dedicated_labor";
   }, [requestedModel]);
 
@@ -233,6 +278,14 @@ export default function SpreadsheetCreatePage() {
     return undefined;
   }, [form.domainScenario]);
 
+  const suggestedTitle = useMemo(() => {
+    return buildSuggestedTitle(
+      selectedScenario?.label,
+      form.unitName,
+      form.lotName
+    );
+  }, [selectedScenario, form.unitName, form.lotName]);
+
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((current) => ({
       ...current,
@@ -261,16 +314,38 @@ export default function SpreadsheetCreatePage() {
     setForm((current) => ({
       ...current,
       domainScenario: nextScenario,
-      headcount:
-        current.headcount ||
-        (scenario?.defaultDraftValues.headcount
-          ? String(scenario.defaultDraftValues.headcount)
-          : ""),
-      monthlyBaseValue:
-        current.monthlyBaseValue ||
-        (scenario?.defaultDraftValues.monthlyBaseValue
-          ? String(scenario.defaultDraftValues.monthlyBaseValue)
-          : ""),
+      title: preferCurrentValue(
+        current.title,
+        buildSuggestedTitle(scenario?.label, current.unitName, current.lotName)
+      ),
+      headcount: preferCurrentValue(
+        current.headcount,
+        scenario?.defaultDraftValues.headcount
+      ),
+      monthlyBaseValue: preferCurrentValue(
+        current.monthlyBaseValue,
+        scenario?.defaultDraftValues.monthlyBaseValue
+      ),
+      salaryBase: preferCurrentValue(
+        current.salaryBase,
+        scenario?.defaultDraftValues.salaryBase
+      ),
+      nightAdditional: preferCurrentValue(
+        current.nightAdditional,
+        scenario?.defaultDraftValues.nightAdditional
+      ),
+      hazardAdditional: preferCurrentValue(
+        current.hazardAdditional,
+        scenario?.defaultDraftValues.hazardAdditional
+      ),
+      mealAllowance: preferCurrentValue(
+        current.mealAllowance,
+        scenario?.defaultDraftValues.mealAllowance
+      ),
+      transportAllowance: preferCurrentValue(
+        current.transportAllowance,
+        scenario?.defaultDraftValues.transportAllowance
+      ),
       objectDescription:
         current.objectDescription ||
         (typeof scenario?.defaultDraftValues.description === "string"
@@ -312,12 +387,45 @@ export default function SpreadsheetCreatePage() {
       return;
     }
 
+    if (isBlank(form.objectDescription)) {
+      setFeedback({
+        open: true,
+        severity: "error",
+        message: "Informe ao menos uma descrição resumida do objeto.",
+      });
+      return;
+    }
+
+    if (isBlank(form.headcount)) {
+      setFeedback({
+        open: true,
+        severity: "error",
+        message: "Informe a quantidade total estimada.",
+      });
+      return;
+    }
+
+    const parsedHeadcount = parseNumericInput(form.headcount);
+    if (!parsedHeadcount || parsedHeadcount <= 0) {
+      setFeedback({
+        open: true,
+        severity: "error",
+        message: "A quantidade total estimada deve ser maior que zero.",
+      });
+      return;
+    }
+
     setSubmitting(true);
 
     try {
+      const normalizedTitle =
+        String(form.title || "").trim() || suggestedTitle || selectedScenario?.label || "";
+
+      const normalizedDescription = String(form.objectDescription || "").trim();
+
       const generatedTemplate = createSpreadsheetTemplate({
         modelType,
-        title: form.title,
+        title: normalizedTitle,
         domainScenario: form.domainScenario,
         contractingAgency: form.contractingAgency,
         contractReference: form.contractReference,
@@ -330,7 +438,7 @@ export default function SpreadsheetCreatePage() {
         professionalCategory: form.professionalCategory,
         cctReference: form.cctReference,
         taxRegime: form.taxRegime,
-        headcount: parseNumericInput(form.headcount),
+        headcount: parsedHeadcount,
         monthlyBaseValue: parseNumericInput(form.monthlyBaseValue),
         mainShift: form.mainShift,
         workScale: form.workScale,
@@ -341,8 +449,8 @@ export default function SpreadsheetCreatePage() {
         hazardAdditional: parseNumericInput(form.hazardAdditional),
         mealAllowance: parseNumericInput(form.mealAllowance),
         transportAllowance: parseNumericInput(form.transportAllowance),
-        objectDescription: form.objectDescription,
-        description: form.objectDescription,
+        objectDescription: normalizedDescription,
+        description: normalizedDescription,
         mandatoryBenefitsNotes: form.mandatoryBenefitsNotes,
         notes: form.notes,
         category: selectedScenario?.defaultCategory,
@@ -420,7 +528,8 @@ export default function SpreadsheetCreatePage() {
             </Link>
             <Typography color="text.primary">Criar planilha</Typography>
           </Breadcrumbs>
-                    <Card
+
+          <Card
             elevation={0}
             sx={{
               borderRadius: 5,
@@ -508,6 +617,12 @@ export default function SpreadsheetCreatePage() {
             normativa.
           </Alert>
 
+          {!isBlank(suggestedTitle) && isBlank(form.title) ? (
+            <Alert severity="success" sx={{ borderRadius: 3 }}>
+              Título sugerido para a planilha: <strong>{suggestedTitle}</strong>
+            </Alert>
+          ) : null}
+
           <Box
             sx={{
               display: "grid",
@@ -575,7 +690,7 @@ export default function SpreadsheetCreatePage() {
                         label="Título da planilha"
                         value={form.title}
                         onChange={(event) => updateField("title", event.target.value)}
-                        placeholder="Ex.: Vigilância patrimonial - Campus Central"
+                        placeholder={suggestedTitle || "Ex.: Vigilância patrimonial - Campus Central"}
                         fullWidth
                       />
 
@@ -783,7 +898,8 @@ export default function SpreadsheetCreatePage() {
                   </Stack>
                 </CardContent>
               </Card>
-                            <Card variant="outlined" sx={{ borderRadius: 4 }}>
+
+              <Card variant="outlined" sx={{ borderRadius: 4 }}>
                 <CardContent>
                   <Stack spacing={2.5}>
                     <Stack direction="row" spacing={1.25} alignItems="center">
@@ -964,7 +1080,8 @@ export default function SpreadsheetCreatePage() {
                   </CardContent>
                 </Card>
               ) : null}
-                            <Card variant="outlined" sx={{ borderRadius: 4 }}>
+
+              <Card variant="outlined" sx={{ borderRadius: 4 }}>
                 <CardContent>
                   <Stack spacing={1.5}>
                     <Typography variant="h6" fontWeight={700}>
