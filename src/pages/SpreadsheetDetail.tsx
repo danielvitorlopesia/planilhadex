@@ -498,7 +498,6 @@ function getStatusChipStyles(status?: string) {
       return { backgroundColor: "#EFE7F6", color: "#8E5AB5" };
   }
 }
-
 function categoryMatches(category: string, terms: string[]) {
   const normalized = category.toLowerCase();
   return terms.some((term) => normalized.includes(term.toLowerCase()));
@@ -603,6 +602,7 @@ function readServiceCompositionEngineSnapshot(
   const raw = readMetadataRecord(record, "serviceCompositionEngineSnapshot");
   return raw ? (raw as ServiceCompositionEngineSnapshot) : null;
 }
+
 function buildVersionHistoryItemFromRecord(
   record: SpreadsheetDetailRecord,
   options?: Partial<VersionHistoryItem>
@@ -1006,470 +1006,6 @@ function buildPcfpModuleGroups(rows: SpreadsheetDetailRow[]): PcfpModuleGroup[] 
   });
 }
 
-
-function upsertRow(
-  rows: SpreadsheetDetailRow[],
-  nextRow: SpreadsheetDetailRow,
-  matcher: (row: SpreadsheetDetailRow) => boolean
-): SpreadsheetDetailRow[] {
-  const index = rows.findIndex(matcher);
-
-  if (index === -1) {
-    return [...rows, nextRow];
-  }
-
-  const updated = [...rows];
-  updated[index] = {
-    ...updated[index],
-    ...nextRow,
-  };
-  return updated;
-}
-
-function buildSubtotal(quantity: number, unitValue: number) {
-  return Number((quantity * unitValue).toFixed(2));
-}
-
-function buildPercentageValue(base: number, rate: number) {
-  return Number((base * rate).toFixed(2));
-}
-
-function removeRowsByMatcher(
-  rows: SpreadsheetDetailRow[],
-  matcher: (row: SpreadsheetDetailRow) => boolean
-): SpreadsheetDetailRow[] {
-  return rows.filter((row) => !matcher(row));
-}
-
-function rebuildDedicatedLaborRowsFromEditor(
-  baseRows: SpreadsheetDetailRow[],
-  editor: EditorState
-): SpreadsheetDetailRow[] {
-  const headcount = Math.max(0, parseNumber(editor.headcount));
-  const salaryBase = Math.max(0, parseNumber(editor.salaryBase));
-  const mealAllowance = Math.max(0, parseNumber(editor.mealAllowance));
-  const transportAllowance = Math.max(0, parseNumber(editor.transportAllowance));
-  const nightAdditional = Math.max(0, parseNumber(editor.nightAdditional));
-  const hazardAdditional = Math.max(0, parseNumber(editor.hazardAdditional));
-
-  const professionalCategory =
-    safeString(editor.professionalCategory) || "Posto operacional";
-
-  const salarySubtotal = buildSubtotal(headcount, salaryBase);
-  const nightSubtotal = buildSubtotal(headcount, nightAdditional);
-  const hazardSubtotal = buildSubtotal(headcount, hazardAdditional);
-
-  const payrollBase =
-    salarySubtotal +
-    nightSubtotal +
-    hazardSubtotal;
-
-  const inssRate = 0.20;
-  const fgtsRate = 0.08;
-  const vacationProvisionRate = 1 / 12;
-  const thirteenthProvisionRate = 1 / 12;
-
-  const inssSubtotal = buildPercentageValue(payrollBase, inssRate);
-  const fgtsSubtotal = buildPercentageValue(payrollBase, fgtsRate);
-  const vacationSubtotal = buildPercentageValue(payrollBase, vacationProvisionRate);
-  const thirteenthSubtotal = buildPercentageValue(payrollBase, thirteenthProvisionRate);
-
-  let nextRows = [...baseRows];
-
-  nextRows = upsertRow(
-    nextRows,
-    {
-      item: professionalCategory,
-      categoria: "Mão de obra",
-      quantidade: headcount,
-      valorUnitario: salaryBase,
-      subtotal: salarySubtotal,
-      status: "Editado",
-    },
-    (row) =>
-      categoryMatches(String(row.categoria || ""), [
-        "mão de obra",
-        "equipe operacional",
-      ])
-  );
-
-  nextRows = upsertRow(
-    nextRows,
-    {
-      item: "Vale-alimentação",
-      categoria: "Benefícios",
-      quantidade: headcount,
-      valorUnitario: mealAllowance,
-      subtotal: buildSubtotal(headcount, mealAllowance),
-      status: "Editado",
-    },
-    (row) =>
-      itemMatches(String(row.item || ""), [
-        "vale-alimentação",
-        "vale alimentação",
-        "alimentação",
-      ])
-  );
-
-  nextRows = upsertRow(
-    nextRows,
-    {
-      item: "Vale-transporte",
-      categoria: "Benefícios",
-      quantidade: headcount,
-      valorUnitario: transportAllowance,
-      subtotal: buildSubtotal(headcount, transportAllowance),
-      status: "Editado",
-    },
-    (row) =>
-      itemMatches(String(row.item || ""), [
-        "vale-transporte",
-        "vale transporte",
-        "transporte",
-      ])
-  );
-
-  if (nightAdditional > 0) {
-    nextRows = upsertRow(
-      nextRows,
-      {
-        item: "Adicional noturno",
-        categoria: "Adicionais",
-        quantidade: headcount,
-        valorUnitario: nightAdditional,
-        subtotal: nightSubtotal,
-        status: "Editado",
-      },
-      (row) =>
-        itemMatches(String(row.item || ""), ["adicional noturno", "noturno"])
-    );
-  } else {
-    nextRows = removeRowsByMatcher(
-      nextRows,
-      (row) =>
-        itemMatches(String(row.item || ""), ["adicional noturno", "noturno"])
-    );
-  }
-
-  if (hazardAdditional > 0) {
-    nextRows = upsertRow(
-      nextRows,
-      {
-        item: "Adicional de insalubridade/periculosidade",
-        categoria: "Adicionais",
-        quantidade: headcount,
-        valorUnitario: hazardAdditional,
-        subtotal: hazardSubtotal,
-        status: "Editado",
-      },
-      (row) =>
-        itemMatches(String(row.item || ""), [
-          "insalubridade",
-          "periculosidade",
-          "adicional de insalubridade",
-        ])
-    );
-  } else {
-    nextRows = removeRowsByMatcher(
-      nextRows,
-      (row) =>
-        itemMatches(String(row.item || ""), [
-          "insalubridade",
-          "periculosidade",
-          "adicional de insalubridade",
-        ])
-    );
-  }
-
-  nextRows = upsertRow(
-    nextRows,
-    {
-      item: "INSS patronal",
-      categoria: "Encargos",
-      quantidade: 1,
-      valorUnitario: inssSubtotal,
-      subtotal: inssSubtotal,
-      status: "Editado",
-    },
-    (row) => itemMatches(String(row.item || ""), ["inss patronal", "inss"])
-  );
-
-  nextRows = upsertRow(
-    nextRows,
-    {
-      item: "FGTS",
-      categoria: "Encargos",
-      quantidade: 1,
-      valorUnitario: fgtsSubtotal,
-      subtotal: fgtsSubtotal,
-      status: "Editado",
-    },
-    (row) => itemMatches(String(row.item || ""), ["fgts"])
-  );
-
-  nextRows = upsertRow(
-    nextRows,
-    {
-      item: "Provisão de férias",
-      categoria: "Provisões",
-      quantidade: 1,
-      valorUnitario: vacationSubtotal,
-      subtotal: vacationSubtotal,
-      status: "Editado",
-    },
-    (row) =>
-      itemMatches(String(row.item || ""), ["provisão de férias", "férias", "ferias"])
-  );
-
-  nextRows = upsertRow(
-    nextRows,
-    {
-      item: "Provisão de 13º salário",
-      categoria: "Provisões",
-      quantidade: 1,
-      valorUnitario: thirteenthSubtotal,
-      subtotal: thirteenthSubtotal,
-      status: "Editado",
-    },
-    (row) =>
-      itemMatches(String(row.item || ""), [
-        "13º",
-        "13 salario",
-        "13º salário",
-        "décimo terceiro",
-      ])
-  );
-
-  return nextRows.map((row) => ({
-    ...row,
-    subtotal:
-      categoryMatches(String(row.categoria || ""), ["encargos", "provisões", "provisoes"])
-        ? safeNumber(row.subtotal)
-        : buildSubtotal(
-            safeNumber(row.quantidade),
-            safeNumber(row.valorUnitario)
-          ),
-  }));
-}
-
-function rebuildRowsFromEditor(
-  spreadsheet: SpreadsheetDetailRecord,
-  editor: EditorState,
-  compositionRows: ServiceCompositionRow[]
-): SpreadsheetDetailRow[] {
-  if (spreadsheet.modelType === "service_composition") {
-    return mapCompositionRowsToSpreadsheetRows(compositionRows);
-  }
-
-  if (spreadsheet.modelType === "dedicated_labor") {
-    return rebuildDedicatedLaborRowsFromEditor(spreadsheet.rows, editor);
-  }
-
-  return spreadsheet.rows.map((row) => ({
-    ...row,
-    subtotal: buildSubtotal(
-      safeNumber(row.quantidade),
-      safeNumber(row.valorUnitario)
-    ),
-  }));
-}
-
-
-function upsertRow(
-  rows: SpreadsheetDetailRow[],
-  nextRow: SpreadsheetDetailRow,
-  matcher: (row: SpreadsheetDetailRow) => boolean
-): SpreadsheetDetailRow[] {
-  const index = rows.findIndex(matcher);
-
-  if (index === -1) {
-    return [...rows, nextRow];
-  }
-
-  const updated = [...rows];
-  updated[index] = {
-    ...updated[index],
-    ...nextRow,
-  };
-  return updated;
-}
-
-function buildSubtotal(quantity: number, unitValue: number) {
-  return Number((quantity * unitValue).toFixed(2));
-}
-
-function rebuildDedicatedLaborRowsFromEditor(
-  baseRows: SpreadsheetDetailRow[],
-  editor: EditorState
-): SpreadsheetDetailRow[] {
-  const headcount = Math.max(0, parseNumber(editor.headcount));
-  const salaryBase = Math.max(0, parseNumber(editor.salaryBase));
-  const mealAllowance = Math.max(0, parseNumber(editor.mealAllowance));
-  const transportAllowance = Math.max(0, parseNumber(editor.transportAllowance));
-  const nightAdditional = Math.max(0, parseNumber(editor.nightAdditional));
-  const hazardAdditional = Math.max(0, parseNumber(editor.hazardAdditional));
-
-  let nextRows = [...baseRows];
-
-  const professionalCategory =
-    safeString(editor.professionalCategory) || "Posto operacional";
-
-  nextRows = upsertRow(
-    nextRows,
-    {
-      item: professionalCategory,
-      categoria: "Mão de obra",
-      quantidade: headcount,
-      valorUnitario: salaryBase,
-      subtotal: buildSubtotal(headcount, salaryBase),
-      status: "Editado",
-    },
-    (row) =>
-      categoryMatches(String(row.categoria || ""), [
-        "mão de obra",
-        "equipe operacional",
-      ])
-  );
-
-  nextRows = upsertRow(
-    nextRows,
-    {
-      item: "Vale-alimentação",
-      categoria: "Benefícios",
-      quantidade: headcount,
-      valorUnitario: mealAllowance,
-      subtotal: buildSubtotal(headcount, mealAllowance),
-      status: "Editado",
-    },
-    (row) =>
-      itemMatches(String(row.item || ""), [
-        "vale-alimentação",
-        "vale alimentação",
-        "alimentação",
-      ])
-  );
-
-  nextRows = upsertRow(
-    nextRows,
-    {
-      item: "Vale-transporte",
-      categoria: "Benefícios",
-      quantidade: headcount,
-      valorUnitario: transportAllowance,
-      subtotal: buildSubtotal(headcount, transportAllowance),
-      status: "Editado",
-    },
-    (row) =>
-      itemMatches(String(row.item || ""), [
-        "vale-transporte",
-        "vale transporte",
-        "transporte",
-      ])
-  );
-
-  if (nightAdditional > 0) {
-    nextRows = upsertRow(
-      nextRows,
-      {
-        item: "Adicional noturno",
-        categoria: "Adicionais",
-        quantidade: headcount,
-        valorUnitario: nightAdditional,
-        subtotal: buildSubtotal(headcount, nightAdditional),
-        status: "Editado",
-      },
-      (row) => itemMatches(String(row.item || ""), ["adicional noturno", "noturno"])
-    );
-  }
-
-  if (hazardAdditional > 0) {
-    nextRows = upsertRow(
-      nextRows,
-      {
-        item: "Adicional de insalubridade/periculosidade",
-        categoria: "Adicionais",
-        quantidade: headcount,
-        valorUnitario: hazardAdditional,
-        subtotal: buildSubtotal(headcount, hazardAdditional),
-        status: "Editado",
-      },
-      (row) =>
-        itemMatches(String(row.item || ""), [
-          "insalubridade",
-          "periculosidade",
-          "adicional de insalubridade",
-        ])
-    );
-  }
-
-  return nextRows.map((row) => ({
-    ...row,
-    subtotal: buildSubtotal(
-      safeNumber(row.quantidade),
-      safeNumber(row.valorUnitario)
-    ),
-  }));
-}
-
-function mapSpreadsheetRowsToCompositionRows(
-  record: SpreadsheetDetailRecord | null
-): ServiceCompositionRow[] {
-  if (!record || record.modelType !== "service_composition") {
-    return [];
-  }
-
-  return record.rows.map((row, index) => ({
-    id: String(getRowExtraValue(row, "id") ?? `${record.id}-${index}`),
-    item: safeString(row.item),
-    categoria: safeString(row.categoria),
-    tipoDemanda:
-      safeString(getRowExtraValue(row, "tipoDemanda")) ||
-      safeString(getRowExtraValue(row, "tipo_demanda")) ||
-      "Não informado",
-    quantidade: safeNumber(row.quantidade),
-    valorUnitario: safeNumber(row.valorUnitario),
-    unidade: safeString(getRowExtraValue(row, "unidade")) || "",
-    periodicidade: safeString(getRowExtraValue(row, "periodicidade")) || "",
-  }));
-}
-
-function mapCompositionRowsToSpreadsheetRows(
-  rows: ServiceCompositionRow[]
-): SpreadsheetDetailRow[] {
-  return rows.map((row) => ({
-    item: row.item,
-    categoria: row.categoria,
-    quantidade: row.quantidade,
-    valorUnitario: row.valorUnitario,
-    subtotal: safeNumber(row.quantidade) * safeNumber(row.valorUnitario),
-    status: "Editado",
-    memoriaCalculo:
-      `${row.tipoDemanda || "Não informado"} | ${row.unidade || "sem unidade"} | ${row.periodicidade || "sem periodicidade"}` as SpreadsheetDetailRow["memoriaCalculo"],
-  }));
-}
-
-function rebuildRowsFromEditor(
-  spreadsheet: SpreadsheetDetailRecord,
-  editor: EditorState,
-  compositionRows: ServiceCompositionRow[]
-): SpreadsheetDetailRow[] {
-  if (spreadsheet.modelType === "service_composition") {
-    return mapCompositionRowsToSpreadsheetRows(compositionRows);
-  }
-
-  if (spreadsheet.modelType === "dedicated_labor") {
-    return rebuildDedicatedLaborRowsFromEditor(spreadsheet.rows, editor);
-  }
-
-  return spreadsheet.rows.map((row) => ({
-    ...row,
-    subtotal: buildSubtotal(
-      safeNumber(row.quantidade),
-      safeNumber(row.valorUnitario)
-    ),
-  }));
-}
-
 function ExecutiveMetricCard({
   label,
   value,
@@ -1625,6 +1161,7 @@ function ModuleDetailCard({ module }: { module: PcfpModuleGroup }) {
     </Card>
   );
 }
+
 function PersistedCompositionCard({
   summary,
   memoryItems,
@@ -1675,7 +1212,6 @@ function PersistedCompositionCard({
     </Card>
   );
 }
-
 function TechnicalOpinionInstitutionalCard({
   renderedOpinion,
 }: {
@@ -1918,8 +1454,7 @@ function TechnicalOpinionCard({
               />
             ))}
           </Box>
-
-          <CompactInfoCard title="Resumo executivo">
+                    <CompactInfoCard title="Resumo executivo">
             <Typography variant="body2">{opinion.resumoExecutivo}</Typography>
           </CompactInfoCard>
 
@@ -1969,6 +1504,44 @@ function TechnicalOpinionCard({
     </Card>
   );
 }
+
+function mapSpreadsheetRowsToCompositionRows(
+  record: SpreadsheetDetailRecord | null
+): ServiceCompositionRow[] {
+  if (!record || record.modelType !== "service_composition") {
+    return [];
+  }
+
+  return record.rows.map((row, index) => ({
+    id: String(getRowExtraValue(row, "id") ?? `${record.id}-${index}`),
+    item: safeString(row.item),
+    categoria: safeString(row.categoria),
+    tipoDemanda:
+      safeString(getRowExtraValue(row, "tipoDemanda")) ||
+      safeString(getRowExtraValue(row, "tipo_demanda")) ||
+      "Não informado",
+    quantidade: safeNumber(row.quantidade),
+    valorUnitario: safeNumber(row.valorUnitario),
+    unidade: safeString(getRowExtraValue(row, "unidade")) || "",
+    periodicidade: safeString(getRowExtraValue(row, "periodicidade")) || "",
+  }));
+}
+
+function mapCompositionRowsToSpreadsheetRows(
+  rows: ServiceCompositionRow[]
+): SpreadsheetDetailRow[] {
+  return rows.map((row) => ({
+    item: row.item,
+    categoria: row.categoria,
+    quantidade: row.quantidade,
+    valorUnitario: row.valorUnitario,
+    subtotal: safeNumber(row.quantidade) * safeNumber(row.valorUnitario),
+    status: "Editado",
+    memoriaCalculo:
+      `${row.tipoDemanda || "Não informado"} | ${row.unidade || "sem unidade"} | ${row.periodicidade || "sem periodicidade"}` as SpreadsheetDetailRow["memoriaCalculo"],
+  }));
+}
+
 export default function SpreadsheetDetail() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<LoadState>("loading");
@@ -2087,8 +1660,7 @@ export default function SpreadsheetDetail() {
   const totalItems = spreadsheet?.rows.length ?? 0;
   const pendingItems =
     spreadsheet?.rows.filter((row) => String(row.status || "") === "Pendente").length ?? 0;
-
-  const laborCostBreakdown = useMemo(() => readLaborCostBreakdown(spreadsheet), [spreadsheet]);
+    const laborCostBreakdown = useMemo(() => readLaborCostBreakdown(spreadsheet), [spreadsheet]);
   const laborChargesConfig = useMemo(() => readLaborChargesConfig(spreadsheet), [spreadsheet]);
   const serviceCompositionSummary = useMemo(
     () => readServiceCompositionSummary(spreadsheet),
@@ -2286,8 +1858,7 @@ export default function SpreadsheetDetail() {
     if (!spreadsheet) return [];
     return buildPcfpModuleGroups(spreadsheet.rows);
   }, [spreadsheet]);
-
-  const effectiveHeadcount = useMemo(() => {
+    const effectiveHeadcount = useMemo(() => {
     const persisted = safeNumber(laborCostBreakdown?.headcount);
     if (persisted > 0) {
       return persisted;
@@ -2444,16 +2015,10 @@ export default function SpreadsheetDetail() {
     setSaveMessage("");
 
     try {
-      const normalizedRows: SpreadsheetDetailRow[] = rebuildRowsFromEditor(
-        spreadsheet,
-        editor,
-        compositionRows
-      );
-
-      const recalculatedMonthlyBaseValue = normalizedRows.reduce(
-        (sum, row) => sum + safeNumber(row.subtotal),
-        0
-      );
+      const normalizedRows: SpreadsheetDetailRow[] =
+        spreadsheet.modelType === "service_composition"
+          ? mapCompositionRowsToSpreadsheetRows(compositionRows)
+          : spreadsheet.rows;
 
       const updatedBase = updateSpreadsheetEditorDraft(spreadsheet.id, {
         contractingAgency: editor.contractingAgency,
@@ -2470,7 +2035,7 @@ export default function SpreadsheetDetail() {
         objectDescription: editor.objectDescription,
         domainScenario: editor.domainScenario,
         headcount: editor.headcount,
-        monthlyBaseValue: String(recalculatedMonthlyBaseValue),
+        monthlyBaseValue: editor.monthlyBaseValue,
         mainShift: editor.mainShift,
         workScale: editor.workScale,
         weeklyHours: editor.weeklyHours,
@@ -2491,7 +2056,6 @@ export default function SpreadsheetDetail() {
       const updated: SpreadsheetDetailRecord = {
         ...updatedBase,
         rows: normalizedRows,
-        monthlyBaseValue: recalculatedMonthlyBaseValue,
         metadata: {
           ...(updatedBase.metadata ?? {}),
           localDraftOverride: true,
