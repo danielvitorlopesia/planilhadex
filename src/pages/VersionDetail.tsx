@@ -46,7 +46,6 @@ import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { getSpreadsheetById } from "../lib/api";
-import { getStatusStyles } from "./Home";
 import { SpreadsheetDetailData } from "../types/spreadsheet";
 import { useAuth } from "../auth/AuthContext";
 import ExecutabilityOpinionView, {
@@ -73,7 +72,77 @@ function formatCurrency(value: number) {
     currency: "BRL",
   });
 }
+type StatusStyleResult = {
+  label: string;
+  sx: {
+    backgroundColor: string;
+    color: string;
+    border?: string;
+  };
+};
 
+function getStatusStyles(status?: string): StatusStyleResult {
+  const normalized = (status || "").trim().toLowerCase();
+
+  if (
+    normalized === "aprovado" ||
+    normalized === "conferido" ||
+    normalized === "concluído" ||
+    normalized === "concluido" ||
+    normalized === "ativo"
+  ) {
+    return {
+      label: status || "Aprovado",
+      sx: {
+        backgroundColor: "#e8f5e9",
+        color: "#2e7d32",
+        border: "1px solid #c8e6c9",
+      },
+    };
+  }
+
+  if (
+    normalized === "pendente" ||
+    normalized === "em análise" ||
+    normalized === "em analise" ||
+    normalized === "em revisão" ||
+    normalized === "em revisao"
+  ) {
+    return {
+      label: status || "Pendente",
+      sx: {
+        backgroundColor: "#fff3e0",
+        color: "#b26a00",
+        border: "1px solid #ffe0b2",
+      },
+    };
+  }
+
+  if (
+    normalized === "rejeitado" ||
+    normalized === "erro" ||
+    normalized === "inconsistente" ||
+    normalized === "cancelado"
+  ) {
+    return {
+      label: status || "Rejeitado",
+      sx: {
+        backgroundColor: "#ffebee",
+        color: "#c62828",
+        border: "1px solid #ffcdd2",
+      },
+    };
+  }
+
+  return {
+    label: status || "Sem status",
+    sx: {
+      backgroundColor: "rgba(140, 88, 162, 0.10)",
+      color: "#6f3f84",
+      border: "1px solid rgba(140, 88, 162, 0.20)",
+    },
+  };
+}
 export default function SpreadsheetDetail() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
