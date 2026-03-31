@@ -1918,6 +1918,15 @@ export default function SpreadsheetDetail() {
     totalValue,
   ]);
 
+  const spreadsheetAuditData = useMemo(() => {
+    return analyzeSpreadsheetAudit({
+      rows: spreadsheet?.rows || [],
+      monthlyBaseValue: effectiveMonthlyReference,
+      laborCostBreakdown,
+      laborChargesConfig,
+    });
+  }, [spreadsheet, effectiveMonthlyReference, laborCostBreakdown, laborChargesConfig]);
+
   const technicalOpinion = useMemo<TechnicalOpinionOutput | null>(() => {
     if (!spreadsheet) {
       return null;
@@ -2820,6 +2829,8 @@ export default function SpreadsheetDetail() {
               </Stack>
             </CardContent>
           </Card>
+
+          <SpreadsheetAuditPanel data={spreadsheetAuditData} />
 
           <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
             <CardContent>
