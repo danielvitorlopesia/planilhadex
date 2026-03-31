@@ -336,8 +336,8 @@ function extractIndicators(source: unknown): Array<{
         ): item is {
           label: string;
           value: string;
-          tone?: RendererTone;
-        } => Boolean(item)
+          tone: RendererTone | undefined;
+        } => item !== null
       );
 
     if (parsed.length) return parsed;
@@ -361,7 +361,10 @@ function extractOpinion(source: RenderTechnicalOpinionInput): ExtractedOpinion {
       deepGet(source, ["spreadsheet", "organization"]),
       deepGet(source, ["spreadsheet", "agency"])
     ),
-    unitName: firstString(source.unitName, deepGet(source, ["spreadsheet", "unitName"])),
+    unitName: firstString(
+      source.unitName,
+      deepGet(source, ["spreadsheet", "unitName"])
+    ),
     contractReference: firstString(
       source.contractReference,
       deepGet(source, ["spreadsheet", "contractReference"])
@@ -370,12 +373,18 @@ function extractOpinion(source: RenderTechnicalOpinionInput): ExtractedOpinion {
       source.referenceDate,
       deepGet(source, ["spreadsheet", "referenceDate"])
     ),
-    modelType: firstString(source.modelType, deepGet(source, ["spreadsheet", "modelType"])),
+    modelType: firstString(
+      source.modelType,
+      deepGet(source, ["spreadsheet", "modelType"])
+    ),
     domainScenario: firstString(
       source.domainScenario,
       deepGet(source, ["spreadsheet", "domainScenario"])
     ),
-    status: firstString(source.status, deepGet(source, ["spreadsheet", "status"])),
+    status: firstString(
+      source.status,
+      deepGet(source, ["spreadsheet", "status"])
+    ),
 
     executability: firstString(
       source.executability,
@@ -397,7 +406,10 @@ function extractOpinion(source: RenderTechnicalOpinionInput): ExtractedOpinion {
     ),
     scoreGlobal: source.scoreGlobal ?? deepGet(source, ["summary", "scoreGlobal"]),
 
-    ementa: firstString(source.ementa, deepGet(source, ["sections", "ementa"])),
+    ementa: firstString(
+      source.ementa,
+      deepGet(source, ["sections", "ementa"])
+    ),
     summary: firstString(
       source.summary,
       source.executiveSummary,
@@ -436,26 +448,35 @@ function extractOpinion(source: RenderTechnicalOpinionInput): ExtractedOpinion {
     indicators: extractIndicators(source),
 
     proposedTotalValue:
-      source.proposedTotalValue ?? deepGet(source, ["financial", "proposedTotalValue"]),
+      source.proposedTotalValue ??
+      deepGet(source, ["financial", "proposedTotalValue"]),
     mandatoryCostTotal:
-      source.mandatoryCostTotal ?? deepGet(source, ["financial", "mandatoryCostTotal"]),
+      source.mandatoryCostTotal ??
+      deepGet(source, ["financial", "mandatoryCostTotal"]),
     evidentiaryCostTotal:
-      source.evidentiaryCostTotal ?? deepGet(source, ["financial", "evidentiaryCostTotal"]),
-    retentionTotal: source.retentionTotal ?? deepGet(source, ["financial", "retentionTotal"]),
+      source.evidentiaryCostTotal ??
+      deepGet(source, ["financial", "evidentiaryCostTotal"]),
+    retentionTotal:
+      source.retentionTotal ?? deepGet(source, ["financial", "retentionTotal"]),
     executabilityBalance:
-      source.executabilityBalance ?? deepGet(source, ["financial", "executabilityBalance"]),
+      source.executabilityBalance ??
+      deepGet(source, ["financial", "executabilityBalance"]),
   };
 }
+
 function buildHeader(opinion: ExtractedOpinion): TechnicalOpinionRenderedHeader {
   return {
     tituloDocumento: "NOTA TÉCNICA AUTOMATIZADA",
-    subtituloDocumento: "Sistema CustoPúblico — Análise de Exequibilidade de Planilha",
+    subtituloDocumento:
+      "Sistema CustoPúblico — Análise de Exequibilidade de Planilha",
     orgao: opinion.organization || "Não informado",
     unidade: opinion.unitName || "Não informada",
     contrato: opinion.contractReference || "Não informado",
     dataReferencia: formatDatePtBr(opinion.referenceDate),
     planilhaAnalisada: opinion.spreadsheetTitle || "Planilha não identificada",
-    cenario: opinion.domainScenario ? toTitleCasePtBr(opinion.domainScenario) : "Não classificado",
+    cenario: opinion.domainScenario
+      ? toTitleCasePtBr(opinion.domainScenario)
+      : "Não classificado",
   };
 }
 
@@ -564,7 +585,9 @@ function buildCabecalhoSection(
   };
 }
 
-function buildEmentaSection(opinion: ExtractedOpinion): TechnicalOpinionRenderedSection {
+function buildEmentaSection(
+  opinion: ExtractedOpinion
+): TechnicalOpinionRenderedSection {
   const paragraphs = [
     opinion.ementa ||
       `Análise automatizada da planilha de custos referente à contratação de serviços terceirizados, com foco em consistência estrutural, coerência financeira e risco preliminar de inexequibilidade.`,
@@ -670,7 +693,9 @@ function buildVersaoGestorSection(
   };
 }
 
-function buildConclusaoSection(opinion: ExtractedOpinion): TechnicalOpinionRenderedSection {
+function buildConclusaoSection(
+  opinion: ExtractedOpinion
+): TechnicalOpinionRenderedSection {
   const paragraphs = [
     opinion.conclusion ||
       `Diante da análise realizada, conclui-se que a planilha apresenta elementos suficientes para leitura técnica preliminar, devendo a decisão administrativa observar o enquadramento de exequibilidade, o risco identificado e a eventual necessidade de complementação documental.`,
