@@ -1,3 +1,6 @@
+import SpreadsheetAuditPanel from "../modules/spreadsheet-editor/components/SpreadsheetAuditPanel";
+import { analyzeSpreadsheetAudit } from "../modules/spreadsheet-editor/utils/spreadsheetAuditAnalyzer";
+import DedicatedLaborEditor from "../modules/spreadsheet-editor/models/DedicatedLaborEditor";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -108,6 +111,12 @@ type SpreadsheetDetailRecord = SpreadsheetRecord & {
   rows: SpreadsheetDetailRow[];
 };
 
+type DomainScenario =
+  | "reception_administrative_support"
+  | "cleaning_conservation"
+  | "concierge_access_control"
+  | "property_security";
+
 type EditorState = {
   contractingAgency: string;
   contractReference: string;
@@ -121,7 +130,7 @@ type EditorState = {
   cctReference: string;
   taxRegime: string;
   objectDescription: string;
-  domainScenario: string;
+  domainScenario: DomainScenario | "";
   headcount: string;
   monthlyBaseValue: string;
   mainShift: string;
@@ -182,15 +191,17 @@ type LaborCostBreakdown = {
 };
 
 type LaborChargesConfig = {
+  employerInssRate?: number;
   fgtsRate?: number;
-  inssRate?: number;
+  ratRate?: number;
+  thirdPartyRate?: number;
   vacationProvisionRate?: number;
-  thirteenthSalaryRate?: number;
-  terminationProvisionRate?: number;
-  otherChargesRate?: number;
-  effectiveChargesRate?: number;
-  totalChargesPercentage?: number;
+  thirteenthProvisionRate?: number;
+  valeTransportePerEmployee?: number;
+  valeAlimentacaoPerEmployee?: number;
+  otherBenefitsPerEmployee?: number;
 };
+
 
 type ServiceCompositionSummary = {
   itemCount?: number;
@@ -577,7 +588,22 @@ function readLaborChargesConfig(
   record: SpreadsheetDetailRecord | null | undefined
 ): LaborChargesConfig | null {
   const raw = readMetadataRecord(record, "laborChargesConfig");
-  return raw ? (raw as LaborChargesConfig) : null;
+
+  if (!raw) {
+    return null;
+  }
+
+  return {
+    employerInssRate: safeNumber(raw["employerInssRate"]),
+    fgtsRate: safeNumber(raw["fgtsRate"]),
+    ratRate: safeNumber(raw["ratRate"]),
+    thirdPartyRate: safeNumber(raw["thirdPartyRate"]),
+    vacationProvisionRate: safeNumber(raw["vacationProvisionRate"]),
+    thirteenthProvisionRate: safeNumber(raw["thirteenthProvisionRate"]),
+    valeTransportePerEmployee: safeNumber(raw["valeTransportePerEmployee"]),
+    valeAlimentacaoPerEmployee: safeNumber(raw["valeAlimentacaoPerEmployee"]),
+    otherBenefitsPerEmployee: safeNumber(raw["otherBenefitsPerEmployee"]),
+  };
 }
 
 function readServiceCompositionSummary(
@@ -894,7 +920,9 @@ function buildInitialEditorState(record: SpreadsheetDetailRecord): EditorState {
     cctReference: storedDraft.cctReference ?? "",
     taxRegime: storedDraft.taxRegime ?? "lucro_presumido",
     objectDescription: storedDraft.objectDescription ?? safeString(record.description),
-    domainScenario: storedDraft.domainScenario ?? safeString(record.domainScenario),
+    domainScenario:
+      (storedDraft.domainScenario as DomainScenario | "") ??
+      (safeString(record.domainScenario) as DomainScenario | ""),
     headcount: storedDraft.headcount ?? stringifyNumber(inferredHeadcount),
     monthlyBaseValue:
       storedDraft.monthlyBaseValue ?? stringifyNumber(inferredMonthlyBaseValue),
@@ -1993,7 +2021,9 @@ export default function SpreadsheetDetail() {
     if (!editor?.domainScenario) {
       return "";
     }
-    return DOMAIN_SCENARIO_LABELS[editor.domainScenario] ?? editor.domainScenario;
+    return editor.domainScenario
+      ? DOMAIN_SCENARIO_LABELS[editor.domainScenario as DomainScenario] ?? editor.domainScenario
+      : "";
   }, [editor?.domainScenario]);
 
   function updateEditorField(field: keyof EditorState, value: string) {
@@ -2033,7 +2063,7 @@ export default function SpreadsheetDetail() {
         cctReference: editor.cctReference,
         taxRegime: editor.taxRegime,
         objectDescription: editor.objectDescription,
-        domainScenario: editor.domainScenario,
+        domainScenario: editor.domainScenario || undefined,
         headcount: editor.headcount,
         monthlyBaseValue: editor.monthlyBaseValue,
         mainShift: editor.mainShift,
@@ -2859,14 +2889,39 @@ export default function SpreadsheetDetail() {
                 </Typography>
 
                 {laborChargesConfig ? (
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Encargos efetivos persistidos:</strong>{" "}
-                    {laborChargesConfig.effectiveChargesRate ??
-                      laborChargesConfig.totalChargesPercentage ??
-                      0}
-                    %
-                  </Typography>
-                ) : null}
+  <Stack spacing={0.5}>
+    <Typography variant="body2" color="text.secondary">
+      <strong>INSS patronal:</strong> {laborChargesConfig.employerInssRate ?? 0}%
+    </Typography>
+    <Typography variant="body2" color="text.secondary">
+      <strong>FGTS:</strong> {laborChargesConfig.fgtsRate ?? 0}%
+    </Typography>
+    <Typography variant="body2" color="text.secondary">
+      <strong>RAT / GILRAT:</strong> {laborChargesConfig.ratRate ?? 0}%
+    </Typography>
+    <Typography variant="body2" color="text.secondary">
+      <strong>Terceiros:</strong> {laborChargesConfig.thirdPartyRate ?? 0}%
+    </Typography>
+    <Typography variant="body2" color="text.secondary">
+      <strong>Provisão de férias:</strong> {laborChargesConfig.vacationProvisionRate ?? 0}%
+    </Typography>
+    <Typography variant="body2" color="text.secondary">
+      <strong>Provisão de 13º:</strong> {laborChargesConfig.thirteenthProvisionRate ?? 0}%
+    </Typography>
+    <Typography variant="body2" color="text.secondary">
+      <strong>Vale-transporte por empregado:</strong>{" "}
+      {formatCurrency(laborChargesConfig.valeTransportePerEmployee ?? 0)}
+    </Typography>
+    <Typography variant="body2" color="text.secondary">
+      <strong>Vale-alimentação por empregado:</strong>{" "}
+      {formatCurrency(laborChargesConfig.valeAlimentacaoPerEmployee ?? 0)}
+    </Typography>
+    <Typography variant="body2" color="text.secondary">
+      <strong>Outros benefícios por empregado:</strong>{" "}
+      {formatCurrency(laborChargesConfig.otherBenefitsPerEmployee ?? 0)}
+    </Typography>
+  </Stack>
+) : null}
               </Stack>
             </CardContent>
           </Card>
