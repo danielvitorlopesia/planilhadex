@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import {
   Alert,
   Box,
@@ -9,7 +9,6 @@ import {
   Chip,
   Container,
   Divider,
-  Grid,
   Link,
   Stack,
   Typography,
@@ -28,6 +27,21 @@ import {
   SpreadsheetModelType,
 } from "../types/spreadsheetModels";
 
+type TemplateWithExtras = SpreadsheetModelTemplate & {
+  type: SpreadsheetModelType;
+  title?: string;
+  shortTitle?: string;
+  description?: string;
+  complexityLabel?: string;
+  useCases?: string[];
+  mainBlocks?: string[];
+  primaryBlocks?: string[];
+  creationHints?: string[];
+  badgeLabel?: string;
+  recommendedForPublicBodies?: boolean;
+  requiresReferenceSpreadsheet?: boolean;
+};
+
 function getModelIcon(type: SpreadsheetModelType) {
   switch (type) {
     case "dedicated_labor":
@@ -44,7 +58,7 @@ function getModelIcon(type: SpreadsheetModelType) {
 }
 
 function getComplexityColor(
-  complexity: SpreadsheetModelTemplate["complexityLabel"]
+  complexity?: string
 ): "success" | "warning" | "error" {
   switch (complexity) {
     case "Essencial":
@@ -58,9 +72,9 @@ function getComplexityColor(
   }
 }
 
-function normalizeTemplates(): SpreadsheetModelTemplate[] {
+function normalizeTemplates(): TemplateWithExtras[] {
   if (Array.isArray(spreadsheetModelTemplates)) {
-    return spreadsheetModelTemplates as SpreadsheetModelTemplate[];
+    return spreadsheetModelTemplates as TemplateWithExtras[];
   }
 
   if (
@@ -68,7 +82,7 @@ function normalizeTemplates(): SpreadsheetModelTemplate[] {
     typeof spreadsheetModelTemplates === "object"
   ) {
     return Object.values(
-      spreadsheetModelTemplates as Record<string, SpreadsheetModelTemplate>
+      spreadsheetModelTemplates as Record<string, TemplateWithExtras>
     );
   }
 
@@ -111,10 +125,14 @@ export default function ModelSelectorPage() {
                 <Typography variant="h4" fontWeight={700}>
                   Escolha o tipo de planilha
                 </Typography>
-                <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
-                  Selecione o modelo mais aderente à natureza da contratação ou da
-                  revisão contratual. Cada opção cria uma estrutura inicial com
-                  blocos, campos e lógica compatíveis com o caso de uso.
+                <Typography
+                  variant="body1"
+                  color="text.secondary"
+                  sx={{ mt: 1 }}
+                >
+                  Selecione o modelo mais aderente à natureza da contratação ou
+                  da revisão contratual. Cada opção cria uma estrutura inicial
+                  com blocos, campos e lógica compatíveis com o caso de uso.
                 </Typography>
               </Box>
 
@@ -140,214 +158,236 @@ export default function ModelSelectorPage() {
             </Alert>
           ) : null}
 
-          <Grid container spacing={3}>
+          <Box
+            sx={{
+              display: "grid",
+              gap: 3,
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(2, minmax(0, 1fr))",
+              },
+            }}
+          >
             {templates.map((model) => {
-              const useCases = Array.isArray(model.useCases) ? model.useCases : [];
-              const mainBlocks = Array.isArray(
-                (model as SpreadsheetModelTemplate & { mainBlocks?: string[] }).mainBlocks
-              )
-                ? ((model as SpreadsheetModelTemplate & { mainBlocks?: string[] })
-                    .mainBlocks as string[])
-                : Array.isArray(
-                    (model as SpreadsheetModelTemplate & { primaryBlocks?: string[] })
-                      .primaryBlocks
-                  )
-                ? ((model as SpreadsheetModelTemplate & { primaryBlocks?: string[] })
-                    .primaryBlocks as string[])
+              const useCases = Array.isArray(model.useCases)
+                ? model.useCases
                 : [];
 
-              const creationHints = Array.isArray(
-                (model as SpreadsheetModelTemplate & { creationHints?: string[] })
-                  .creationHints
-              )
-                ? ((model as SpreadsheetModelTemplate & { creationHints?: string[] })
-                    .creationHints as string[])
+              const mainBlocks = Array.isArray(model.mainBlocks)
+                ? model.mainBlocks
+                : Array.isArray(model.primaryBlocks)
+                ? model.primaryBlocks
+                : [];
+
+              const creationHints = Array.isArray(model.creationHints)
+                ? model.creationHints
                 : [];
 
               const badgeLabel =
-                (model as SpreadsheetModelTemplate & { badgeLabel?: string }).badgeLabel ||
+                model.badgeLabel ||
                 model.shortTitle ||
-                model.title;
+                model.title ||
+                model.type;
+
+              const title = model.shortTitle || model.title || model.type;
+              const description =
+                model.description ||
+                "Sem descrição disponível para este modelo.";
 
               return (
-                <Grid item xs={12} md={6} key={model.type}>
-                  <Card
-                    variant="outlined"
+                <Card
+                  key={model.type}
+                  variant="outlined"
+                  sx={{
+                    height: "100%",
+                    borderRadius: 3,
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <CardContent
                     sx={{
-                      height: "100%",
-                      borderRadius: 3,
+                      p: 3,
                       display: "flex",
                       flexDirection: "column",
+                      gap: 2,
+                      height: "100%",
                     }}
                   >
-                    <CardContent
-                      sx={{
-                        p: 3,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 2,
-                        height: "100%",
-                      }}
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="flex-start"
+                      spacing={2}
                     >
-                      <Stack
-                        direction="row"
-                        justifyContent="space-between"
-                        alignItems="flex-start"
-                        spacing={2}
-                      >
-                        <Stack direction="row" spacing={1.5} alignItems="center">
-                          <Box
-                            sx={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: 2,
-                              display: "grid",
-                              placeItems: "center",
-                              bgcolor: "action.hover",
-                            }}
-                          >
-                            {getModelIcon(model.type)}
-                          </Box>
+                      <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Box
+                          sx={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 2,
+                            display: "grid",
+                            placeItems: "center",
+                            bgcolor: "action.hover",
+                          }}
+                        >
+                          {getModelIcon(model.type)}
+                        </Box>
 
-                          <Box>
-                            <Typography variant="subtitle2" color="text.secondary">
-                              {badgeLabel}
-                            </Typography>
-                            <Typography variant="h6" fontWeight={700}>
-                              {model.shortTitle}
-                            </Typography>
-                          </Box>
-                        </Stack>
-
-                        <Chip
-                          label={model.complexityLabel}
-                          color={getComplexityColor(model.complexityLabel)}
-                          size="small"
-                        />
+                        <Box>
+                          <Typography variant="subtitle2" color="text.secondary">
+                            {badgeLabel}
+                          </Typography>
+                          <Typography variant="h6" fontWeight={700}>
+                            {title}
+                          </Typography>
+                        </Box>
                       </Stack>
 
-                      <Typography variant="body2" color="text.secondary">
-                        {model.description}
+                      <Chip
+                        label={model.complexityLabel || "Intermediário"}
+                        color={getComplexityColor(model.complexityLabel)}
+                        size="small"
+                      />
+                    </Stack>
+
+                    <Typography variant="body2" color="text.secondary">
+                      {description}
+                    </Typography>
+
+                    <Divider />
+
+                    <Box>
+                      <Typography
+                        variant="subtitle2"
+                        fontWeight={700}
+                        gutterBottom
+                      >
+                        Casos de uso
                       </Typography>
 
-                      <Divider />
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        flexWrap="wrap"
+                        useFlexGap
+                      >
+                        {useCases.length > 0 ? (
+                          useCases.map((useCase) => (
+                            <Chip
+                              key={useCase}
+                              label={useCase}
+                              size="small"
+                              variant="outlined"
+                            />
+                          ))
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Nenhum caso de uso informado.
+                          </Typography>
+                        )}
+                      </Stack>
+                    </Box>
 
-                      <Box>
-                        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                          Casos de uso
-                        </Typography>
+                    <Box>
+                      <Typography
+                        variant="subtitle2"
+                        fontWeight={700}
+                        gutterBottom
+                      >
+                        Blocos principais
+                      </Typography>
 
-                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                          {useCases.length > 0 ? (
-                            useCases.map((useCase) => (
-                              <Chip
-                                key={useCase}
-                                label={useCase}
-                                size="small"
-                                variant="outlined"
-                              />
-                            ))
-                          ) : (
-                            <Typography variant="body2" color="text.secondary">
-                              Nenhum caso de uso informado.
+                      <Stack spacing={0.5}>
+                        {mainBlocks.length > 0 ? (
+                          mainBlocks.map((block) => (
+                            <Typography
+                              key={block}
+                              variant="body2"
+                              color="text.secondary"
+                            >
+                              • {block}
                             </Typography>
-                          )}
-                        </Stack>
-                      </Box>
+                          ))
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Nenhum bloco principal informado.
+                          </Typography>
+                        )}
+                      </Stack>
+                    </Box>
 
-                      <Box>
-                        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                          Blocos principais
-                        </Typography>
+                    <Box>
+                      <Typography
+                        variant="subtitle2"
+                        fontWeight={700}
+                        gutterBottom
+                      >
+                        Observações
+                      </Typography>
 
-                        <Stack spacing={0.5}>
-                          {mainBlocks.length > 0 ? (
-                            mainBlocks.map((block) => (
-                              <Typography
-                                key={block}
-                                variant="body2"
-                                color="text.secondary"
-                              >
-                                • {block}
-                              </Typography>
-                            ))
-                          ) : (
-                            <Typography variant="body2" color="text.secondary">
-                              Nenhum bloco principal informado.
+                      <Stack spacing={0.5}>
+                        {creationHints.length > 0 ? (
+                          creationHints.map((hint) => (
+                            <Typography
+                              key={hint}
+                              variant="body2"
+                              color="text.secondary"
+                            >
+                              • {hint}
                             </Typography>
-                          )}
-                        </Stack>
-                      </Box>
+                          ))
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Sem observações adicionais.
+                          </Typography>
+                        )}
+                      </Stack>
+                    </Box>
 
-                      <Box>
-                        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                          Observações
-                        </Typography>
-
-                        <Stack spacing={0.5}>
-                          {creationHints.length > 0 ? (
-                            creationHints.map((hint) => (
-                              <Typography
-                                key={hint}
-                                variant="body2"
-                                color="text.secondary"
-                              >
-                                • {hint}
-                              </Typography>
-                            ))
-                          ) : (
-                            <Typography variant="body2" color="text.secondary">
-                              Sem observações adicionais.
-                            </Typography>
-                          )}
-                        </Stack>
-                      </Box>
-
-                      <Box sx={{ mt: "auto", pt: 1 }}>
+                    <Box sx={{ mt: "auto", pt: 1 }}>
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1}
+                        justifyContent="space-between"
+                        alignItems={{ xs: "stretch", sm: "center" }}
+                      >
                         <Stack
-                          direction={{ xs: "column", sm: "row" }}
+                          direction="row"
                           spacing={1}
-                          justifyContent="space-between"
-                          alignItems={{ xs: "stretch", sm: "center" }}
+                          flexWrap="wrap"
+                          useFlexGap
                         >
-                          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                            {"recommendedForPublicBodies" in model &&
-                            (model as SpreadsheetModelTemplate & {
-                              recommendedForPublicBodies?: boolean;
-                            }).recommendedForPublicBodies ? (
-                              <Chip
-                                size="small"
-                                color="primary"
-                                label="Aderente ao setor público"
-                              />
-                            ) : null}
+                          {model.recommendedForPublicBodies ? (
+                            <Chip
+                              size="small"
+                              color="primary"
+                              label="Aderente ao setor público"
+                            />
+                          ) : null}
 
-                            {"requiresReferenceSpreadsheet" in model &&
-                            (model as SpreadsheetModelTemplate & {
-                              requiresReferenceSpreadsheet?: boolean;
-                            }).requiresReferenceSpreadsheet ? (
-                              <Chip
-                                size="small"
-                                color="warning"
-                                label="Exige planilha-base"
-                              />
-                            ) : null}
-                          </Stack>
-
-                          <Button
-                            variant="contained"
-                            onClick={() => handleCreate(model.type)}
-                          >
-                            Criar planilha
-                          </Button>
+                          {model.requiresReferenceSpreadsheet ? (
+                            <Chip
+                              size="small"
+                              color="warning"
+                              label="Exige planilha-base"
+                            />
+                          ) : null}
                         </Stack>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
+
+                        <Button
+                          variant="contained"
+                          onClick={() => handleCreate(model.type)}
+                        >
+                          Criar planilha
+                        </Button>
+                      </Stack>
+                    </Box>
+                  </CardContent>
+                </Card>
               );
             })}
-          </Grid>
+          </Box>
         </Stack>
       </Container>
     </Box>
