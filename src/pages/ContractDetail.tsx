@@ -19,8 +19,14 @@ type Spreadsheet = {
   status: string;
 };
 
+type RouteParams = {
+  id?: string;
+};
+
 export default function ContractDetail() {
-  const [match, params] = useRoute("/contratacoes/:id");
+  const [match, rawParams] = useRoute("/contratacoes/:id");
+  const params = rawParams as RouteParams | null;
+
   const [contract, setContract] = useState<Contract | null>(null);
   const [spreadsheets, setSpreadsheets] = useState<Spreadsheet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,9 +34,21 @@ export default function ContractDetail() {
 
   useEffect(() => {
     async function loadData() {
-      if (!match || !params?.id) return;
+      if (!match || !params?.id) {
+        setLoading(false);
+        return;
+      }
 
       const contractId = Number(params.id);
+
+      if (!Number.isFinite(contractId)) {
+        setError("ID de contratação inválido.");
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
 
       const { data: contractData, error: contractError } = await supabase
         .from("contracts")
@@ -40,11 +58,13 @@ export default function ContractDetail() {
 
       if (contractError) {
         setError(contractError.message);
+        setContract(null);
+        setSpreadsheets([]);
         setLoading(false);
         return;
       }
 
-      setContract(contractData);
+      setContract((contractData ?? null) as Contract | null);
 
       const { data: spreadsheetsData, error: spreadsheetsError } = await supabase
         .from("spreadsheets")
@@ -54,11 +74,12 @@ export default function ContractDetail() {
 
       if (spreadsheetsError) {
         setError(spreadsheetsError.message);
+        setSpreadsheets([]);
         setLoading(false);
         return;
       }
 
-      setSpreadsheets(spreadsheetsData || []);
+      setSpreadsheets((spreadsheetsData ?? []) as Spreadsheet[]);
       setLoading(false);
     }
 
