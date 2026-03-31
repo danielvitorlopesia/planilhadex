@@ -100,6 +100,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function safeString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  return normalized ? normalized : undefined;
+}
+
+function safeStringArray(value: unknown, fallback: string[] = []): string[] {
+  if (!Array.isArray(value)) {
+    return [...fallback];
+  }
+
+  return value.filter((item): item is string => typeof item === "string");
+}
+
 function safeReadStorage(): SpreadsheetRecord[] {
   if (!hasBrowserStorage()) {
     return [];
@@ -227,6 +244,58 @@ function buildTrainingProfile(domainScenarioKey: DomainScenarioKey): Spreadsheet
     expectedCostDrivers: [...scenario.expectedCostDrivers],
     validationFocus: [...scenario.validationFocus],
     readingHints: [...scenario.readingHints],
+  };
+}
+
+function resolveDomainScenarioKey(value: unknown): DomainScenarioKey | undefined {
+  if (typeof value === "string" && value in DOMAIN_SCENARIOS) {
+    return value as DomainScenarioKey;
+  }
+
+  return undefined;
+}
+
+function resolveTrainingProfile(
+  profile: unknown,
+  fallbackScenarioKey?: DomainScenarioKey
+): SpreadsheetTrainingProfile | undefined {
+  const explicitScenarioKey = isRecord(profile)
+    ? resolveDomainScenarioKey(profile.domainScenarioKey)
+    : undefined;
+
+  const scenarioKey = explicitScenarioKey ?? fallbackScenarioKey;
+
+  if (!scenarioKey) {
+    return undefined;
+  }
+
+  const base = buildTrainingProfile(scenarioKey);
+
+  if (!isRecord(profile)) {
+    return base;
+  }
+
+  return {
+    domainScenarioKey: scenarioKey,
+    domainScenarioLabel:
+      safeString(profile.domainScenarioLabel) ?? base.domainScenarioLabel,
+    interpretationTags: safeStringArray(
+      profile.interpretationTags,
+      base.interpretationTags
+    ),
+    expectedDocuments: safeStringArray(
+      profile.expectedDocuments,
+      base.expectedDocuments
+    ),
+    expectedCostDrivers: safeStringArray(
+      profile.expectedCostDrivers,
+      base.expectedCostDrivers
+    ),
+    validationFocus: safeStringArray(
+      profile.validationFocus,
+      base.validationFocus
+    ),
+    readingHints: safeStringArray(profile.readingHints, base.readingHints),
   };
 }
 
@@ -681,6 +750,10 @@ export function createSpreadsheetFromModel(
       ? generatedTemplate.monthlyBaseValue
       : rows.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
 
+  const resolvedDomainScenario =
+    resolveDomainScenarioKey(mergedDraft.domainScenario) ??
+    resolveDomainScenarioKey(generatedTemplate.domainScenario);
+
   const spreadsheet: SpreadsheetRecord = {
     id: buildId("sheet"),
     title: generatedTemplate.title,
@@ -689,7 +762,7 @@ export function createSpreadsheetFromModel(
     category: generatedTemplate.category,
     updatedAt: humanDateTime(),
     modelType: generatedTemplate.modelType,
-    domainScenario: generatedTemplate.domainScenario as DomainScenarioKey | undefined,
+    domainScenario: resolvedDomainScenario,
     rows,
     source: "local",
     contractReference: generatedTemplate.contractReference || "",
@@ -703,12 +776,10 @@ export function createSpreadsheetFromModel(
         : parseNumericInput(mergedDraft.headcount),
     monthlyBaseValue,
     notes: generatedTemplate.notes || "",
-    trainingProfile:
-      generatedTemplate.trainingProfile ||
-      (mergedDraft.domainScenario &&
-      mergedDraft.domainScenario in DOMAIN_SCENARIOS
-        ? buildTrainingProfile(mergedDraft.domainScenario as DomainScenarioKey)
-        : undefined),
+    trainingProfile: resolveTrainingProfile(
+      generatedTemplate.trainingProfile,
+      resolvedDomainScenario
+    ),
     metadata: {
       origin: "local_model_creation",
       templateTitle: template.title,
