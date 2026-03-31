@@ -19,13 +19,12 @@ type Spreadsheet = {
   status: string;
 };
 
-type RouteParams = {
-  id?: string;
-};
-
 export default function ContractDetail() {
   const [match, rawParams] = useRoute("/contratacoes/:id");
-  const params = rawParams as RouteParams | null;
+  const routeId =
+    rawParams && typeof rawParams === "object" && "id" in rawParams
+      ? String((rawParams as { id?: unknown }).id ?? "")
+      : "";
 
   const [contract, setContract] = useState<Contract | null>(null);
   const [spreadsheets, setSpreadsheets] = useState<Spreadsheet[]>([]);
@@ -34,12 +33,12 @@ export default function ContractDetail() {
 
   useEffect(() => {
     async function loadData() {
-      if (!match || !params?.id) {
+      if (!match || !routeId) {
         setLoading(false);
         return;
       }
 
-      const contractId = Number(params.id);
+      const contractId = Number(routeId);
 
       if (!Number.isFinite(contractId)) {
         setError("ID de contratação inválido.");
@@ -84,7 +83,7 @@ export default function ContractDetail() {
     }
 
     loadData();
-  }, [match, params?.id]);
+  }, [match, routeId]);
 
   return (
     <main style={styles.page}>
