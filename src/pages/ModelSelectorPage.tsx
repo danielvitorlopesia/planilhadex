@@ -72,17 +72,44 @@ function getComplexityColor(
   }
 }
 
-function normalizeTemplates(): TemplateWithExtras[] {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function getOptionalString(
+  value: SpreadsheetModelTemplate,
+  key: keyof TemplateWithExtras
+): string | undefined {
+  if (!isRecord(value)) return undefined;
+  const raw = value[key as string];
+  return typeof raw === "string" && raw.trim() ? raw : undefined;
+}
+
+function getOptionalBoolean(
+  value: SpreadsheetModelTemplate,
+  key: keyof TemplateWithExtras
+): boolean {
+  if (!isRecord(value)) return false;
+  return value[key as string] === true;
+}
+
+function getOptionalStringArray(
+  value: SpreadsheetModelTemplate,
+  key: keyof TemplateWithExtras
+): string[] {
+  if (!isRecord(value)) return [];
+  const raw = value[key as string];
+  return Array.isArray(raw) ? raw.filter((item): item is string => typeof item === "string") : [];
+}
+
+function normalizeTemplates(): SpreadsheetModelTemplate[] {
   if (Array.isArray(spreadsheetModelTemplates)) {
-    return spreadsheetModelTemplates as TemplateWithExtras[];
+    return spreadsheetModelTemplates;
   }
 
-  if (
-    spreadsheetModelTemplates &&
-    typeof spreadsheetModelTemplates === "object"
-  ) {
+  if (spreadsheetModelTemplates && typeof spreadsheetModelTemplates === "object") {
     return Object.values(
-      spreadsheetModelTemplates as Record<string, TemplateWithExtras>
+      spreadsheetModelTemplates as Record<string, SpreadsheetModelTemplate>
     );
   }
 
@@ -169,30 +196,34 @@ export default function ModelSelectorPage() {
             }}
           >
             {templates.map((model) => {
-              const useCases = Array.isArray(model.useCases)
-                ? model.useCases
-                : [];
+              const useCases = getOptionalStringArray(model, "useCases");
+              const mainBlocksPrimary = getOptionalStringArray(model, "mainBlocks");
+              const fallbackBlocks = getOptionalStringArray(model, "primaryBlocks");
+              const mainBlocks =
+                mainBlocksPrimary.length > 0 ? mainBlocksPrimary : fallbackBlocks;
 
-              const mainBlocks = Array.isArray(model.mainBlocks)
-                ? model.mainBlocks
-                : Array.isArray(model.primaryBlocks)
-                ? model.primaryBlocks
-                : [];
+              const creationHints = getOptionalStringArray(model, "creationHints");
 
-              const creationHints = Array.isArray(model.creationHints)
-                ? model.creationHints
-                : [];
+              const shortTitle = getOptionalString(model, "shortTitle");
+              const titleText = getOptionalString(model, "title");
+              const badgeText = getOptionalString(model, "badgeLabel");
+              const complexityLabel = getOptionalString(model, "complexityLabel");
+              const descriptionText = getOptionalString(model, "description");
 
-              const badgeLabel =
-                model.badgeLabel ||
-                model.shortTitle ||
-                model.title ||
-                model.type;
-
-              const title = model.shortTitle || model.title || model.type;
+              const badgeLabel = badgeText || shortTitle || titleText || model.type;
+              const title = shortTitle || titleText || model.type;
               const description =
-                model.description ||
+                descriptionText ||
                 "Sem descrição disponível para este modelo.";
+
+              const recommendedForPublicBodies = getOptionalBoolean(
+                model,
+                "recommendedForPublicBodies"
+              );
+              const requiresReferenceSpreadsheet = getOptionalBoolean(
+                model,
+                "requiresReferenceSpreadsheet"
+              );
 
               return (
                 <Card
@@ -245,8 +276,8 @@ export default function ModelSelectorPage() {
                       </Stack>
 
                       <Chip
-                        label={model.complexityLabel || "Intermediário"}
-                        color={getComplexityColor(model.complexityLabel)}
+                        label={complexityLabel || "Intermediário"}
+                        color={getComplexityColor(complexityLabel)}
                         size="small"
                       />
                     </Stack>
@@ -358,7 +389,7 @@ export default function ModelSelectorPage() {
                           flexWrap="wrap"
                           useFlexGap
                         >
-                          {model.recommendedForPublicBodies ? (
+                          {recommendedForPublicBodies ? (
                             <Chip
                               size="small"
                               color="primary"
@@ -366,7 +397,7 @@ export default function ModelSelectorPage() {
                             />
                           ) : null}
 
-                          {model.requiresReferenceSpreadsheet ? (
+                          {requiresReferenceSpreadsheet ? (
                             <Chip
                               size="small"
                               color="warning"
