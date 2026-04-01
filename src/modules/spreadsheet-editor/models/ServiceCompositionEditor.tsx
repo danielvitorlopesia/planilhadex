@@ -183,6 +183,41 @@ function mergeDemandTypeTags(
   return cleaned;
 }
 
+function buildCategoryTotals(rows: ServiceCompositionRow[]) {
+  const totals: Record<string, number> = {};
+
+  rows.forEach((row) => {
+    const category = safeString(row.categoria) || "Não classificado";
+    totals[category] = Number(
+      ((totals[category] || 0) + Number(row.subtotal || 0)).toFixed(2)
+    );
+  });
+
+  return totals;
+}
+
+function buildRecurrenceTotals(rows: ServiceCompositionRow[]) {
+  const totals: Record<string, number> = {};
+
+  rows.forEach((row) => {
+    const metadata =
+      row.metadata && typeof row.metadata === "object"
+        ? (row.metadata as Record<string, unknown>)
+        : {};
+
+    const demandType =
+      safeString(metadata.demandType) ||
+      safeString((row as unknown as Record<string, unknown>).demandType) ||
+      "nao_informado";
+
+    totals[demandType] = Number(
+      ((totals[demandType] || 0) + Number(row.subtotal || 0)).toFixed(2)
+    );
+  });
+
+  return totals;
+}
+
 export default function ServiceCompositionEditor({
   spreadsheet,
   onSpreadsheetUpdated,
@@ -292,18 +327,25 @@ export default function ServiceCompositionEditor({
   function handleSave() {
     try {
       const sanitizedRows = normalizedRows.map((row) => {
-        const metadata = {
-          ...(row.metadata && typeof row.metadata === "object"
+        const rowMetadata =
+          row.metadata && typeof row.metadata === "object"
             ? (row.metadata as Record<string, unknown>)
-            : {}),
-          demandType: row.demandType,
-          serviceUnit: row.serviceUnit,
-          periodicity: row.periodicity,
-          productivityFactor: row.productivityFactor,
-          monthlyFactor: row.monthlyFactor,
-          depreciationCriteria: row.depreciationCriteria,
-          consumptionBase: row.consumptionBase,
-          technicalJustification: row.technicalJustification,
+            : {};
+
+        const demandType = (
+          safeString(rowMetadata.demandType) || "nao_informado"
+        ) as ServiceCompositionDemandType;
+
+        const metadata = {
+          ...rowMetadata,
+          demandType,
+          serviceUnit: safeString(rowMetadata.serviceUnit),
+          periodicity: safeString(rowMetadata.periodicity),
+          productivityFactor: Number(rowMetadata.productivityFactor ?? 1),
+          monthlyFactor: Number(rowMetadata.monthlyFactor ?? 1),
+          depreciationCriteria: safeString(rowMetadata.depreciationCriteria),
+          consumptionBase: safeString(rowMetadata.consumptionBase),
+          technicalJustification: safeString(rowMetadata.technicalJustification),
         };
 
         return {
@@ -315,7 +357,7 @@ export default function ServiceCompositionEditor({
           subtotal: Number(row.subtotal || 0),
           status: safeString(row.status).trim() || "Pendente",
           memoriaCalculo: safeString(row.memoriaCalculo),
-          trainingTags: mergeDemandTypeTags(row.trainingTags, row.demandType),
+          trainingTags: mergeDemandTypeTags(row.trainingTags, demandType),
           metadata,
         };
       });
@@ -346,8 +388,8 @@ export default function ServiceCompositionEditor({
               generatedAt: new Date().toISOString(),
               itemCount: summary.itemCount,
               total: summary.total,
-              totalByCategory: summary.totalsByCategory,
-              totalByRecurrence: summary.totalsByRecurrence,
+              totalByCategory: buildCategoryTotals(sanitizedRows),
+              totalByRecurrence: buildRecurrenceTotals(sanitizedRows),
             },
           },
         },
@@ -597,7 +639,9 @@ export default function ServiceCompositionEditor({
                           <Select
                             size="small"
                             fullWidth
-                            value={row.demandType}
+                            value={(
+                              safeString(metadata.demandType) || "nao_informado"
+                            ) as ServiceCompositionDemandType}
                             onChange={(event) =>
                               updateDemandType(
                                 index,
