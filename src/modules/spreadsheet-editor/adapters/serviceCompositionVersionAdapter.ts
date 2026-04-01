@@ -1,5 +1,8 @@
 import { SpreadsheetRecord } from "../../../services/spreadsheetService";
-import { ServiceCompositionDraftRow } from "../utils/serviceCompositionCalculator";
+import {
+  ServiceCompositionRow,
+  summarizeServiceCompositionRows,
+} from "../utils/serviceCompositionCalculator";
 import {
   compareServiceCompositionVersions,
   ServiceCompositionComparisonResult,
@@ -29,9 +32,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function inferServiceCompositionCategory(
-  rawCategory?: string
-): ServiceCompositionDraftRow["category"] {
+function inferServiceCompositionCategory(rawCategory?: string): string {
   const value = String(rawCategory || "").toLowerCase();
 
   if (
@@ -74,61 +75,68 @@ function inferServiceCompositionCategory(
   return "Materiais e insumos";
 }
 
-function inferRecurrenceTypeFromPeriodicity(
+function inferDemandTypeFromPeriodicity(
   periodicity?: string
-): ServiceCompositionDraftRow["recurrenceType"] {
+): ServiceCompositionRow["demandType"] {
   if (periodicity === "sob_demanda") {
     return "sob_demanda";
+  }
+
+  if (periodicity === "eventual") {
+    return "eventual";
   }
 
   return "recorrente";
 }
 
-function sanitizeServiceCompositionDraftRow(
-  input?: Partial<ServiceCompositionDraftRow>
-): ServiceCompositionDraftRow {
-  const periodicity = (
-    safeString(input?.periodicity, "mensal") || "mensal"
-  ) as ServiceCompositionDraftRow["periodicity"];
+function sanitizeServiceCompositionRow(
+  input?: Partial<ServiceCompositionRow>
+): ServiceCompositionRow {
+  const periodicity = safeString(input?.periodicity, "mensal") || "mensal";
 
-  const recurrenceType = (
-    safeString(
-      input?.recurrenceType,
-      inferRecurrenceTypeFromPeriodicity(periodicity)
-    ) || "recorrente"
-  ) as ServiceCompositionDraftRow["recurrenceType"];
+  const demandType =
+    (safeString(
+      input?.demandType,
+      inferDemandTypeFromPeriodicity(periodicity)
+    ) as ServiceCompositionRow["demandType"]) || "recorrente";
 
-  const depreciationMethod = (
-    safeString(input?.depreciationMethod, "nao_aplica") || "nao_aplica"
-  ) as ServiceCompositionDraftRow["depreciationMethod"];
+  const depreciationCriteria =
+    safeString(input?.depreciationCriteria, "nao_aplica") || "nao_aplica";
 
   const category = inferServiceCompositionCategory(
-    safeString(input?.category) || "Materiais e insumos"
+    safeString(input?.categoria) || "Materiais e insumos"
   );
 
-  const usefulLifeMonths =
-    depreciationMethod === "rateio_linear"
-      ? Math.max(1, safeNumber(input?.usefulLifeMonths, 12))
-      : 0;
+  const monthlyFactor = Math.max(0, safeNumber(input?.monthlyFactor, 1) || 1);
 
   return {
     id:
       safeString(input?.id) ||
       `svc_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     item: safeString(input?.item) || "Novo componente",
-    category,
-    recurrenceType,
+    categoria: category,
+    demandType,
     serviceUnit: safeString(input?.serviceUnit) || "unidade",
     periodicity,
-    quantity: Math.max(0, safeNumber(input?.quantity, 1)),
-    unitCost: Math.max(0, safeNumber(input?.unitCost, 0)),
-    productivityFactor: Math.max(0, safeNumber(input?.productivityFactor, 1)),
-    allocationFactor: Math.max(0, safeNumber(input?.allocationFactor, 1)),
-    depreciationMethod,
-    usefulLifeMonths,
+    quantidade: Math.max(0, safeNumber(input?.quantidade, 1)),
+    valorUnitario: Math.max(0, safeNumber(input?.valorUnitario, 0)),
+    productivityFactor: Math.max(
+      0,
+      safeNumber(input?.productivityFactor, 1) || 1
+    ),
+    monthlyFactor,
+    depreciationCriteria,
     status: safeString(input?.status) || "Pendente",
-    consumptionBasis: safeString(input?.consumptionBasis),
+    consumptionBase: safeString(input?.consumptionBase),
     technicalJustification: safeString(input?.technicalJustification),
+    memoriaCalculo: safeString(input?.memoriaCalculo),
+    origem: safeString(input?.origem) || "edição local",
+    automatico: Boolean(input?.automatico),
+    subtotal: Math.max(0, safeNumber(input?.subtotal, 0)),
+    trainingTags: Array.isArray(input?.trainingTags)
+      ? [...input.trainingTags]
+      : [],
+    metadata: isRecord(input?.metadata) ? { ...input.metadata } : {},
   };
 }
 
@@ -154,61 +162,73 @@ export function isServiceCompositionSpreadsheetRow(row: SpreadsheetRow) {
   );
 }
 
-export function spreadsheetRowToServiceCompositionDraftRow(
+export function spreadsheetRowToServiceCompositionRow(
   row: SpreadsheetRow
-): ServiceCompositionDraftRow {
+): ServiceCompositionRow {
   const metadata = isRecord(row.metadata) ? row.metadata : {};
 
-  return sanitizeServiceCompositionDraftRow({
+  return sanitizeServiceCompositionRow({
     id: safeString(row.id),
     item: safeString(row.item),
-    category: safeString(row.categoria),
-    recurrenceType:
-      safeString(metadata.recurrenceType) ||
-      safeString(metadata.demandType) ||
-      "recorrente",
+    categoria: safeString(row.categoria),
+    demandType:
+      (safeString(metadata.demandType) as ServiceCompositionRow["demandType"]) ||
+      inferDemandTypeFromPeriodicity(safeString(metadata.periodicity, "mensal")),
     serviceUnit: safeString(metadata.serviceUnit, "unidade"),
     periodicity: safeString(metadata.periodicity, "mensal"),
-    quantity: safeNumber(row.quantidade, 0),
-    unitCost: safeNumber(row.valorUnitario, 0),
+    quantidade: safeNumber(row.quantidade, 0),
+    valorUnitario: safeNumber(row.valorUnitario, 0),
     productivityFactor: safeNumber(metadata.productivityFactor, 1),
-    allocationFactor: safeNumber(metadata.allocationFactor, 1),
-    depreciationMethod: safeString(metadata.depreciationMethod, "nao_aplica"),
-    usefulLifeMonths: safeNumber(metadata.usefulLifeMonths, 0),
+    monthlyFactor:
+      safeNumber(metadata.monthlyFactor, safeNumber(metadata.allocationFactor, 1)) ||
+      1,
+    depreciationCriteria: safeString(
+      metadata.depreciationCriteria,
+      safeString(metadata.depreciationMethod, "nao_aplica")
+    ),
     status: safeString(row.status, "Pendente"),
-    consumptionBasis: safeString(metadata.consumptionBasis),
+    consumptionBase: safeString(
+      metadata.consumptionBase,
+      safeString(metadata.consumptionBasis)
+    ),
     technicalJustification:
       safeString(metadata.technicalJustification) ||
       safeString(row.memoriaCalculo),
+    memoriaCalculo: safeString(row.memoriaCalculo),
+    origem: safeString(row.origem, "edição local"),
+    automatico: Boolean(row.automatico),
+    subtotal: safeNumber(row.subtotal, 0),
+    trainingTags: Array.isArray(row.trainingTags) ? [...row.trainingTags] : [],
+    metadata,
   });
 }
 
-export function spreadsheetRowsToServiceCompositionDraftRows(
+export function spreadsheetRowsToServiceCompositionRows(
   rows: SpreadsheetRow[]
-): ServiceCompositionDraftRow[] {
+): ServiceCompositionRow[] {
   return rows
     .filter(isServiceCompositionSpreadsheetRow)
-    .map((row) => spreadsheetRowToServiceCompositionDraftRow(row));
+    .map((row) => spreadsheetRowToServiceCompositionRow(row));
 }
 
-export function spreadsheetToServiceCompositionDraftRows(
+export function spreadsheetToServiceCompositionRows(
   spreadsheet: SpreadsheetRecord | null | undefined
-): ServiceCompositionDraftRow[] {
+): ServiceCompositionRow[] {
   if (!spreadsheet) {
     return [];
   }
 
-  return spreadsheetRowsToServiceCompositionDraftRows(spreadsheet.rows);
+  return spreadsheetRowsToServiceCompositionRows(spreadsheet.rows);
 }
 
 export function compareServiceCompositionSpreadsheets(args: {
   previousSpreadsheet: SpreadsheetRecord | null | undefined;
   currentSpreadsheet: SpreadsheetRecord | null | undefined;
 }): ServiceCompositionComparisonResult {
-  const previousRows = spreadsheetToServiceCompositionDraftRows(
+  const previousRows = spreadsheetToServiceCompositionRows(
     args.previousSpreadsheet
   );
-  const currentRows = spreadsheetToServiceCompositionDraftRows(
+  const currentRows = spreadsheetToServiceCompositionRows(
     args.currentSpreadsheet
   );
 
@@ -232,10 +252,10 @@ export function buildServiceCompositionComparisonContext(args: {
   previousSpreadsheet: SpreadsheetRecord | null | undefined;
   currentSpreadsheet: SpreadsheetRecord | null | undefined;
 }) {
-  const previousRows = spreadsheetToServiceCompositionDraftRows(
+  const previousRows = spreadsheetToServiceCompositionRows(
     args.previousSpreadsheet
   );
-  const currentRows = spreadsheetToServiceCompositionDraftRows(
+  const currentRows = spreadsheetToServiceCompositionRows(
     args.currentSpreadsheet
   );
 
@@ -244,9 +264,14 @@ export function buildServiceCompositionComparisonContext(args: {
     currentRows,
   });
 
+  const previousSummary = summarizeServiceCompositionRows(previousRows);
+  const currentSummary = summarizeServiceCompositionRows(currentRows);
+
   return {
     previousRows,
     currentRows,
+    previousSummary,
+    currentSummary,
     comparison,
     hasPreviousRows: previousRows.length > 0,
     hasCurrentRows: currentRows.length > 0,
