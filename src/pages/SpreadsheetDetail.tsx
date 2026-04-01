@@ -1,6 +1,7 @@
 import SpreadsheetAuditPanel from "../modules/spreadsheet-editor/components/SpreadsheetAuditPanel";
 import { analyzeSpreadsheetAudit } from "../modules/spreadsheet-editor/utils/spreadsheetAuditAnalyzer";
 import DedicatedLaborEditor from "../modules/spreadsheet-editor/models/DedicatedLaborEditor";
+import SpreadsheetEditor from "../modules/spreadsheet-editor/SpreadsheetEditor";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -2113,6 +2114,20 @@ export default function SpreadsheetDetail() {
     setSaveState("success");
     setSaveMessage(`${getVersionLabel(item)} restaurada localmente para análise.`);
   }
+
+  const handleSpreadsheetEditorUpdated = (updatedSpreadsheet: SpreadsheetRecord) => {
+    const nextSpreadsheet = updatedSpreadsheet as SpreadsheetDetailRecord;
+    const nextPreviousSpreadsheet = readPreviousSpreadsheetCandidate(nextSpreadsheet);
+
+    setSpreadsheet(nextSpreadsheet);
+    setPreviousSpreadsheet(nextPreviousSpreadsheet);
+    setVersionHistory(
+      readVersionHistoryFromMetadata(nextSpreadsheet, nextPreviousSpreadsheet)
+    );
+    setDataSource("local");
+    setSaveState("success");
+    setSaveMessage("Módulo salvo com sucesso.");
+  };
     if (state === "loading") {
     return (
       <Box
@@ -2759,6 +2774,31 @@ export default function SpreadsheetDetail() {
               selectedVersionItem ? getVersionLabel(selectedVersionItem) : "Versão selecionada"
             }
           />
+
+          {spreadsheet ? (
+            <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
+              <CardContent>
+                <Stack spacing={2}>
+                  <Stack direction="row" spacing={1.25} alignItems="center">
+                    <ManageSearchOutlinedIcon sx={{ color: "#5E35B1" }} />
+                    <Typography variant="h6" fontWeight={700}>
+                      Editor operacional da planilha
+                    </Typography>
+                  </Stack>
+
+                  <Typography variant="body2" color="text.secondary">
+                    Este bloco habilita a edição especializada conforme o modelo da planilha,
+                    com salvamento do módulo, persistência de metadados e atualização da leitura técnica.
+                  </Typography>
+
+                  <SpreadsheetEditor
+                    spreadsheet={spreadsheet}
+                    onSpreadsheetUpdated={handleSpreadsheetEditorUpdated}
+                  />
+                </Stack>
+              </CardContent>
+            </Card>
+          ) : null}
                     <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
             <CardContent>
               <Stack spacing={2}>
