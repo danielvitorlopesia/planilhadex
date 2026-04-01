@@ -1,12 +1,11 @@
 import { SpreadsheetRecord } from "../../../services/spreadsheetService";
 import {
-  ServiceCompositionDraftRow,
-  ServiceCompositionMemoryItem,
+  ServiceCompositionMemoryBundle,
+  ServiceCompositionRow,
   ServiceCompositionSummary,
   buildServiceCompositionMemoryBundle,
-  buildServiceCompositionSummary,
-  calculateServiceCompositionItemSubtotal,
-  sanitizeServiceCompositionDraftRow,
+  normalizeServiceCompositionRows,
+  summarizeServiceCompositionRows,
 } from "../utils/serviceCompositionCalculator";
 
 export type SpreadsheetRow = SpreadsheetRecord["rows"][number];
@@ -18,13 +17,13 @@ export type ServiceCompositionPersistencePayload = {
     editorModule: "service_composition";
     lastEditedSection: "materials_equipments_logistics";
     serviceCompositionSummary: ServiceCompositionSummary;
-    serviceCompositionMemoryBundle: ServiceCompositionMemoryItem[];
+    serviceCompositionMemoryBundle: ServiceCompositionMemoryBundle;
     serviceCompositionEngineSnapshot: {
       generatedAt: string;
       itemCount: number;
       total: number;
-      totalByCategory: ServiceCompositionSummary["totalsByCategory"];
-      totalByRecurrence: ServiceCompositionSummary["totalsByRecurrence"];
+      totalByCategory: Record<string, number>;
+      totalByRecurrence: Record<string, number>;
     };
   };
 };
@@ -38,7 +37,17 @@ function safeString(value: unknown, fallback = "") {
 }
 
 function safeNumber(value: unknown, fallback = 0) {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().replace(/\./g, "").replace(",", ".");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  return fallback;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -67,103 +76,161 @@ export function isServiceCompositionEditableRow(row: SpreadsheetRow) {
   );
 }
 
+function inferDemandTypeFromMetadata(metadata: Record<string, unknown>, periodicity: string) {
+  const explicitDemandType = safeString(metadata.demandType);
+  if (
+    explicitDemandType === "recorrente" ||
+    explicitDemandType === "eventual" ||
+    explicitDemandType === "sob_demanda" ||
+    explicitDemandType === "nao_informado"
+  ) {
+    return explicitDemandType;
+  }
+
+  if (periodicity === "sob_demanda") {
+    return "sob_demanda";
+  }
+
+  if (periodicity === "eventual") {
+    return "eventual";
+  }
+
+  return "recorrente";
+}
+
 export function inferDraftRowFromSpreadsheetRow(
   row: SpreadsheetRow
-): ServiceCompositionDraftRow {
+): ServiceCompositionRow {
   const metadata = isRecord(row.metadata) ? row.metadata : {};
+  const periodicity = safeString(metadata.periodicity, "mensal") || "mensal";
 
-  return sanitizeServiceCompositionDraftRow({
+  return {
     id: safeString(row.id),
     item: safeString(row.item),
-    category: safeString(row.categoria),
-    recurrenceType:
-      safeString(metadata.recurrenceType) ||
-      safeString(metadata.demandType) ||
-      "recorrente",
+    categoria: safeString(row.categoria) || "Materiais e insumos",
+    demandType: inferDemandTypeFromMetadata(metadata, periodicity) as ServiceCompositionRow["demandType"],
     serviceUnit: safeString(metadata.serviceUnit, "unidade"),
-    periodicity: safeString(metadata.periodicity, "mensal"),
-    quantity: safeNumber(row.quantidade, 1),
-    unitCost: safeNumber(row.valorUnitario, 0),
-    productivityFactor: safeNumber(metadata.productivityFactor, 1),
-    allocationFactor: safeNumber(metadata.allocationFactor, 1),
-    depreciationMethod: safeString(metadata.depreciationMethod, "nao_aplica"),
-    usefulLifeMonths: safeNumber(metadata.usefulLifeMonths, 0),
+    periodicity,
+    quantidade: safeNumber(row.quantidade, 1),
+    valorUnitario: safeNumber(row.valorUnitario, 0),
+    productivityFactor: safeNumber(metadata.productivityFactor, 1) || 1,
+    monthlyFactor:
+      safeNumber(metadata.monthlyFactor, safeNumber(metadata.allocationFactor, 1)) || 1,
+    depreciationCriteria: safeString(
+      metadata.depreciationCriteria,
+      safeString(metadata.depreciationMethod, "nao_aplica")
+    ),
     status: safeString(row.status, "Pendente"),
-    consumptionBasis: safeString(metadata.consumptionBasis),
+    consumptionBase: safeString(
+      metadata.consumptionBase,
+      safeString(metadata.consumptionBasis)
+    ),
     technicalJustification:
       safeString(metadata.technicalJustification) ||
       safeString(row.memoriaCalculo),
-  });
+    memoriaCalculo: safeString(row.memoriaCalculo),
+    origem: safeString(row.origem, "edição local"),
+    automatico: Boolean(row.automatico),
+    subtotal: safeNumber(row.subtotal, 0),
+    trainingTags: Array.isArray(row.trainingTags) ? [...row.trainingTags] : [],
+    metadata,
+  };
 }
 
 export function extractServiceCompositionDraftRows(
   rows: SpreadsheetRow[]
-): ServiceCompositionDraftRow[] {
-  return rows
-    .filter(isServiceCompositionEditableRow)
-    .map((row) => inferDraftRowFromSpreadsheetRow(row));
+): ServiceCompositionRow[] {
+  return normalizeServiceCompositionRows(
+    rows
+      .filter(isServiceCompositionEditableRow)
+      .map((row) => inferDraftRowFromSpreadsheetRow(row))
+  );
+}
+
+function buildTrainingTags(row: ServiceCompositionRow) {
+  const bucket =
+    row.categoria === "Materiais e insumos"
+      ? "material"
+      : row.categoria === "Equipamentos"
+      ? "equipment"
+      : row.categoria === "Logística operacional"
+      ? "logistics"
+      : row.categoria === "Apoio operacional"
+      ? "support"
+      : row.categoria === "Equipe técnica / operacional"
+      ? "workforce"
+      : "service_composition";
+
+  return ["service_composition_editable", safeString(row.demandType), bucket].filter(Boolean);
 }
 
 export function buildSpreadsheetRowFromDraftRow(
-  row: ServiceCompositionDraftRow
+  row: ServiceCompositionRow
 ): SpreadsheetRow {
-  const subtotal = calculateServiceCompositionItemSubtotal(row);
-
-  const trainingTags = [
-    "service_composition_editable",
-    row.recurrenceType,
-    row.category === "Materiais e insumos"
-      ? "material"
-      : row.category === "Equipamentos"
-      ? "equipment"
-      : row.category === "Logística operacional"
-      ? "logistics"
-      : row.category === "Apoio operacional"
-      ? "support"
-      : "workforce",
-  ];
+  const normalizedRow = normalizeServiceCompositionRows([row])[0];
+  const subtotal = safeNumber(normalizedRow?.subtotal, 0);
 
   return {
-    id: row.id,
-    item: row.item,
-    categoria: row.category,
-    quantidade: row.quantity,
-    valorUnitario: row.unitCost,
+    id: safeString(normalizedRow?.id),
+    item: safeString(normalizedRow?.item),
+    categoria: safeString(normalizedRow?.categoria),
+    quantidade: safeNumber(normalizedRow?.quantidade, 0),
+    valorUnitario: safeNumber(normalizedRow?.valorUnitario, 0),
     subtotal,
-    status: row.status,
-    memoriaCalculo: row.technicalJustification || "",
+    status: safeString(normalizedRow?.status, "Pendente"),
+    memoriaCalculo: safeString(normalizedRow?.technicalJustification),
     origem: "edição local",
     automatico: false,
-    trainingTags,
+    trainingTags: buildTrainingTags(normalizedRow),
     metadata: {
-      recurrenceType: row.recurrenceType,
-      demandType: row.recurrenceType,
-      serviceUnit: row.serviceUnit,
-      periodicity: row.periodicity,
-      productivityFactor: row.productivityFactor,
-      allocationFactor: row.allocationFactor,
-      depreciationMethod: row.depreciationMethod,
-      usefulLifeMonths: row.usefulLifeMonths,
-      consumptionBasis: row.consumptionBasis,
-      technicalJustification: row.technicalJustification,
+      demandType: normalizedRow.demandType,
+      serviceUnit: normalizedRow.serviceUnit,
+      periodicity: normalizedRow.periodicity,
+      productivityFactor: normalizedRow.productivityFactor,
+      monthlyFactor: normalizedRow.monthlyFactor,
+      depreciationCriteria: normalizedRow.depreciationCriteria,
+      consumptionBase: normalizedRow.consumptionBase,
+      technicalJustification: normalizedRow.technicalJustification,
     },
   };
 }
 
 export function normalizeServiceCompositionDraftRows(
-  rows: Array<Partial<ServiceCompositionDraftRow>>
-): ServiceCompositionDraftRow[] {
-  return rows.map((row) => sanitizeServiceCompositionDraftRow(row));
+  rows: Array<Partial<ServiceCompositionRow>>
+): ServiceCompositionRow[] {
+  return normalizeServiceCompositionRows(rows as ServiceCompositionRow[]);
+}
+
+function buildCategoryTotals(rows: ServiceCompositionRow[]) {
+  const result: Record<string, number> = {};
+
+  for (const row of rows) {
+    const category = safeString(row.categoria) || "Não classificado";
+    result[category] = round2((result[category] || 0) + safeNumber(row.subtotal, 0));
+  }
+
+  return result;
+}
+
+function buildRecurrenceTotals(rows: ServiceCompositionRow[]) {
+  const result: Record<string, number> = {};
+
+  for (const row of rows) {
+    const recurrence = safeString(row.demandType) || "nao_informado";
+    result[recurrence] = round2((result[recurrence] || 0) + safeNumber(row.subtotal, 0));
+  }
+
+  return result;
 }
 
 export function calculateServiceCompositionEngine(
-  draftRows: ServiceCompositionDraftRow[]
+  draftRows: ServiceCompositionRow[]
 ) {
   const normalizedRows = normalizeServiceCompositionDraftRows(draftRows);
   const spreadsheetRows = normalizedRows.map((row) =>
     buildSpreadsheetRowFromDraftRow(row)
   );
-  const summary = buildServiceCompositionSummary(normalizedRows);
+  const summary = summarizeServiceCompositionRows(normalizedRows);
   const memoryBundle = buildServiceCompositionMemoryBundle(normalizedRows);
 
   return {
@@ -177,7 +244,7 @@ export function calculateServiceCompositionEngine(
 
 export function buildServiceCompositionPersistencePayload(args: {
   currentSpreadsheet: SpreadsheetRecord;
-  draftRows: ServiceCompositionDraftRow[];
+  draftRows: ServiceCompositionRow[];
 }): ServiceCompositionPersistencePayload {
   const { currentSpreadsheet, draftRows } = args;
 
@@ -205,8 +272,8 @@ export function buildServiceCompositionPersistencePayload(args: {
         generatedAt: new Date().toISOString(),
         itemCount: calculated.summary.itemCount,
         total: calculated.summary.total,
-        totalByCategory: calculated.summary.totalsByCategory,
-        totalByRecurrence: calculated.summary.totalsByRecurrence,
+        totalByCategory: buildCategoryTotals(calculated.normalizedRows),
+        totalByRecurrence: buildRecurrenceTotals(calculated.normalizedRows),
       },
     },
   };
