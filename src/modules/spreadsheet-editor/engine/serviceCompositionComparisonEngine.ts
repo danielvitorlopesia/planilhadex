@@ -1,6 +1,8 @@
 import {
-  ServiceCompositionDraftRow,
+  ServiceCompositionRow,
   ServiceCompositionSummary,
+  normalizeServiceCompositionRows,
+  summarizeServiceCompositionRows,
 } from "../utils/serviceCompositionCalculator";
 
 export type ServiceCompositionChangeType =
@@ -13,17 +15,16 @@ export type ServiceCompositionFieldDelta = {
   field:
     | "item"
     | "category"
-    | "recurrenceType"
+    | "demandType"
     | "serviceUnit"
     | "periodicity"
     | "quantity"
     | "unitCost"
     | "productivityFactor"
-    | "allocationFactor"
-    | "depreciationMethod"
-    | "usefulLifeMonths"
+    | "monthlyFactor"
+    | "depreciationCriteria"
     | "status"
-    | "consumptionBasis"
+    | "consumptionBase"
     | "technicalJustification"
     | "subtotal";
   previousValue: string | number;
@@ -37,8 +38,8 @@ export type ServiceCompositionRowComparison = {
   category: string;
   recurrenceType: string;
   changeType: ServiceCompositionChangeType;
-  previousRow: ServiceCompositionDraftRow | null;
-  currentRow: ServiceCompositionDraftRow | null;
+  previousRow: ServiceCompositionRow | null;
+  currentRow: ServiceCompositionRow | null;
   previousSubtotal: number;
   currentSubtotal: number;
   subtotalDelta: number;
@@ -92,227 +93,11 @@ function normalizeText(value: unknown) {
   return safeString(value).trim().toLowerCase();
 }
 
-function inferServiceCompositionCategory(
-  rawCategory?: string
-): ServiceCompositionDraftRow["category"] {
-  const value = String(rawCategory || "").toLowerCase();
-
-  if (
-    value.includes("equipe operacional") ||
-    value.includes("equipe técnica") ||
-    value.includes("equipe tecnica") ||
-    value.includes("mão de obra") ||
-    value.includes("mao de obra")
-  ) {
-    return "Equipe técnica / operacional";
-  }
-
-  if (
-    value.includes("material") ||
-    value.includes("insumo") ||
-    value.includes("uniforme") ||
-    value.includes("epi")
-  ) {
-    return "Materiais e insumos";
-  }
-
-  if (
-    value.includes("equipamento") ||
-    value.includes("máquina") ||
-    value.includes("maquina") ||
-    value.includes("utensílio") ||
-    value.includes("utensilio")
-  ) {
-    return "Equipamentos";
-  }
-
-  if (value.includes("logística") || value.includes("logistica")) {
-    return "Logística operacional";
-  }
-
-  if (value.includes("apoio")) {
-    return "Apoio operacional";
-  }
-
-  return "Materiais e insumos";
+function getRowSubtotal(row: ServiceCompositionRow | null | undefined) {
+  return round2(safeNumber(row?.subtotal, 0));
 }
 
-function inferRecurrenceTypeFromPeriodicity(
-  periodicity?: string
-): ServiceCompositionDraftRow["recurrenceType"] {
-  if (periodicity === "sob_demanda") {
-    return "sob_demanda";
-  }
-
-  return "recorrente";
-}
-
-function getMonthlyizationFactor(
-  periodicity: ServiceCompositionDraftRow["periodicity"]
-) {
-  switch (periodicity) {
-    case "mensal":
-      return 1;
-    case "bimestral":
-      return 1 / 2;
-    case "trimestral":
-      return 1 / 3;
-    case "quadrimestral":
-      return 1 / 4;
-    case "semestral":
-      return 1 / 6;
-    case "anual":
-      return 1 / 12;
-    case "sob_demanda":
-      return 1;
-    default:
-      return 1;
-  }
-}
-
-function getDepreciationFactor(row: {
-  depreciationMethod: ServiceCompositionDraftRow["depreciationMethod"];
-  usefulLifeMonths: number;
-}) {
-  if (row.depreciationMethod === "rateio_linear" && row.usefulLifeMonths > 0) {
-    return 1 / row.usefulLifeMonths;
-  }
-
-  return 1;
-}
-
-function calculateServiceCompositionItemSubtotal(row: ServiceCompositionDraftRow) {
-  const monthlyizationFactor = getMonthlyizationFactor(row.periodicity);
-  const depreciationFactor = getDepreciationFactor(row);
-
-  return round2(
-    row.quantity *
-      row.unitCost *
-      row.productivityFactor *
-      monthlyizationFactor *
-      row.allocationFactor *
-      depreciationFactor
-  );
-}
-
-function sanitizeServiceCompositionDraftRow(
-  input?: Partial<ServiceCompositionDraftRow>
-): ServiceCompositionDraftRow {
-  const periodicity = (
-    safeString(input?.periodicity, "mensal") || "mensal"
-  ) as ServiceCompositionDraftRow["periodicity"];
-
-  const recurrenceType = (
-    safeString(
-      input?.recurrenceType,
-      inferRecurrenceTypeFromPeriodicity(periodicity)
-    ) || "recorrente"
-  ) as ServiceCompositionDraftRow["recurrenceType"];
-
-  const depreciationMethod = (
-    safeString(input?.depreciationMethod, "nao_aplica") || "nao_aplica"
-  ) as ServiceCompositionDraftRow["depreciationMethod"];
-
-  const category = inferServiceCompositionCategory(
-    safeString(input?.category) || "Materiais e insumos"
-  );
-
-  const usefulLifeMonths =
-    depreciationMethod === "rateio_linear"
-      ? Math.max(1, safeNumber(input?.usefulLifeMonths, 12))
-      : 0;
-
-  return {
-    id:
-      safeString(input?.id) ||
-      `svc_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    item: safeString(input?.item) || "Novo componente",
-    category,
-    recurrenceType,
-    serviceUnit: safeString(input?.serviceUnit) || "unidade",
-    periodicity,
-    quantity: Math.max(0, safeNumber(input?.quantity, 1)),
-    unitCost: Math.max(0, safeNumber(input?.unitCost, 0)),
-    productivityFactor: Math.max(0, safeNumber(input?.productivityFactor, 1)),
-    allocationFactor: Math.max(0, safeNumber(input?.allocationFactor, 1)),
-    depreciationMethod,
-    usefulLifeMonths,
-    status: safeString(input?.status) || "Pendente",
-    consumptionBasis: safeString(input?.consumptionBasis),
-    technicalJustification: safeString(input?.technicalJustification),
-  };
-}
-
-function buildServiceCompositionSummary(
-  rows: ServiceCompositionDraftRow[]
-): ServiceCompositionSummary {
-  const totalsByCategory: Record<string, number> = {
-    "Equipe técnica / operacional": 0,
-    "Materiais e insumos": 0,
-    Equipamentos: 0,
-    "Logística operacional": 0,
-    "Apoio operacional": 0,
-  };
-
-  const totalsByRecurrence: Record<string, number> = {
-    recorrente: 0,
-    eventual: 0,
-    sob_demanda: 0,
-  };
-
-  rows.forEach((row) => {
-    const subtotal = calculateServiceCompositionItemSubtotal(row);
-    totalsByCategory[row.category] =
-      round2((totalsByCategory[row.category] || 0) + subtotal);
-    totalsByRecurrence[row.recurrenceType] =
-      round2((totalsByRecurrence[row.recurrenceType] || 0) + subtotal);
-  });
-
-  const workforceTotal = round2(totalsByCategory["Equipe técnica / operacional"] || 0);
-  const materialsTotal = round2(totalsByCategory["Materiais e insumos"] || 0);
-  const equipmentTotal = round2(totalsByCategory["Equipamentos"] || 0);
-  const logisticsTotal = round2(totalsByCategory["Logística operacional"] || 0);
-  const supportTotal = round2(totalsByCategory["Apoio operacional"] || 0);
-
-  const recurringTotal = round2(totalsByRecurrence["recorrente"] || 0);
-  const eventualTotal = round2(totalsByRecurrence["eventual"] || 0);
-  const onDemandTotal = round2(totalsByRecurrence["sob_demanda"] || 0);
-
-  const total = round2(
-    workforceTotal +
-      materialsTotal +
-      equipmentTotal +
-      logisticsTotal +
-      supportTotal
-  );
-
-  return {
-    itemCount: rows.length,
-    total,
-    workforceTotal,
-    materialsTotal,
-    equipmentTotal,
-    logisticsTotal,
-    supportTotal,
-    recurringTotal,
-    eventualTotal,
-    onDemandTotal,
-    totalsByCategory: {
-      "Equipe técnica / operacional": workforceTotal,
-      "Materiais e insumos": materialsTotal,
-      Equipamentos: equipmentTotal,
-      "Logística operacional": logisticsTotal,
-      "Apoio operacional": supportTotal,
-    },
-    totalsByRecurrence: {
-      recorrente: recurringTotal,
-      eventual: eventualTotal,
-      sob_demanda: onDemandTotal,
-    },
-  };
-}
-
-function buildRowIdentityKey(row: ServiceCompositionDraftRow) {
+function buildRowIdentityKey(row: ServiceCompositionRow) {
   const explicitId = safeString(row.id).trim();
   if (explicitId) {
     return explicitId;
@@ -320,21 +105,21 @@ function buildRowIdentityKey(row: ServiceCompositionDraftRow) {
 
   return [
     normalizeText(row.item),
-    normalizeText(row.category),
-    normalizeText(row.recurrenceType),
+    normalizeText(row.categoria),
+    normalizeText(row.demandType),
     normalizeText(row.serviceUnit),
     normalizeText(row.periodicity),
   ].join("|");
 }
 
 function sanitizeRows(
-  rows: Array<Partial<ServiceCompositionDraftRow>>
-): ServiceCompositionDraftRow[] {
-  return rows.map((row) => sanitizeServiceCompositionDraftRow(row));
+  rows: Array<Partial<ServiceCompositionRow>>
+): ServiceCompositionRow[] {
+  return normalizeServiceCompositionRows(rows as ServiceCompositionRow[]);
 }
 
-function mapRowsByIdentity(rows: ServiceCompositionDraftRow[]) {
-  const map = new Map<string, ServiceCompositionDraftRow>();
+function mapRowsByIdentity(rows: ServiceCompositionRow[]) {
+  const map = new Map<string, ServiceCompositionRow>();
 
   for (const row of rows) {
     map.set(buildRowIdentityKey(row), row);
@@ -364,93 +149,104 @@ function pushDeltaIfChanged(
 }
 
 function buildFieldDeltas(
-  previousRow: ServiceCompositionDraftRow,
-  currentRow: ServiceCompositionDraftRow
+  previousRow: ServiceCompositionRow,
+  currentRow: ServiceCompositionRow
 ): ServiceCompositionFieldDelta[] {
   const deltas: ServiceCompositionFieldDelta[] = [];
 
   pushDeltaIfChanged(deltas, "item", previousRow.item, currentRow.item);
-  pushDeltaIfChanged(deltas, "category", previousRow.category, currentRow.category);
   pushDeltaIfChanged(
     deltas,
-    "recurrenceType",
-    previousRow.recurrenceType,
-    currentRow.recurrenceType
+    "category",
+    safeString(previousRow.categoria),
+    safeString(currentRow.categoria)
+  );
+  pushDeltaIfChanged(
+    deltas,
+    "demandType",
+    safeString(previousRow.demandType),
+    safeString(currentRow.demandType)
   );
   pushDeltaIfChanged(
     deltas,
     "serviceUnit",
-    previousRow.serviceUnit,
-    currentRow.serviceUnit
+    safeString(previousRow.serviceUnit),
+    safeString(currentRow.serviceUnit)
   );
   pushDeltaIfChanged(
     deltas,
     "periodicity",
-    previousRow.periodicity,
-    currentRow.periodicity
+    safeString(previousRow.periodicity),
+    safeString(currentRow.periodicity)
   );
-  pushDeltaIfChanged(deltas, "quantity", previousRow.quantity, currentRow.quantity);
-  pushDeltaIfChanged(deltas, "unitCost", previousRow.unitCost, currentRow.unitCost);
+  pushDeltaIfChanged(
+    deltas,
+    "quantity",
+    safeNumber(previousRow.quantidade),
+    safeNumber(currentRow.quantidade)
+  );
+  pushDeltaIfChanged(
+    deltas,
+    "unitCost",
+    safeNumber(previousRow.valorUnitario),
+    safeNumber(currentRow.valorUnitario)
+  );
   pushDeltaIfChanged(
     deltas,
     "productivityFactor",
-    previousRow.productivityFactor,
-    currentRow.productivityFactor
+    safeNumber(previousRow.productivityFactor, 1),
+    safeNumber(currentRow.productivityFactor, 1)
   );
   pushDeltaIfChanged(
     deltas,
-    "allocationFactor",
-    previousRow.allocationFactor,
-    currentRow.allocationFactor
+    "monthlyFactor",
+    safeNumber(previousRow.monthlyFactor, 1),
+    safeNumber(currentRow.monthlyFactor, 1)
   );
   pushDeltaIfChanged(
     deltas,
-    "depreciationMethod",
-    previousRow.depreciationMethod,
-    currentRow.depreciationMethod
+    "depreciationCriteria",
+    safeString(previousRow.depreciationCriteria),
+    safeString(currentRow.depreciationCriteria)
   );
   pushDeltaIfChanged(
     deltas,
-    "usefulLifeMonths",
-    previousRow.usefulLifeMonths,
-    currentRow.usefulLifeMonths
+    "status",
+    safeString(previousRow.status),
+    safeString(currentRow.status)
   );
-  pushDeltaIfChanged(deltas, "status", previousRow.status, currentRow.status);
   pushDeltaIfChanged(
     deltas,
-    "consumptionBasis",
-    previousRow.consumptionBasis,
-    currentRow.consumptionBasis
+    "consumptionBase",
+    safeString(previousRow.consumptionBase),
+    safeString(currentRow.consumptionBase)
   );
   pushDeltaIfChanged(
     deltas,
     "technicalJustification",
-    previousRow.technicalJustification,
-    currentRow.technicalJustification
+    safeString(previousRow.technicalJustification),
+    safeString(currentRow.technicalJustification)
   );
 
-  const previousSubtotal = calculateServiceCompositionItemSubtotal(previousRow);
-  const currentSubtotal = calculateServiceCompositionItemSubtotal(currentRow);
-
-  pushDeltaIfChanged(deltas, "subtotal", previousSubtotal, currentSubtotal);
+  pushDeltaIfChanged(
+    deltas,
+    "subtotal",
+    getRowSubtotal(previousRow),
+    getRowSubtotal(currentRow)
+  );
 
   return deltas;
 }
 
 function buildComparisonRow(args: {
   key: string;
-  previousRow: ServiceCompositionDraftRow | null;
-  currentRow: ServiceCompositionDraftRow | null;
+  previousRow: ServiceCompositionRow | null;
+  currentRow: ServiceCompositionRow | null;
 }): ServiceCompositionRowComparison {
   const { key, previousRow, currentRow } = args;
 
-  const previousSubtotal = previousRow
-    ? calculateServiceCompositionItemSubtotal(previousRow)
-    : 0;
-
-  const currentSubtotal = currentRow
-    ? calculateServiceCompositionItemSubtotal(currentRow)
-    : 0;
+  const previousSubtotal = previousRow ? getRowSubtotal(previousRow) : 0;
+  const currentSubtotal = currentRow ? getRowSubtotal(currentRow) : 0;
 
   let changeType: ServiceCompositionChangeType = "unchanged";
   let fieldDeltas: ServiceCompositionFieldDelta[] = [];
@@ -470,8 +266,8 @@ function buildComparisonRow(args: {
     id: safeString(referenceRow?.id) || key,
     key,
     item: safeString(referenceRow?.item),
-    category: safeString(referenceRow?.category),
-    recurrenceType: safeString(referenceRow?.recurrenceType),
+    category: safeString(referenceRow?.categoria),
+    recurrenceType: safeString(referenceRow?.demandType),
     changeType,
     previousRow,
     currentRow,
@@ -482,49 +278,51 @@ function buildComparisonRow(args: {
   };
 }
 
-function buildDeltaByCategory(
-  previousSummary: ServiceCompositionSummary,
-  currentSummary: ServiceCompositionSummary
-) {
-  const categories = new Set<string>([
-    ...Object.keys(previousSummary.totalsByCategory || {}),
-    ...Object.keys(currentSummary.totalsByCategory || {}),
-  ]);
-
+function buildCategoryTotals(rows: ServiceCompositionRow[]) {
   const result: Record<string, number> = {};
 
-  categories.forEach((category) => {
-    const previousValue = safeNumber(previousSummary.totalsByCategory?.[category], 0);
-    const currentValue = safeNumber(currentSummary.totalsByCategory?.[category], 0);
-    result[category] = round2(currentValue - previousValue);
-  });
+  for (const row of rows) {
+    const category = safeString(row.categoria) || "Não classificado";
+    result[category] = round2((result[category] || 0) + getRowSubtotal(row));
+  }
 
   return result;
 }
 
-function buildDeltaByRecurrence(
-  previousSummary: ServiceCompositionSummary,
-  currentSummary: ServiceCompositionSummary
+function buildRecurrenceTotals(rows: ServiceCompositionRow[]) {
+  const result: Record<string, number> = {};
+
+  for (const row of rows) {
+    const recurrence = safeString(row.demandType) || "nao_informado";
+    result[recurrence] = round2((result[recurrence] || 0) + getRowSubtotal(row));
+  }
+
+  return result;
+}
+
+function buildDeltaMap(
+  previousMap: Record<string, number>,
+  currentMap: Record<string, number>
 ) {
-  const recurrences = new Set<string>([
-    ...Object.keys(previousSummary.totalsByRecurrence || {}),
-    ...Object.keys(currentSummary.totalsByRecurrence || {}),
+  const keys = new Set<string>([
+    ...Object.keys(previousMap),
+    ...Object.keys(currentMap),
   ]);
 
   const result: Record<string, number> = {};
 
-  recurrences.forEach((recurrence) => {
-    const previousValue = safeNumber(previousSummary.totalsByRecurrence?.[recurrence], 0);
-    const currentValue = safeNumber(currentSummary.totalsByRecurrence?.[recurrence], 0);
-    result[recurrence] = round2(currentValue - previousValue);
+  keys.forEach((key) => {
+    const previousValue = safeNumber(previousMap[key], 0);
+    const currentValue = safeNumber(currentMap[key], 0);
+    result[key] = round2(currentValue - previousValue);
   });
 
   return result;
 }
 
 export function compareServiceCompositionVersions(args: {
-  previousRows: Array<Partial<ServiceCompositionDraftRow>>;
-  currentRows: Array<Partial<ServiceCompositionDraftRow>>;
+  previousRows: Array<Partial<ServiceCompositionRow>>;
+  currentRows: Array<Partial<ServiceCompositionRow>>;
 }): ServiceCompositionComparisonResult {
   const previousRows = sanitizeRows(args.previousRows);
   const currentRows = sanitizeRows(args.currentRows);
@@ -545,8 +343,14 @@ export function compareServiceCompositionVersions(args: {
     })
   );
 
-  const previousSummary = buildServiceCompositionSummary(previousRows);
-  const currentSummary = buildServiceCompositionSummary(currentRows);
+  const previousSummary = summarizeServiceCompositionRows(previousRows);
+  const currentSummary = summarizeServiceCompositionRows(currentRows);
+
+  const previousCategoryTotals = buildCategoryTotals(previousRows);
+  const currentCategoryTotals = buildCategoryTotals(currentRows);
+
+  const previousRecurrenceTotals = buildRecurrenceTotals(previousRows);
+  const currentRecurrenceTotals = buildRecurrenceTotals(currentRows);
 
   const addedCount = rows.filter((row) => row.changeType === "added").length;
   const removedCount = rows.filter((row) => row.changeType === "removed").length;
@@ -566,8 +370,14 @@ export function compareServiceCompositionVersions(args: {
       totalDelta: round2(currentSummary.total - previousSummary.total),
       previousSummary,
       currentSummary,
-      deltaByCategory: buildDeltaByCategory(previousSummary, currentSummary),
-      deltaByRecurrence: buildDeltaByRecurrence(previousSummary, currentSummary),
+      deltaByCategory: buildDeltaMap(
+        previousCategoryTotals,
+        currentCategoryTotals
+      ),
+      deltaByRecurrence: buildDeltaMap(
+        previousRecurrenceTotals,
+        currentRecurrenceTotals
+      ),
     },
     rows: rows.sort((a, b) => {
       const weight = (type: ServiceCompositionChangeType) => {
