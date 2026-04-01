@@ -2117,13 +2117,10 @@ export default function SpreadsheetDetail() {
 
   const handleSpreadsheetEditorUpdated = (updatedSpreadsheet: SpreadsheetRecord) => {
     const nextSpreadsheet = updatedSpreadsheet as SpreadsheetDetailRecord;
-    const nextPreviousSpreadsheet = readPreviousSpreadsheetCandidate(nextSpreadsheet);
 
     setSpreadsheet(nextSpreadsheet);
-    setPreviousSpreadsheet(nextPreviousSpreadsheet);
-    setVersionHistory(
-      readVersionHistoryFromMetadata(nextSpreadsheet, nextPreviousSpreadsheet)
-    );
+    setEditor(buildInitialEditorState(nextSpreadsheet));
+    setCompositionRows(mapSpreadsheetRowsToCompositionRows(nextSpreadsheet));
     setDataSource("local");
     setSaveState("success");
     setSaveMessage("Módulo salvo com sucesso.");
