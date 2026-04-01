@@ -1,5 +1,13 @@
 import React from "react";
-import { Box, Card, CardContent, Chip, Divider, Stack, Typography } from "@mui/material";
+import {
+  Box,
+  Card,
+  CardContent,
+  Chip,
+  Divider,
+  Stack,
+  Typography,
+} from "@mui/material";
 import { ServiceCompositionMemoryItem } from "../utils/serviceCompositionCalculator";
 
 type Props = {
@@ -13,12 +21,29 @@ function money(value: number) {
   }).format(value || 0);
 }
 
-function labelFromDepreciation(method: string) {
-  switch (method) {
+function labelFromDemandType(demandType: string) {
+  switch (demandType) {
+    case "recorrente":
+      return "Recorrente";
+    case "eventual":
+      return "Eventual";
+    case "sob_demanda":
+      return "Sob demanda";
+    case "nao_informado":
+      return "Não informado";
+    default:
+      return demandType || "Não informado";
+  }
+}
+
+function labelFromDepreciation(criteria: string) {
+  switch (criteria) {
     case "rateio_linear":
       return "Rateio linear";
-    default:
+    case "nao_aplica":
       return "Não se aplica";
+    default:
+      return criteria || "Não informado";
   }
 }
 
@@ -32,9 +57,14 @@ export default function ServiceCompositionMemoryCard({ items }: Props) {
               Memória de cálculo auditável
             </Typography>
 
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-              Demonstração item a item da fórmula aplicada, fatores de periodicidade,
-              rateio/depreciação, base de consumo e justificativa técnica.
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mt: 0.75 }}
+            >
+              Demonstração item a item da memória técnica registrada, incluindo
+              categoria, recorrência, periodicidade, fatores de cálculo, base de
+              consumo e justificativa técnica.
             </Typography>
           </Box>
 
@@ -47,7 +77,7 @@ export default function ServiceCompositionMemoryCard({ items }: Props) {
           ) : (
             <Stack spacing={2}>
               {items.map((item) => (
-                <Card key={item.id} variant="outlined" sx={{ borderRadius: 3 }}>
+                <Card key={String(item.rowId)} variant="outlined" sx={{ borderRadius: 3 }}>
                   <CardContent>
                     <Stack spacing={1.5}>
                       <Stack
@@ -71,12 +101,23 @@ export default function ServiceCompositionMemoryCard({ items }: Props) {
                       </Stack>
 
                       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                        <Chip size="small" label={`Recorrência: ${item.recurrenceType}`} />
-                        <Chip size="small" label={`Periodicidade: ${item.periodicity}`} />
-                        <Chip size="small" label={`Unidade: ${item.serviceUnit}`} />
                         <Chip
                           size="small"
-                          label={`Depreciação: ${labelFromDepreciation(item.depreciationMethod)}`}
+                          label={`Recorrência: ${labelFromDemandType(item.demandType)}`}
+                        />
+                        <Chip
+                          size="small"
+                          label={`Periodicidade: ${item.periodicity || "Não informada"}`}
+                        />
+                        <Chip
+                          size="small"
+                          label={`Unidade: ${item.serviceUnit || "Não informada"}`}
+                        />
+                        <Chip
+                          size="small"
+                          label={`Depreciação: ${labelFromDepreciation(
+                            item.depreciationCriteria
+                          )}`}
                         />
                       </Stack>
 
@@ -96,44 +137,41 @@ export default function ServiceCompositionMemoryCard({ items }: Props) {
                         </Typography>
 
                         <Typography variant="body2" color="text.secondary">
-                          Fator produtividade: <strong>{item.productivityFactor}</strong>
+                          Fator produtividade:{" "}
+                          <strong>{item.productivityFactor}</strong>
                         </Typography>
 
                         <Typography variant="body2" color="text.secondary">
-                          Fator mensal: <strong>{item.monthlyizationFactor}</strong>
+                          Fator mensal: <strong>{item.monthlyFactor}</strong>
                         </Typography>
 
                         <Typography variant="body2" color="text.secondary">
-                          Rateio contratual: <strong>{item.allocationFactor}</strong>
+                          Status: <strong>{item.status || "Não informado"}</strong>
                         </Typography>
 
                         <Typography variant="body2" color="text.secondary">
-                          Fator depreciação: <strong>{item.depreciationFactor}</strong>
+                          Origem: <strong>{item.source || "Não informada"}</strong>
                         </Typography>
                       </Box>
 
-                      {item.usefulLifeMonths > 0 ? (
-                        <Typography variant="body2" color="text.secondary">
-                          Vida útil considerada: <strong>{item.usefulLifeMonths} mês(es)</strong>
-                        </Typography>
+                      {item.memoryText ? (
+                        <Box>
+                          <Typography variant="body2" fontWeight={700}>
+                            Memória de cálculo
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {item.memoryText}
+                          </Typography>
+                        </Box>
                       ) : null}
 
-                      <Box>
-                        <Typography variant="body2" fontWeight={700}>
-                          Fórmula aplicada
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {item.formula}
-                        </Typography>
-                      </Box>
-
-                      {item.consumptionBasis ? (
+                      {item.consumptionBase ? (
                         <Box>
                           <Typography variant="body2" fontWeight={700}>
                             Base de consumo
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            {item.consumptionBasis}
+                            {item.consumptionBase}
                           </Typography>
                         </Box>
                       ) : null}
